@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Panel editorial — Netti</title>
     <style>
+      [hidden] { display: none !important; }
       * {
         box-sizing: border-box;
         margin: 0;
@@ -615,14 +616,14 @@
             <div class="form-group">
               <label for="edit-body">Cuerpo (Markdown)</label>
               <div class="markdown-toolbar">
-                <button type="button" onclick="insertMarkdown('**', '**')" title="Negrita">B</button>
-                <button type="button" onclick="insertMarkdown('*', '*')" title="Cursiva">I</button>
-                <button type="button" onclick="insertMarkdown('`', '`')" title="Código">Code</button>
-                <button type="button" onclick="insertMarkdown('[', '](URL)')" title="Enlace">Link</button>
-                <button type="button" onclick="insertMarkdown('![', '](URL)')" title="Imagen">Img</button>
-                <button type="button" onclick="insertMarkdown('# ', '')" title="Encabezado H1">H1</button>
-                <button type="button" onclick="insertMarkdown('## ', '')" title="Encabezado H2">H2</button>
-                <button type="button" onclick="insertMarkdown('- ', '\n- ')" title="Lista">List</button>
+                <button type="button" data-markdown-open="**" data-markdown-close="**" title="Negrita">B</button>
+                <button type="button" data-markdown-open="*" data-markdown-close="*" title="Cursiva">I</button>
+                <button type="button" data-markdown-open="`" data-markdown-close="`" title="Código">Code</button>
+                <button type="button" data-markdown-open="[" data-markdown-close="](URL)" title="Enlace">Link</button>
+                <button type="button" data-markdown-open="![" data-markdown-close="](URL)" title="Imagen">Img</button>
+                <button type="button" data-markdown-open="# " data-markdown-close="" title="Encabezado H1">H1</button>
+                <button type="button" data-markdown-open="## " data-markdown-close="" title="Encabezado H2">H2</button>
+                <button type="button" data-markdown-open="- " data-markdown-close="&#10;- " title="Lista">List</button>
               </div>
               <textarea id="edit-body" required></textarea>
             </div>
