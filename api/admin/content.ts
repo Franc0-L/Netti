@@ -6,9 +6,9 @@ import {
 } from "../_lib/security.js";
 import { getRequiredEnv } from "../../src/lib/env-config.js";
 import { dryRunDelete, performDelete } from "../_lib/content/trash.js";
-import { findEntryBySlug, listEntries, readEntryBySlug } from "../_lib/content/repository.js";
+import { findEntryBySlug, invalidateTreeCache, listEntries, listMediaEntries, listTrashEntries, readEntryBySlug } from "../_lib/content/repository.js";
 import { validate } from "../_lib/content/validation.js";
-import { writeMarkdownFile } from "../_lib/github/contents.js";
+import { deleteMarkdownFile, writeMarkdownFile } from "../_lib/github/contents.js";
 
 const collections = new Set(["games", "reviews", "news", "guides"]);
 
@@ -51,13 +51,13 @@ export default async function handler(req: AdminRequest, res: AdminResponse) {
         return json(res, 400, { error: "Colección desconocida." });
       }
       const collection = rawCollection as string;
-      if (collection && !collections.has(collection)) {
+      if (collection && !collections.has(collection) && !["trash", "media"].includes(collection)) {
         return json(res, 400, { error: "Colección desconocida." });
       }
 
       const rawSlug = req.query?.slug;
       if (rawSlug !== undefined) {
-        if (!collection || typeof rawSlug !== "string") {
+        if (!collection || !collections.has(collection) || typeof rawSlug !== "string") {
           return json(res, 400, {
             error: "La publicación solicitada no es válida.",
           });
@@ -88,6 +88,8 @@ export default async function handler(req: AdminRequest, res: AdminResponse) {
       }
       const pageStr = rawPage as string;
       const page = pageStr === undefined ? 1 : Number(pageStr);
+      if (collection === "trash") return json(res, 200, await listTrashEntries(page));
+      if (collection === "media") return json(res, 200, await listMediaEntries(page));
       const result = await listEntries(collection, page);
       return json(res, 200, result);
     }
@@ -189,9 +191,47 @@ export default async function handler(req: AdminRequest, res: AdminResponse) {
       fields?: unknown;
       body?: unknown;
       sha?: unknown;
+      action?: unknown;
     };
     const collection = data.collection;
     const slug = data.slug;
+
+    if (req.method === "POST" && data.action === "restore") {
+      if (typeof collection !== "string" || !collections.has(collection)) {
+        return json(res, 400, { error: "Colección desconocida." });
+      }
+      if (typeof slug !== "string" || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) || slug.length > 160 || typeof data.sha !== "string") {
+        return json(res, 400, { error: "La publicación de la papelera no es válida." });
+      }
+      try {
+        const trashed = await readEntryBySlug(collection, `.deleted/${slug}`);
+        if (trashed.sha !== data.sha) {
+          return json(res, 409, { error: "La publicación de la papelera cambió. Recargá antes de restaurar." });
+        }
+        const originalSlug = trashed.fields.deletedSlug;
+        if (typeof originalSlug !== "string" || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(originalSlug)) {
+          return json(res, 400, { error: "No se pudo identificar el nombre original de la publicación." });
+        }
+        if (await findEntryBySlug(collection, originalSlug)) {
+          return json(res, 409, { error: "Ya existe una publicación con ese nombre. Renombrala o eliminá la versión actual antes de restaurar." });
+        }
+        const fields = { ...trashed.fields };
+        for (const key of ["deleted", "deletedAt", "deletedReason", "deletedSlug", "deletedCollection", "deletedBy"]) delete fields[key];
+        const saved = await writeMarkdownFile(collection, originalSlug, fields, trashed.body);
+        try {
+          await deleteMarkdownFile(collection, `.deleted/${slug}`, trashed.sha);
+        } catch (error) {
+          logAdminError("content_restore_cleanup", req, error, 502);
+          invalidateTreeCache();
+          return json(res, 200, { ok: true, slug: originalSlug, commit: saved.commit, warning: "La publicación se restauró, pero quedó una copia en la papelera." });
+        }
+        invalidateTreeCache();
+        return json(res, 200, { ok: true, slug: originalSlug, commit: saved.commit });
+      } catch (error) {
+        logAdminError("content_restore", req, error, 500);
+        return json(res, 500, { error: error instanceof Error ? error.message : "No se pudo restaurar la publicación." });
+      }
+    }
 
     if (typeof collection !== "string" || !collections.has(collection)) {
       return json(res, 400, { error: "Colección desconocida." });
