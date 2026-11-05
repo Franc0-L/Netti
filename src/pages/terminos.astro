@@ -1,0 +1,168 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+---
+
+<BaseLayout
+	title="Términos y condiciones · Netti"
+	description="Términos y condiciones de Netti. Uso del sitio, contenido editorial y exención de responsabilidad."
+>
+	<article class="terms-page">
+		<header class="terms-header">
+			<h1>Términos y condiciones</h1>
+			<p class="terms-intro">
+				Última actualización: <time>{new Date().getFullYear()}-11-05</time>
+			</p>
+		</header>
+
+		<section class="terms-section">
+			<h2>1. Aceptación de los términos</h2>
+			<p>
+				Al acceder y utilizar este sitio web, aceptás estos términos y
+				condiciones. Si no estás de acuerdo con alguna parte, por favor no
+				utilices el sitio.
+			</p>
+		</section>
+
+		<section class="terms-section">
+			<h2>2. Uso del sitio</h2>
+			<p>
+				Puedes leer, navegar y compartir el contenido de este sitio para
+				uso personal y no comercial. Queda prohibida la reproducción,
+				distribución o modificación total o parcial del contenido sin
+				autorización previa por escrito.
+			</p>
+		</section>
+
+		<section class="terms-section">
+			<h2>3. Contenido editorial</h2>
+			<p>
+				Los juegos, marcas, logotipos y obras de arte mencionados en este
+				sitio pertenecen a sus respectivos estudios y distribuidores.
+				Netti no es un distribuidor oficial ni está afiliado con las
+				empresas mencionadas. Las reseñas y opiniones publicadas son
+				responsabilidad editorial de Netti.
+			</p>
+		</section>
+
+		<section class="terms-section">
+			<h2>4. Panel editorial</h2>
+			<p>
+				El acceso al panel editorial ubicado en <code>/admin/</code>
+				requiere contraseña y es de uso exclusivo del equipo editorial de
+				Netti. Queda prohibido compartir credenciales de acceso o
+				utilizar el panel para fines distintos a la gestión de contenido
+				editorial.
+			</p>
+		</section>
+
+		<section class="terms-section">
+			<h2>5. Enlaces externos</h2>
+			<p>
+				Este sitio puede contener enlaces a sitios web o plataformas
+				externas (YouTube, Instagram, TikTok, entre otros). No controlamos
+				ni nos responsabilizamos por el contenido o las prácticas de
+				privacidad de esos sitios. El acceso a los mismos es bajo tu
+				propio riesgo.
+			</p>
+		</section>
+
+		<section class="terms-section">
+			<h2>6. Exención de responsabilidad</h2>
+			<p>
+				El contenido de este sitio se proporciona "tal cual", sin
+				garantías de ningún tipo, ya sean expresas o implícitas. Netti no
+				garantiza la disponibilidad continua del sitio ni se hace
+				responsable por daños o perjuicios derivados del uso o la
+				imposibilidad de uso del sitio.
+			</p>
+		</section>
+
+		<section class="terms-section">
+			<h2>7. Modificaciones</h2>
+			<p>
+				Netti se reserva el derecho de modificar estos términos en
+				cualquier momento. Los cambios entrarán en vigencia al ser
+				publicados en esta página. Se recomienda revisarla periódicamente.
+			</p>
+		</section>
+
+		<section class="terms-section">
+			<h2>8. Contacto</h2>
+			<p>
+				Para consultas sobre estos términos, podés escribirnos a:
+			</p>
+			<p class="terms-contact">
+				<a href="mailto:nettivideojuegos@gmail.com">
+					nettivideojuegos@gmail.com
+				</a>
+			</p>
+		</section>
+
+		<footer class="terms-footer">
+			<p>
+				© {new Date().getFullYear()} Netti. Todos los derechos
+				reservados.
+			</p>
+		</footer>
+	</article>
+</BaseLayout>
+
+<style>
+	.terms-page {
+		max-width: 68ch;
+		margin: 0 auto;
+		padding: clamp(2rem, 4vw, 3rem) clamp(1.25rem, 3vw, 2.5rem) 1.5rem;
+	}
+	.terms-header {
+		margin-bottom: 2rem;
+		border-bottom: 1px solid var(--border-card);
+		padding-bottom: 1rem;
+	}
+	.terms-header h1 {
+		font-size: clamp(2rem, 5vw, 3rem);
+		margin: 0 0 0.5rem;
+	}
+	.terms-intro {
+		color: var(--muted);
+		font-size: 1.05rem;
+		margin: 0;
+	}
+	.terms-section {
+		margin-bottom: 2rem;
+	}
+	.terms-section h2 {
+		font-size: 1.25rem;
+		margin-top: 1.5rem;
+		margin-bottom: 0.75rem;
+		color: var(--accent);
+	}
+	.terms-section p {
+		margin-bottom: 1rem;
+		color: var(--prose);
+		line-height: 1.7;
+	}
+	code {
+		background: var(--field);
+		padding: 0.1rem 0.4rem;
+		border-radius: 0.3rem;
+		font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+		font-size: 0.9em;
+		color: var(--accent-strong);
+	}
+	.terms-contact a {
+		color: var(--accent);
+		text-decoration: underline;
+		text-underline-offset: 3px;
+	}
+	.terms-contact a:hover {
+		color: var(--accent-strong);
+	}
+	.terms-footer {
+		margin-top: 3rem;
+		padding-top: 1rem;
+		border-top: 1px solid var(--border-card);
+		font-size: 0.85rem;
+		color: var(--muted);
+		text-align: center;
+	}
+</style>
