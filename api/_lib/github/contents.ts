@@ -1,4 +1,5 @@
 import { githubClient, GitHubHttpError } from "./client.js";
+import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 
 // Obtiene el árbol recursivo del repositorio. Devuelve la lista de items (blobs y tree) o lanza GitHubHttpError.
 export async function getTree(): Promise<
@@ -47,8 +48,7 @@ export async function readMarkdownFile(
   if (!match) {
     throw new GitHubHttpError("El artículo no tiene frontmatter válido.", 400);
   }
-  const yaml = require("yaml");
-  const fields = yaml.parse(match[1]) || {};
+  const fields = parseYaml(match[1]) || {};
   const body = content.slice(match[0].length).trimStart();
   return { fields, body, sha: item.sha };
 }
@@ -61,11 +61,10 @@ export async function writeMarkdownFile(
   body: string,
   existingSha?: string,
 ): Promise<{ commit: string | undefined }> {
-  const { stringify } = require("yaml");
   const clean = Object.fromEntries(
     Object.entries(fields).filter(([, v]) => v !== undefined && v !== ""),
   );
-  const markdown = `---\n${stringify(clean, { lineWidth: 0 }).trimEnd()}\n---\n\n${body.trim()}\n`;
+  const markdown = `---\n${stringifyYaml(clean, { lineWidth: 0 }).trimEnd()}\n---\n\n${body.trim()}\n`;
 
   const bodyPayload: Record<string, unknown> = {
     message: `content(${collection}): ${existingSha ? "editar" : "crear"} ${slug}`,
