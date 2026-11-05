@@ -1,0 +1,32 @@
+{
+  "switch": {
+    "label": "Nintendo Switch",
+    "image": "/images/platforms/switch.png",
+    "symbol": "switch"
+  },
+  "playstation": {
+    "label": "PlayStation",
+    "image": "/images/platforms/playstation.png",
+    "symbol": "playstation"
+  },
+  "xbox": {
+    "label": "Xbox",
+    "image": "/images/platforms/xbox.png",
+    "symbol": "xbox"
+  },
+  "computer": {
+    "label": "PC",
+    "image": "/images/platforms/pc.png",
+    "symbol": "computer"
+  },
+  "mobile": {
+    "label": "Móvil",
+    "image": "/images/platforms/pc.png",
+    "symbol": "mobile"
+  },
+  "controller": {
+    "label": "Control",
+    "image": "/images/platforms/pc.png",
+    "symbol": "controller"
+  }
+}

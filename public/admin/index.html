@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Iniciar sesión — Panel editorial Netti</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family:
+          "Quicksand",
+          ui-rounded,
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+        background: #141218;
+        color: #f4effc;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+      }
+      .login-card {
+        width: min(100%, 420px);
+        padding: 2.5rem 2rem;
+        border: 1px solid #352d45;
+        border-radius: 1.5rem;
+        background: #1e1b24;
+        box-shadow:
+          2px 2px 0 #0000003d,
+          0 0 0 1px #ffffff0a;
+      }
+      .login-card h1 {
+        margin: 0 0 1rem;
+        font-size: 1.75rem;
+        text-align: center;
+        letter-spacing: -0.04em;
+      }
+      .login-card p {
+        margin: 0 0 1.5rem;
+        color: #b6adc9;
+        font-size: 0.9rem;
+        text-align: center;
+      }
+      .form-group {
+        margin-bottom: 1.25rem;
+      }
+      .form-group label {
+        display: block;
+        margin-bottom: 0.5rem;
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: #b6adc9;
+      }
+      .form-group input {
+        width: 100%;
+        min-height: 44px;
+        padding: 0.6rem 0.8rem;
+        border: 1px solid #352d45;
+        border-radius: 0.8rem;
+        background: #17141d;
+        color: #f4effc;
+        font:
+          500 0.95rem "Quicksand",
+          system-ui,
+          sans-serif;
+      }
+      .form-group input:focus {
+        outline: none;
+        border-color: #a78bfa;
+      }
+      .error {
+        margin: 0 0 1.25rem;
+        padding: 0.75rem 1rem;
+        border: 1px solid #f16c79;
+        border-radius: 0.8rem;
+        background: #f16c7922;
+        color: #f16c79;
+        font-size: 0.85rem;
+        display: none;
+      }
+      .btn-submit {
+        width: 100%;
+        min-height: 44px;
+        padding: 0.6rem 1.3rem;
+        border: 0;
+        border-radius: 999px;
+        background: #a78bfa;
+        color: #17111f;
+        font-weight: 700;
+        font-size: 0.95rem;
+        cursor: pointer;
+      }
+      .btn-submit:hover {
+        background: #c9bbff;
+      }
+      .footer-note {
+        margin-top: 1.5rem;
+        text-align: center;
+        font-size: 0.8rem;
+        color: #b6adc9;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="login-card">
+      <h1>Panel editorial Netti</h1>
+      <p>Ingresá tu contraseña para acceder al panel de administración.</p>
+
+      <div id="error" class="error" role="alert">Contraseña incorrecta.</div>
+
+      <form id="login-form">
+        <div class="form-group">
+          <label for="password">Contraseña</label>
+          <input
+            type="password"
+            id="password"
+            name="password"
+            autocomplete="current-password"
+            required
+          />
+        </div>
+        <button type="submit" class="btn-submit">Entrar</button>
+      </form>
+
+      <p class="footer-note">Netti — Blog editorial de videojuegos</p>
+    </div>
+
+    <script>
+      const form = document.getElementById("login-form");
+      const error = document.getElementById("error");
+      const passwordInput = document.getElementById("password");
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        error.style.display = "none";
+
+        const password = passwordInput.value;
+
+        try {
+          const response = await fetch("/api/admin/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "login", password }),
+          });
+
+          const data = await response.json();
+
+          if (response.ok && data.ok) {
+            window.location.href = "/admin/";
+          } else {
+            error.textContent = data.error || "Contraseña incorrecta.";
+            error.style.display = "block";
+          }
+        } catch {
+          error.textContent =
+            "No se pudo conectar con el servidor. Intentá de nuevo.";
+          error.style.display = "block";
+        }
+      });
+    </script>
+  </body>
+</html>
