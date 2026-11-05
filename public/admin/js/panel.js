@@ -208,8 +208,8 @@ function renderList(entries, page, pageCount, total) {
         <td><code style="color:#b6adc9;">${slug}</code></td>
         <td>${updated}</td>
         <td>
-          <button class="btn-secondary" onclick="app.editArticle('${escapeHtml(entry.slug)}', '${escapeHtml(entry.collection)}', '${escapeHtml(entry.sha || "")}')">Editar</button>
-          <button class="btn-danger" onclick="app.deleteArticle('${escapeHtml(entry.slug)}', '${escapeHtml(entry.collection)}', '${escapeHtml(entry.sha || "")}')">Borrar</button>
+          <button class="btn-secondary" data-action="edit" data-slug="${slug}" data-collection="${entry.collection}" data-sha="${entry.sha || ""}">Editar</button>
+          <button class="btn-danger" data-action="delete" data-slug="${slug}" data-collection="${entry.collection}" data-sha="${entry.sha || ""}">Borrar</button>
         </td>
       </tr>
     `;
@@ -220,9 +220,9 @@ function renderList(entries, page, pageCount, total) {
     pageCount > 1
       ? `
       <div class="pagination">
-        ${page > 1 ? `<a onclick="app.loadPage(${page - 1})">← Anterior</a>` : `<span class="disabled">← Anterior</span>`}
+        ${page > 1 ? `<a data-page="${page - 1}">← Anterior</a>` : `<span class="disabled">← Anterior</span>`}
         <span class="current">Página ${page} de ${pageCount}</span>
-        ${page < pageCount ? `<a onclick="app.loadPage(${page + 1})">Siguiente →</a>` : `<span class="disabled">Siguiente →</span>`}
+        ${page < pageCount ? `<a data-page="${page + 1}">Siguiente →</a>` : `<span class="disabled">Siguiente →</span>`}
       </div>
     `
       : "";
@@ -305,6 +305,8 @@ async function editArticle(slug, collection, sha) {
     imageInput.value = "";
     imagePreview.style.display = "none";
     imageAlt.value = entry.fields.coverAlt || "";
+    currentImageUrl = entry.fields.coverImage || null;
+    if (currentImageUrl) { imagePreviewImg.src = currentImageUrl; imagePreview.style.display = "block"; }
 
     gameRefGroup.style.display =
       entry.collection === "reviews" || entry.collection === "guides"
@@ -514,7 +516,7 @@ async function loadTrash() {
           <td><code style="color: var(--muted);">${slug}</code></td>
           <td>${deletedAt}</td>
           <td>
-            <button class="btn-secondary" onclick="app.recoverArticle('${escapeHtml(slug)}', '${escapeHtml(deletedCollection)}')">Recuperar</button>
+            <button class="btn-secondary" data-action="recover" data-slug="${slug}" data-collection="${deletedCollection}">Recuperar</button>
           </td>
         </tr>
       `;
@@ -599,7 +601,7 @@ function renderMediaList(items) {
   mediaList.innerHTML = items
     .map(
       (item) => `
-      <div class="media-item" onclick="selectMediaItem(this, '${item.url}', '${item.alt}')">
+      <div class="media-item" data-media-index="${mediaItems.indexOf(item)}">
         ${item.url ? `<img src="${item.url}" alt="${item.alt}" />` : `<div style="width:100%;height:100px;background:var(--field);border-radius:0.4rem;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:0.75rem">Sin imagen</div>`}
         <div class="media-item-name">${escapeHtml(item.name)}</div>
       </div>
@@ -649,7 +651,29 @@ function insertTextAtCursor(text) {
   updatePreview();
 }
 
-// Exponer API global para onclick en HTML
+document.addEventListener("click", (event) => {
+  const target = event.target.closest("[data-action], [data-page], [data-media-index], [data-markdown-open]");
+  if (!target) return;
+  if (target.dataset.markdownOpen !== undefined) {
+    insertMarkdown(target.dataset.markdownOpen, target.dataset.markdownClose || "");
+    return;
+  }
+  if (target.dataset.page) {
+    loadCollection(currentCollection, Number(target.dataset.page));
+    return;
+  }
+  if (target.dataset.mediaIndex !== undefined) {
+    const item = mediaItems[Number(target.dataset.mediaIndex)];
+    if (item) selectMediaItem(target, item.url, item.alt);
+    return;
+  }
+  const { action, slug, collection, sha } = target.dataset;
+  if (action === "edit") editArticle(slug, collection, sha);
+  else if (action === "delete") deleteArticle(slug, collection, sha);
+  else if (action === "recover") recoverArticle(slug, collection);
+});
+
+// API pública del panel
 window.app = {
   loadCollection,
   loadPage: (page) => loadCollection(currentCollection, page),
