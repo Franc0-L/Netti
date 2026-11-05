@@ -614,19 +614,13 @@ async function loadTrash() {
   }
 }
 
-async function recoverArticle(slug, collection) {
+async function recoverArticle(slug, collection, sha) {
   if (!confirm(`¿Recuperar "${slug}"?`)) return;
   try {
     const res = await fetch(`${API_BASE}/content`, {
-      method: "PUT",
+      method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        collection,
-        slug,
-        fields: { title: slug },
-        body: "",
-        sha: "",
-      }),
+      body: JSON.stringify({ action: "restore", collection, slug, sha }),
     });
     if (!res.ok) {
       const err = await res.json();
@@ -741,7 +735,7 @@ document.addEventListener("click", (event) => {
   const { action, slug, collection, sha } = target.dataset;
   if (action === "edit") editArticle(slug, collection, sha);
   else if (action === "delete") deleteArticle(slug, collection, sha);
-  else if (action === "recover") recoverArticle(slug, collection);
+  else if (action === "recover") recoverArticle(slug, collection, sha);
 });
 
 // API pública del panel
