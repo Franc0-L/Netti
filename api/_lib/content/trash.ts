@@ -3,7 +3,6 @@ import {
   writeMarkdownFile,
   deleteMarkdownFile,
 } from "../github/contents.js";
-import { stringify } from "yaml";
 import { readEntryBySlug, invalidateTreeCache } from "./repository.js";
 
 // Dry run: analiza qué se borraría sin tocar nada. Devuelve info del archivo y listas vacías de medios (pendiente de implementar).
@@ -103,7 +102,7 @@ export async function performDelete(
     deletedCollection: collection,
     deletedBy: "editor",
   };
-  const trashBody = `---\n${stringify(trashFields, { lineWidth: 0 }).trimEnd()}\n---\n\n${entry.body}\n`;
+  const trashBody = entry.body;
 
   // Escribir en la papelera
   await writeMarkdownFile(

@@ -91,6 +91,45 @@ export async function listEntries(
   };
 }
 
+// Lista publicaciones eliminadas que pueden restaurarse desde la papelera.
+export async function listTrashEntries(page = 1) {
+  const tree = await getTreeCached();
+  const paths = tree.filter((item) =>
+    item.type === "blob" &&
+    /^content\/(games|reviews|news|guides)\/\.deleted\/[a-z0-9-]+\.md$/.test(item.path),
+  ).sort((a, b) => b.path.localeCompare(a.path));
+  const pageCount = Math.ceil(paths.length / LIST_PAGE_SIZE);
+  const paginated = paths.slice((page - 1) * LIST_PAGE_SIZE, page * LIST_PAGE_SIZE);
+  const entries = await Promise.all(paginated.map(async (item) => {
+    const [, collection, , filename] = item.path.split("/");
+    const slug = filename.slice(0, -3);
+    const markdown = await readMarkdownFile(collection, `.deleted/${slug}`);
+    return { collection, slug, sha: item.sha, fields: markdown.fields };
+  }));
+  return { entries, page, pageSize: LIST_PAGE_SIZE, pageCount, total: paths.length };
+}
+
+// Lista imágenes subidas para el navegador de medios del panel.
+export async function listMediaEntries(page = 1) {
+  const tree = await getTreeCached();
+  const paths = tree.filter((item) =>
+    item.type === "blob" &&
+    /^media\/(games|reviews|news|guides)\/[a-z0-9-]+\/[^/]+\.(?:webp|avif|png|jpe?g|gif)$/i.test(item.path),
+  ).sort((a, b) => b.path.localeCompare(a.path));
+  const pageCount = Math.ceil(paths.length / LIST_PAGE_SIZE);
+  const paginated = paths.slice((page - 1) * LIST_PAGE_SIZE, page * LIST_PAGE_SIZE);
+  const entries = paginated.map((item) => {
+    const filename = item.path.split("/").pop() || item.path;
+    return {
+      collection: "media",
+      slug: item.path,
+      sha: item.sha,
+      fields: { title: filename, coverImage: `/${item.path}`, coverAlt: filename },
+    };
+  });
+  return { entries, page, pageSize: LIST_PAGE_SIZE, pageCount, total: paths.length };
+}
+
 // Busca una publicación en todo el árbol, sin limitarse a la primera página.
 export async function findEntryBySlug(collection: string, slug: string): Promise<{ collection: string; slug: string; sha: string; page: number } | null> {
   const paths = await contentPaths(collection);
