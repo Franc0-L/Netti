@@ -12,7 +12,7 @@ interface Props {
 const {
 	title,
 	description = "Reseñas, análisis y noticias de videojuegos.",
-	ogImage = "/images/logo-netti.jpg",
+	ogImage = "/images/logo-netti.png",
 	ogType = "website",
 } = Astro.props;
 
@@ -102,7 +102,7 @@ const isCurrent = (href: string) => path === href || path.startsWith(href);
 				<div class="footer-brand">
 					<img
 						class="footer-logo"
-						src="/images/logo-netti.jpg"
+						src="/images/logo-netti.png"
 						alt=""
 						width="512"
 						height="512"
