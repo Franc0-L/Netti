@@ -1,0 +1,81 @@
+---
+interface Props {
+	url?: string;
+	title?: string;
+}
+
+const { url, title = "Video" } = Astro.props;
+const youtube = url?.match(
+	/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([\w-]{11})/,
+);
+const vimeo = url?.match(/vimeo\.com\/(\d+)/);
+const isFile = url ? /\.(mp4|webm|ogv)(?:\?.*)?$/i.test(url) : false;
+---
+
+{url && (
+	<section class="media-video" aria-label={title}>
+		{youtube ? (
+			<div class="frame">
+				<iframe
+					src={`https://www.youtube-nocookie.com/embed/${youtube[1]}`}
+					title={title}
+					loading="lazy"
+					allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+					allowfullscreen
+					referrerpolicy="strict-origin-when-cross-origin"
+				></iframe>
+			</div>
+		) : vimeo ? (
+			<div class="frame">
+				<iframe
+					src={`https://player.vimeo.com/video/${vimeo[1]}`}
+					title={title}
+					loading="lazy"
+					allow="fullscreen; picture-in-picture"
+					allowfullscreen
+					referrerpolicy="strict-origin-when-cross-origin"
+				></iframe>
+			</div>
+		) : isFile ? (
+			<video controls preload="metadata" src={url} title={title}></video>
+		) : (
+			<p class="fallback">
+				<a href={url} target="_blank" rel="noopener noreferrer">
+					{title} ↗
+				</a>
+			</p>
+		)}
+	</section>
+)}
+
+<style>
+	.media-video {
+		margin: 2.5rem 0;
+	}
+	.frame {
+		position: relative;
+		aspect-ratio: 16/9;
+		overflow: hidden;
+		border: 2px solid var(--border-card);
+		border-radius: 1rem;
+		background: var(--media-bg);
+	}
+	.frame iframe {
+		display: block;
+		width: 100%;
+		height: 100%;
+		border: 0;
+	}
+	video {
+		display: block;
+		width: 100%;
+		height: auto;
+		border: 2px solid var(--border-card);
+		border-radius: 1rem;
+		background: var(--media-bg);
+	}
+	.fallback a {
+		color: var(--accent);
+		font-weight: 600;
+	}
+</style>

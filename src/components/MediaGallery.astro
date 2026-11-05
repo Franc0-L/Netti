@@ -1,0 +1,97 @@
+---
+import { resolveImageUrl } from "../lib/image-url";
+
+interface GalleryItem {
+	src: string;
+	alt?: string;
+	caption?: string;
+}
+
+interface Props {
+	items?: GalleryItem[];
+	heading?: string;
+}
+
+const { items = [], heading = "Galería" } = Astro.props;
+---
+
+{items.length > 0 && (
+	<section class="gallery" aria-label={heading}>
+		<h2>{heading}</h2>
+		<ul>
+			{items.map((item) => (
+				<li>
+					<figure>
+						<button
+							class="gallery-trigger"
+							type="button"
+							data-lightbox-trigger
+							data-lightbox-group="entry-media"
+							data-lightbox-src={resolveImageUrl(item.src)}
+							data-lightbox-alt={item.alt ?? ""}
+							data-lightbox-caption={item.caption ?? ""}
+							aria-label={`Ampliar imagen: ${item.alt || item.caption || heading}`}
+						>
+							<img
+								src={resolveImageUrl(item.src)}
+								alt={item.alt ?? ""}
+								width="1200"
+								height="675"
+								loading="lazy"
+								decoding="async"
+							/>
+						</button>
+						{item.caption && <figcaption>{item.caption}</figcaption>}
+					</figure>
+				</li>
+			))}
+		</ul>
+	</section>
+)}
+
+<style>
+	.gallery {
+		margin: 2.5rem 0;
+	}
+	.gallery h2 {
+		margin: 0 0 1rem;
+		font-size: 1.5rem;
+	}
+	.gallery ul {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+		gap: 1rem;
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+	.gallery figure {
+		margin: 0;
+	}
+	.gallery-trigger {
+		display: block;
+		width: 100%;
+		padding: 0;
+		overflow: hidden;
+		border: 0;
+		border-radius: 0.9rem;
+		background: transparent;
+		cursor: zoom-in;
+	}
+	.gallery img {
+		display: block;
+		width: 100%;
+		height: auto;
+		aspect-ratio: 16/9;
+		object-fit: cover;
+		border: 2px solid var(--border-card);
+		border-radius: 0.9rem;
+		background: var(--surface);
+	}
+	.gallery figcaption {
+		margin-top: 0.5rem;
+		color: var(--muted);
+		font-size: 0.84rem;
+		line-height: 1.5;
+	}
+</style>

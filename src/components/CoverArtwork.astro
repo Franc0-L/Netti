@@ -1,0 +1,102 @@
+---
+import { resolveImageUrl } from "../lib/image-url";
+
+interface Props {
+	src?: string;
+	alt: string;
+	title: string;
+	variant?: "card" | "hero" | "compact";
+	priority?: boolean;
+}
+
+const { src, alt, title, variant = "card", priority = false } = Astro.props;
+const resolvedSrc = resolveImageUrl(src);
+const initials = title
+	.trim()
+	.split(/\s+/)
+	.slice(0, 2)
+	.map((word) => word[0])
+	.join("")
+	.toUpperCase();
+const dimensions =
+	variant === "hero"
+		? { width: 1200, height: 525 }
+		: variant === "compact"
+			? { width: 1200, height: 900 }
+			: { width: 1200, height: 675 };
+---
+
+<div
+	class:list={["cover", `cover--${variant}`, { "cover--image": src }]}
+	role={src ? undefined : "img"}
+	aria-label={src ? undefined : `Imagen pendiente para ${title}`}
+>
+	{src ? (
+		<img
+			src={resolvedSrc}
+			alt={alt}
+			width={dimensions.width}
+			height={dimensions.height}
+			loading={priority || variant === "hero" ? "eager" : "lazy"}
+			fetchpriority={priority || variant === "hero" ? "high" : "auto"}
+			decoding="async"
+		/>
+	) : (
+		<span class="placeholder" aria-hidden="true">
+			{initials}
+		</span>
+	)}
+</div>
+
+<style>
+	.cover {
+		position: relative;
+		display: grid;
+		place-items: center;
+		overflow: hidden;
+		isolation: isolate;
+		width: 100%;
+		aspect-ratio: 16/9;
+		border: 1px solid var(--border);
+		border-radius: 0.8rem;
+		background: linear-gradient(135deg, var(--cover-from), var(--cover-to) 72%);
+	}
+	.cover::before {
+		position: absolute;
+		z-index: 1;
+		inset: 0;
+		border: 1px solid rgb(255 255 255 / 5%);
+		border-radius: inherit;
+		content: "";
+		pointer-events: none;
+	}
+	.cover img {
+		display: block;
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		image-rendering: auto;
+	}
+	.placeholder {
+		color: var(--accent-strong);
+		font-size: clamp(2.5rem, 7vw, 5rem);
+		font-weight: 800;
+		letter-spacing: -0.08em;
+	}
+	.cover--hero {
+		aspect-ratio: 16/7;
+		border-radius: 1rem;
+	}
+	.cover--compact {
+		aspect-ratio: 4/3;
+		border-radius: 0.6rem;
+	}
+	@media (prefers-reduced-motion: no-preference) {
+		.cover img {
+			transition: transform 180ms ease;
+		}
+		a:hover .cover img {
+			transform: scale(1.015);
+		}
+	}
+</style>

@@ -1,0 +1,85 @@
+---
+interface Props {
+	tags?: string[];
+	limit?: number;
+}
+
+const { tags = [], limit = 4 } = Astro.props;
+const families: Record<string, { order: number; tone: string }> = {
+	"En análisis": { order: 0, tone: "state" },
+	Actualizado: { order: 0, tone: "state" },
+	Rejugado: { order: 0, tone: "state" },
+	Recomendado: { order: 1, tone: "recommendation" },
+	Joyita: { order: 1, tone: "excellent" },
+	Imprescindible: { order: 1, tone: "excellent" },
+	Cooperativo: { order: 2, tone: "mode" },
+	"Para jugar en cooperativo": { order: 2, tone: "mode" },
+	Multijugador: { order: 2, tone: "mode" },
+	"Un jugador": { order: 2, tone: "mode" },
+	Indie: { order: 3, tone: "format" },
+	AAA: { order: 3, tone: "format" },
+	"Acceso anticipado": { order: 3, tone: "format" },
+};
+const visibleTags = tags
+	.map((tag, index) => ({
+		tag,
+		index,
+		family: families[tag] ?? { order: 4, tone: "format" },
+	}))
+	.sort((a, b) => a.family.order - b.family.order || a.index - b.index)
+	.slice(0, limit);
+---
+
+{visibleTags.length > 0 && (
+	<ul class="editorial-tags" aria-label="Etiquetas editoriales">
+		{visibleTags.map(({ tag, family }) => (
+			<li class={`tag tag--${family.tone}`}>{tag}</li>
+		))}
+	</ul>
+)}
+
+<style>
+	.editorial-tags {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.4rem;
+		margin: 0.65rem 0;
+		padding: 0;
+		list-style: none;
+	}
+	.tag {
+		max-width: 100%;
+		overflow: hidden;
+		padding: 3px 8px;
+		min-width: 44px;
+		min-height: 44px;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		border: 1px solid color-mix(in srgb, var(--tag-color) 30%, transparent);
+		border-radius: 999px;
+		background: color-mix(in srgb, var(--tag-color) 12%, transparent);
+		color: var(--tag-color);
+		font-size: 11px;
+		letter-spacing: 0.04em;
+		line-height: 1.4;
+		text-overflow: ellipsis;
+		text-transform: uppercase;
+		white-space: nowrap;
+	}
+	.tag--state {
+		--tag-color: var(--accent);
+	}
+	.tag--recommendation {
+		--tag-color: var(--gold);
+	}
+	.tag--excellent {
+		--tag-color: var(--green);
+	}
+	.tag--mode {
+		--tag-color: var(--cyan);
+	}
+	.tag--format {
+		--tag-color: var(--muted);
+	}
+</style>
