@@ -3,7 +3,8 @@
   "compilerOptions": {
     "noEmit": true,
     "allowJs": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "types": ["node"]
   },
   "include": [".astro/types.d.ts", "src/**/*", "api/**/*.ts"],
   "exclude": ["dist"]

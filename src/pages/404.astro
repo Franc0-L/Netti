@@ -1,6 +1,8 @@
 ---
 import BaseLayout from "../layouts/BaseLayout.astro";
 import { getCollectionEntries } from "../lib/fetch-content";
+import CoverArtwork from "../components/CoverArtwork.astro";
+import ScoreBadge from "../components/ScoreBadge.astro";
 
 const featuredGames = (await getCollectionEntries("games")).slice(0, 4);
 const featuredReviews = (await getCollectionEntries("reviews"))
@@ -51,7 +53,7 @@ const featuredReviews = (await getCollectionEntries("reviews"))
 							href={`/juegos/${game.id}/`}
 							class="suggestion-card"
 						>
-							<CoverArtworkPlaceholder
+							<CoverArtwork
 								src={game.data.coverImage}
 								alt={game.data.coverAlt ?? game.data.title}
 								title={game.data.title}
@@ -111,10 +113,7 @@ const featuredReviews = (await getCollectionEntries("reviews"))
 	</article>
 </BaseLayout>
 
-<script>
-	import CoverArtwork from "../components/CoverArtwork.astro";
-	import ScoreBadge from "../components/ScoreBadge.astro";
-</script>
+
 
 <style>
 	.not-found-page {
