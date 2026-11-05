@@ -1,4 +1,4 @@
-import { serverEnv } from "../../src/lib/env.js";
+import { serverEnv } from "../../../src/lib/env.js";
 
 const REPO = serverEnv("CONTENT_GITHUB_REPO") || "Franc0-L/Contenido-Netti";
 

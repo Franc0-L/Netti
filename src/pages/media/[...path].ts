@@ -19,8 +19,8 @@ const contentTypes: Record<string, string> = {
 };
 
 /*
-    Magic bytes (números mágicos) por extensión de imagen. Se usan para verificar que el contenido sea realmente una imagen del tipo
-    declarado y no un archivo con extensión falsa.
+  Magic bytes (números mágicos) por extensión de imagen. Se usan para verificar que el contenido sea realmente una imagen del tipo
+  declarado y no un archivo con extensión falsa.
 */
 const MAGIC_BYTES: Record<string, Buffer[]> = {
   jpg: [Buffer.from([0xff, 0xd8, 0xff])],
@@ -36,8 +36,8 @@ const AVIF = Buffer.from([0x61, 0x76, 0x69, 0x66]); // "avif"
 const AVIS = Buffer.from([0x61, 0x76, 0x69, 0x73]); // "avis"
 
 /*
-    Verifica que los bytes del archivo coincidan con la firma esperada. WebP y AVIF necesitan comprobar campos en
-    offsets específicos: mirar solo `RIFF` aceptaría cualquier archivo RIFF (por ejemplo, un WAV) como WebP.
+  Verifica que los bytes del archivo coincidan con la firma esperada. WebP y AVIF necesitan comprobar campos en
+  offsets específicos: mirar solo `RIFF` aceptaría cualquier archivo RIFF (por ejemplo, un WAV) como WebP.
 */
 function hasValidMagicBytes(bytes: Buffer, extension: string): boolean {
   const ext = extension.toLowerCase();

@@ -3,107 +3,107 @@ import ScoreBadge from "./ScoreBadge.astro";
 import { resolveImageUrl } from "../lib/image-url";
 
 interface Card {
-	title: string;
-	href: string;
-	image?: string;
-	alt?: string;
-	score?: number;
+  title: string;
+  href: string;
+  image?: string;
+  alt?: string;
+  score?: number;
 }
 
 interface Props {
-	heading: string;
-	cards: Card[];
+  heading: string;
+  cards: Card[];
 }
 
 const { heading, cards } = Astro.props;
 ---
 
 {cards.length > 0 && (
-	<section class="related-cards" aria-label={heading}>
-		<h2>{heading}</h2>
-		<ul>
-			{cards.slice(0, 4).map((card) => (
-				<li>
-					<a href={card.href}>
-						{card.image && (
-							<img
-								src={resolveImageUrl(card.image)}
-								alt={card.alt ?? ""}
-								width="560"
-								height="315"
-								loading="lazy"
-								decoding="async"
-							/>
-						)}
-						<span class="title">{card.title}</span>
-						{card.score !== undefined && (
-							<ScoreBadge score={card.score} compact />
-						)}
-					</a>
-				</li>
-			))}
-		</ul>
-	</section>
+  <section class="related-cards" aria-label={heading}>
+    <h2>{heading}</h2>
+    <ul>
+      {cards.slice(0, 4).map((card) => (
+        <li>
+          <a href={card.href}>
+            {card.image && (
+              <img
+                src={resolveImageUrl(card.image)}
+                alt={card.alt ?? ""}
+                width="560"
+                height="315"
+                loading="lazy"
+                decoding="async"
+              />
+            )}
+            <span class="title">{card.title}</span>
+            {card.score !== undefined && (
+              <ScoreBadge score={card.score} compact />
+            )}
+          </a>
+        </li>
+      ))}
+    </ul>
+  </section>
 )}
 
 <style>
-	.related-cards {
-		margin: 3rem 0 1rem;
-	}
-	.related-cards h2 {
-		margin: 0 0 1rem;
-		padding-left: 0.65rem;
-		border-left: 2px solid var(--accent);
-		color: var(--muted);
-		font-size: 0.9rem;
-		letter-spacing: 0.06em;
-		text-transform: uppercase;
-	}
-	.related-cards ul {
-		display: flex;
-		gap: 0.8rem;
-		overflow-x: auto;
-		margin: 0;
-		padding: 0 0 0.75rem;
-		list-style: none;
-		scroll-snap-type: x mandatory;
-	}
-	.related-cards li {
-		flex: 0 0 140px;
-		min-width: 0;
-		scroll-snap-align: start;
-	}
-	.related-cards a {
-		display: grid;
-		gap: 0.45rem;
-		height: 100%;
-		color: var(--text);
-		text-decoration: none;
-	}
-	.related-cards img {
-		display: block;
-		width: 100%;
-		aspect-ratio: 16 / 9;
-		border: 1px solid var(--border-card);
-		border-radius: 0.55rem;
-		background: var(--surface);
-		object-fit: cover;
-	}
-	.related-cards .title {
-		display: -webkit-box;
-		overflow: hidden;
-		font-size: 0.84rem;
-		font-weight: 700;
-		line-height: 1.4;
-		-webkit-box-orient: vertical;
-		-webkit-line-clamp: 2;
-	}
-	.related-cards a:hover .title {
-		color: var(--accent);
-	}
-	@media (max-width: 600px) {
-		.related-cards li {
-			flex-basis: 120px;
-		}
-	}
+  .related-cards {
+    margin: 3rem 0 1rem;
+  }
+  .related-cards h2 {
+    margin: 0 0 1rem;
+    padding-left: 0.65rem;
+    border-left: 2px solid var(--accent);
+    color: var(--muted);
+    font-size: 0.9rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .related-cards ul {
+    display: flex;
+    gap: 0.8rem;
+    overflow-x: auto;
+    margin: 0;
+    padding: 0 0 0.75rem;
+    list-style: none;
+    scroll-snap-type: x mandatory;
+  }
+  .related-cards li {
+    flex: 0 0 140px;
+    min-width: 0;
+    scroll-snap-align: start;
+  }
+  .related-cards a {
+    display: grid;
+    gap: 0.45rem;
+    height: 100%;
+    color: var(--text);
+    text-decoration: none;
+  }
+  .related-cards img {
+    display: block;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    border: 1px solid var(--border-card);
+    border-radius: 0.55rem;
+    background: var(--surface);
+    object-fit: cover;
+  }
+  .related-cards .title {
+    display: -webkit-box;
+    overflow: hidden;
+    font-size: 0.84rem;
+    font-weight: 700;
+    line-height: 1.4;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+  .related-cards a:hover .title {
+    color: var(--accent);
+  }
+  @media (max-width: 600px) {
+    .related-cards li {
+      flex-basis: 120px;
+    }
+  }
 </style>

@@ -1,0 +1,365 @@
+---
+import { getCollectionEntries } from "../../lib/fetch-content";
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import PageIntro from "../../components/PageIntro.astro";
+import CoverArtwork from "../../components/CoverArtwork.astro";
+import ScoreBadge from "../../components/ScoreBadge.astro";
+import EditorialTags from "../../components/EditorialTags.astro";
+import FeaturedBadge from "../../components/FeaturedBadge.astro";
+import CatalogEmpty from "../../components/CatalogEmpty.astro";
+import "../../styles/main.css";
+
+const reviews = (await getCollectionEntries("reviews")).sort(
+  (a, b) => b.data.publishedAt.valueOf() - a.data.publishedAt.valueOf(),
+);
+const games = await getCollectionEntries("games");
+const gameTitles = new Map(games.map((game) => [game.id, game.data.title]));
+const formatDate = (date: Date) =>
+  date.toLocaleDateString("es-AR", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+---
+
+<BaseLayout
+  title="Reseñas"
+  description="Reseñas de videojuegos con puntuaciones explicadas, en Netti."
+>
+  <PageIntro
+    eyebrow="Opinión editorial"
+    title="Reseñas"
+    description="Análisis, puntuaciones explicadas y veredictos para decidir qué jugar después."
+  />
+
+  {reviews.length > 0 ? (
+    <>
+      <section class="tools" aria-label="Buscar y ordenar reseñas">
+        <label class="search">
+          <span>Buscar reseña</span>
+          <input
+            id="review-search"
+            type="search"
+            placeholder="Título, juego o veredicto…"
+            autocomplete="off"
+          />
+        </label>
+        <label class="sort">
+          <span>Ordenar por</span>
+          <select id="review-sort" name="sort">
+            <option value="recent">Más recientes</option>
+            <option value="score">Mejor puntuación</option>
+            <option value="title">Título (A–Z)</option>
+          </select>
+        </label>
+        <p id="review-count" class="count" aria-live="polite">
+          {reviews.length} reseñas
+        </p>
+      </section>
+
+      <ol class="review-list" id="review-list">
+        {reviews.map((review) => (
+          <li
+            class="review-row"
+            data-title={review.data.title.toLocaleLowerCase("es")}
+            data-search={`${review.data.title} ${review.data.description} ${review.data.scoreReason} ${gameTitles.get(review.data.game) ?? ""}`.toLocaleLowerCase(
+              "es",
+            )}
+            data-score={review.data.score}
+            data-date={review.data.publishedAt.valueOf()}
+          >
+            <a
+              class="thumb"
+              href={`/resenas/${review.id}/`}
+              aria-label={`Leer reseña: ${review.data.title}`}
+            >
+              <CoverArtwork
+                src={review.data.coverImage}
+                alt={review.data.coverAlt ?? review.data.title}
+                title={review.data.title}
+                variant="compact"
+              />
+            </a>
+            <div class="body">
+              <h2>
+                <FeaturedBadge featured={review.data.featured} />
+                <a href={`/resenas/${review.id}/`}>{review.data.title}</a>
+              </h2>
+              <p class="summary">{review.data.description}</p>
+              <EditorialTags tags={review.data.tags} limit={2} />
+              <p class="reason">{review.data.scoreReason}</p>
+              <p class="meta">
+                <time datetime={review.data.publishedAt.toISOString()}>
+                  {formatDate(review.data.publishedAt)}
+                </time>
+                <span>{review.data.author}</span>
+              </p>
+            </div>
+            <div class="score">
+              <ScoreBadge score={review.data.score} size="lg" />
+              <a class="read" href={`/resenas/${review.id}/`}>
+                Leer reseña <span aria-hidden="true">→</span>
+              </a>
+            </div>
+          </li>
+        ))}
+      </ol>
+      <CatalogEmpty
+        label="No hay reseñas que coincidan con esa búsqueda."
+        id="reviews-empty"
+        hidden
+      />
+    </>
+  ) : (
+    <p class="empty">Todavía no hay reseñas publicadas.</p>
+  )}
+</BaseLayout>
+
+<script>
+  const list = document.querySelector<HTMLOListElement>("#review-list");
+  const search = document.querySelector<HTMLInputElement>("#review-search");
+  const sort = document.querySelector<HTMLSelectElement>("#review-sort");
+  const count = document.querySelector<HTMLElement>("#review-count");
+  const empty = document.querySelector<HTMLElement>("#reviews-empty");
+  const rows = list
+    ? [...list.querySelectorAll<HTMLElement>(".review-row")]
+    : [];
+  const params = new URLSearchParams(location.search);
+
+  function syncUrl() {
+    const next = new URLSearchParams();
+    if (search?.value.trim()) next.set("q", search.value.trim());
+    if (sort?.value && sort.value !== "recent") next.set("orden", sort.value);
+    const query = next.toString();
+    history.replaceState(
+      null,
+      "",
+      query ? `${location.pathname}?${query}` : location.pathname,
+    );
+  }
+
+  function apply() {
+    if (!list) return;
+    const query = search?.value.trim().toLocaleLowerCase("es") ?? "";
+    let visible = 0;
+    for (const row of rows) {
+      const show = (row.dataset.search ?? "").includes(query);
+      row.hidden = !show;
+      if (show) visible++;
+    }
+    const mode = sort?.value ?? "recent";
+    const ordered = [...rows].sort((a: HTMLElement, b: HTMLElement) => {
+      if (mode === "score")
+        return Number(b.dataset.score ?? 0) - Number(a.dataset.score ?? 0);
+      if (mode === "title")
+        return (a.dataset.title ?? "").localeCompare(
+          b.dataset.title ?? "",
+          "es",
+        );
+      return Number(b.dataset.date ?? 0) - Number(a.dataset.date ?? 0);
+    });
+    for (const row of ordered) list.append(row);
+    if (count) count.textContent = `${visible} de ${rows.length} reseñas`;
+    if (empty) empty.hidden = visible !== 0;
+  }
+
+  if (search && params.get("q")) search.value = params.get("q") ?? "";
+  if (
+    sort &&
+    params.get("orden") &&
+    ["recent", "score", "title"].includes(params.get("orden") ?? "")
+  )
+    sort.value = params.get("orden") ?? "recent";
+  apply();
+
+  search?.addEventListener("input", () => {
+    apply();
+    syncUrl();
+  });
+  sort?.addEventListener("change", () => {
+    apply();
+    syncUrl();
+  });
+</script>
+
+<style>
+  .tools {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(160px, 1fr) auto;
+    gap: 0.85rem;
+    align-items: end;
+    margin: clamp(1rem, 3vw, 1.75rem) 0 1.25rem;
+    padding: 1.15rem;
+    border: 1px solid var(--border-card);
+    border-radius: 1.15rem;
+    background: color-mix(in srgb, var(--surface) 94%, transparent);
+    box-shadow: var(--shadow-hard-sm);
+  }
+  .tools label {
+    display: grid;
+    gap: 0.45rem;
+    color: var(--muted);
+    font-size: 0.78rem;
+    font-weight: 600;
+  }
+  .tools input,
+  .tools select {
+    width: 100%;
+    min-height: 44px;
+    padding: 0.6rem 0.8rem;
+    border: 1px solid var(--border-card);
+    border-radius: 0.8rem;
+    color: var(--text);
+    background: var(--field);
+    font:
+      500 0.92rem "Quicksand",
+      system-ui,
+      sans-serif;
+    transition: border-color 160ms ease;
+  }
+  .tools select {
+    padding-right: 2.3rem;
+  }
+  .tools input:hover,
+  .tools select:hover,
+  .tools input:focus-visible,
+  .tools select:focus-visible {
+    border-color: var(--accent);
+  }
+  .tools input::placeholder {
+    color: color-mix(in srgb, var(--muted) 75%, transparent);
+  }
+  .count {
+    margin: 0 0 0.8rem;
+    color: var(--muted);
+    font-size: 0.82rem;
+    white-space: nowrap;
+  }
+
+  .review-list {
+    display: grid;
+    gap: 1.15rem;
+    margin: 0;
+    padding: 0 0 2rem;
+    list-style: none;
+  }
+  .review-row {
+    display: grid;
+    grid-template-columns: 220px minmax(0, 1fr) auto;
+    gap: 1.75rem;
+    align-items: center;
+    padding: 1.35rem;
+    border: 1px solid var(--border-card);
+    border-radius: 1.2rem;
+    background: color-mix(in srgb, var(--surface) 92%, transparent);
+    box-shadow: var(--shadow-hard-sm);
+    transition:
+      border-color 160ms ease,
+      box-shadow 160ms ease,
+      transform 160ms ease;
+  }
+  .review-row:hover {
+    border-color: var(--accent);
+    box-shadow: var(--shadow-hard);
+    transform: translateY(-3px);
+  }
+  .review-row[hidden] {
+    display: none;
+  }
+  .body h2 {
+    margin: 0 0 0.45rem;
+    font-size: 1.55rem;
+    line-height: 1.2;
+  }
+  .body h2 {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.45rem;
+  }
+  .summary {
+    margin: 0 0 0.5rem;
+    color: var(--muted);
+    font-size: 1rem;
+    line-height: 1.6;
+  }
+  .reason {
+    margin: 0 0 0.7rem;
+    color: var(--prose);
+    font-size: 0.95rem;
+    line-height: 1.65;
+  }
+  .meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 1rem;
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.82rem;
+  }
+  .meta time {
+    color: var(--accent);
+    font-weight: 600;
+  }
+  .score {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.7rem;
+  }
+  .score .read {
+    margin-top: auto;
+    box-shadow: 0 2px 5px rgb(0 0 0 / 20%);
+    transition:
+      transform 0.2s ease,
+      box-shadow 0.2s ease;
+  }
+  .score .read:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 10px rgb(0 0 0 / 32%);
+  }
+  .read {
+    color: var(--accent);
+    font-size: 0.88rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  @media (max-width: 820px) {
+    .review-row {
+      grid-template-columns: 160px minmax(0, 1fr);
+      gap: 1.25rem;
+    }
+    .score {
+      grid-column: 2;
+      flex-direction: row;
+      align-items: center;
+      justify-content: space-between;
+    }
+  }
+  @media (max-width: 720px) {
+    .tools {
+      grid-template-columns: 1fr 1fr;
+    }
+    .tools .search {
+      grid-column: 1 / -1;
+    }
+    .count {
+      grid-column: 1 / -1;
+      margin: 0;
+    }
+  }
+  @media (max-width: 520px) {
+    .review-row {
+      grid-template-columns: 96px minmax(0, 1fr);
+      padding: 1rem;
+    }
+    .body h2 {
+      font-size: 1.2rem;
+    }
+    .reason {
+      display: none;
+    }
+  }
+</style>

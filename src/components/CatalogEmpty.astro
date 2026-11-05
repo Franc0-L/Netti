@@ -1,0 +1,22 @@
+---
+interface Props {
+  label?: string;
+  id?: string;
+  hidden?: boolean;
+}
+
+const { label = "No hay resultados", id, hidden = true } = Astro.props;
+---
+
+<div class="catalog-empty" id={id} {hidden}>
+  <p>{label}</p>
+</div>
+
+<style>
+  .catalog-empty {
+    text-align: center;
+    padding: 2rem;
+    color: var(--muted);
+    font-size: 1rem;
+  }
+</style>

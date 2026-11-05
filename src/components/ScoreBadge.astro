@@ -1,79 +1,79 @@
 ---
 interface Props {
-	score: number;
-	compact?: boolean;
-	size?: "md" | "lg";
+  score: number;
+  compact?: boolean;
+  size?: "md" | "lg";
 }
 
 const { score, compact = false, size = "md" } = Astro.props;
 const tier =
-	score >= 90
-		? { name: "Mítica", color: "var(--gold)" }
-		: score >= 80
-			? { name: "Legendaria", color: "var(--red)" }
-			: score >= 60
-				? { name: "Épica", color: "var(--accent)" }
-				: score >= 40
-					? { name: "Rara", color: "var(--cyan)" }
-					: score >= 20
-						? { name: "Poco común", color: "var(--green)" }
-						: { name: "Común", color: "#a0a1aa" };
+  score >= 90
+    ? { name: "Mítica", color: "var(--gold)" }
+    : score >= 80
+      ? { name: "Legendaria", color: "var(--red)" }
+      : score >= 60
+        ? { name: "Épica", color: "var(--accent)" }
+        : score >= 40
+          ? { name: "Rara", color: "var(--cyan)" }
+          : score >= 20
+            ? { name: "Poco común", color: "var(--green)" }
+            : { name: "Común", color: "#a0a1aa" };
 ---
 
 <span
-	class:list={["score-badge", { compact, "size-lg": size === "lg" }]}
-	style={`--score-color: ${tier.color}`}
-	aria-label={`Puntuación ${score}, rareza ${tier.name}`}
+  class:list={["score-badge", { compact, "size-lg": size === "lg" }]}
+  style={`--score-color: ${tier.color}`}
+  aria-label={`Puntuación ${score}, rareza ${tier.name}`}
 >
-	<strong>{score}</strong>
-	{!compact && <span>{tier.name}</span>}
+  <strong>{score}</strong>
+  {!compact && <span>{tier.name}</span>}
 </span>
 
 <style>
-	.score-badge {
-		display: inline-flex;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-		gap: 0.1rem;
-		min-width: 4.4rem;
-		padding: 0.5rem 0.8rem;
-		border: 2px solid var(--score-color);
-		border-radius: 0.8rem;
-		color: var(--score-color);
-		background: color-mix(in srgb, var(--score-color) 10%, var(--surface));
-		box-shadow: 3px 4px 0 rgb(70 45 143 / 50%);
-		font-variant-numeric: tabular-nums;
-		line-height: 1;
-		white-space: nowrap;
-	}
-	/* Quicksand es variable 300–700: 800 se sintetizaría y engordaría el número. */
-	.score-badge strong {
-		font-family: var(--font-display);
-		font-size: 1.75rem;
-		font-weight: 700;
-	}
-	.score-badge span {
-		font-size: 0.68rem;
-		font-weight: 700;
-		letter-spacing: 0.02em;
-	}
-	.compact {
-		min-width: 3.6rem;
-		padding: 0.45rem 0.55rem;
-	}
-	.compact strong {
-		font-size: 1.3rem;
-	}
-	.size-lg {
-		min-width: 7rem;
-		padding: 1rem 1.2rem;
-		border-radius: 1rem;
-	}
-	.size-lg strong {
-		font-size: 3.2rem;
-	}
-	.size-lg span {
-		font-size: 0.82rem;
-	}
+  .score-badge {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.1rem;
+    min-width: 4.4rem;
+    padding: 0.5rem 0.8rem;
+    border: 2px solid var(--score-color);
+    border-radius: 0.8rem;
+    color: var(--score-color);
+    background: color-mix(in srgb, var(--score-color) 10%, var(--surface));
+    box-shadow: 3px 4px 0 rgb(70 45 143 / 50%);
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+    white-space: nowrap;
+  }
+  /* Quicksand es variable 300–700: 800 se sintetizaría y engordaría el número. */
+  .score-badge strong {
+    font-family: var(--font-display);
+    font-size: 1.75rem;
+    font-weight: 700;
+  }
+  .score-badge span {
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+  }
+  .compact {
+    min-width: 3.6rem;
+    padding: 0.45rem 0.55rem;
+  }
+  .compact strong {
+    font-size: 1.3rem;
+  }
+  .size-lg {
+    min-width: 7rem;
+    padding: 1rem 1.2rem;
+    border-radius: 1rem;
+  }
+  .size-lg strong {
+    font-size: 3.2rem;
+  }
+  .size-lg span {
+    font-size: 0.82rem;
+  }
 </style>

@@ -215,8 +215,7 @@ export async function getCollectionEntry<T extends Collection = Collection>(
   const raw = Buffer.from(blob.content, "base64").toString("utf8");
   const { data, content } = parseContent(raw);
   return validateEntry(collection, slug, data, content) as
-    | CollectionEntryMap[T]
-    | null;
+    CollectionEntryMap[T] | null;
 }
 
 // Valida que una colección exista en los schemas definidos.

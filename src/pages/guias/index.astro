@@ -1,0 +1,143 @@
+---
+import { getCollectionEntries } from "../../lib/fetch-content";
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import PageIntro from "../../components/PageIntro.astro";
+import CoverArtwork from "../../components/CoverArtwork.astro";
+import CatalogEmpty from "../../components/CatalogEmpty.astro";
+import "../../styles/main.css";
+
+const guides = (await getCollectionEntries("guides")).sort(
+  (a: { data: { publishedAt: Date } }, b: { data: { publishedAt: Date } }) =>
+    b.data.publishedAt.valueOf() - a.data.publishedAt.valueOf(),
+);
+const formatDate = (date: Date) =>
+  date.toLocaleDateString("es-AR", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+---
+
+<BaseLayout
+  title="Guías"
+  description="Guías y consejos prácticos, sin spoilers, para arrancar de la mejor manera."
+>
+  <PageIntro
+    eyebrow="Acompañamiento"
+    title="Guías"
+    description="Consejos prácticos para avanzar, descubrir secretos y disfrutar cada partida a tu ritmo."
+  />
+
+  {guides.length > 0 ? (
+    <ol class="guide-list">
+      {guides.map(
+        (guide: {
+          id: string;
+          data: {
+            title: string;
+            coverImage?: string;
+            coverAlt?: string;
+            description: string;
+            publishedAt: Date;
+          };
+        }) => (
+          <li class="guide">
+            <a
+              class="thumb"
+              href={`/guias/${guide.id}/`}
+              aria-label={`Leer guía: ${guide.data.title}`}
+            >
+              <CoverArtwork
+                src={guide.data.coverImage}
+                alt={guide.data.coverAlt ?? guide.data.title}
+                title={guide.data.title}
+              />
+            </a>
+            <div class="body">
+              <p class="eyebrow">Guía · {formatDate(guide.data.publishedAt)}</p>
+              <h2>
+                <a href={`/guias/${guide.id}/`}>{guide.data.title}</a>
+              </h2>
+              <p class="summary">{guide.data.description}</p>
+              <a class="read" href={`/guias/${guide.id}/`}>
+                Leer guía <span aria-hidden="true">→</span>
+              </a>
+            </div>
+          </li>
+        ),
+      )}
+    </ol>
+  ) : (
+    <CatalogEmpty label="Todavía no hay guías publicadas." />
+  )}
+</BaseLayout>
+
+<style>
+  .guide-list {
+    display: grid;
+    gap: 1.15rem;
+    margin: clamp(1rem, 3vw, 1.75rem) 0 0;
+    padding: 0 0 2rem;
+    list-style: none;
+  }
+  .guide {
+    display: grid;
+    grid-template-columns: 260px minmax(0, 1fr);
+    gap: 1.75rem;
+    align-items: center;
+    padding: 1.35rem;
+    border: 1px solid var(--border-card);
+    border-radius: 1.2rem;
+    background: color-mix(in srgb, var(--surface) 92%, transparent);
+    box-shadow: var(--shadow-hard-sm);
+    transition:
+      border-color 180ms ease,
+      box-shadow 180ms ease,
+      transform 180ms ease;
+  }
+  .guide:hover {
+    border-color: var(--accent);
+    box-shadow: var(--shadow-hard);
+    transform: translateY(-3px);
+  }
+  .eyebrow {
+    margin: 0 0 0.35rem;
+    color: var(--accent);
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .guide h2 {
+    margin: 0 0 0.45rem;
+    font-size: 1.55rem;
+    line-height: 1.2;
+  }
+  .guide .summary {
+    margin: 0 0 0.65rem;
+    color: var(--muted);
+    font-size: 1rem;
+    line-height: 1.6;
+  }
+  .read {
+    color: var(--accent);
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
+
+  @media (max-width: 760px) {
+    .guide {
+      grid-template-columns: 160px minmax(0, 1fr);
+      gap: 1.25rem;
+    }
+  }
+  @media (max-width: 520px) {
+    .guide {
+      grid-template-columns: 1fr;
+    }
+    .guide h2 {
+      font-size: 1.3rem;
+    }
+  }
+</style>

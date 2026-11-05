@@ -6,333 +6,334 @@ import ScoreBadge from "../components/ScoreBadge.astro";
 
 const featuredGames = (await getCollectionEntries("games")).slice(0, 4);
 const featuredReviews = (await getCollectionEntries("reviews"))
-	.sort(
-		(a, b) => b.data.publishedAt.valueOf() - a.data.publishedAt.valueOf(),
-	)
-	.slice(0, 3);
+  .sort((a, b) => b.data.publishedAt.valueOf() - a.data.publishedAt.valueOf())
+  .slice(0, 3);
 ---
 
 <BaseLayout
-	title="Página no encontrada · Netti"
-	description="La página que buscas no existe. Volvé al inicio o explorá nuestro catálogo."
+  title="Página no encontrada · Netti"
+  description="La página que buscas no existe. Volvé al inicio o explorá nuestro catálogo."
 >
-	<article class="not-found-page">
-		<header class="not-found-header">
-			<div class="error-code">404</div>
-			<h1>Te fuiste fuera del mapa.</h1>
-			<p class="not-found-intro">
-				La página que buscás no existe o fue movida. No te preocupes, todavía
-				tenés mucho por descubrir en Netti.
-			</p>
-		</header>
+  <article class="not-found-page">
+    <header class="not-found-header">
+      <div class="error-code">404</div>
+      <h1>Te fuiste fuera del mapa.</h1>
+      <p class="not-found-intro">
+        La página que buscás no existe o fue movida. No te preocupes, todavía
+        tenés mucho por descubrir en Netti.
+      </p>
+    </header>
 
-		<section class="not-found-actions">
-			<a href="/" class="btn-primary">
-				<svg
-					viewBox="0 0 24 24"
-					fill="none"
-					stroke="currentColor"
-					stroke-width="2.5"
-					stroke-linecap="round"
-					stroke-linejoin="round"
-					aria-hidden="true"
-				>
-					<path d="M5 12h14" />
-					<path d="m12 5 7 7-7 7" />
-				</svg>
-				Volver al inicio
-			</a>
-		</section>
+    <section class="not-found-actions">
+      <a href="/" class="btn-primary">
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M5 12h14" />
+          <path d="m12 5 7 7-7 7" />
+        </svg>
+        Volver al inicio
+      </a>
+    </section>
 
-		{featuredGames.length > 0 && (
-			<section class="not-found-suggestions">
-				<h2>Quizá te interese…</h2>
-				<div class="suggestions-grid">
-					{featuredGames.map((game) => (
-						<a
-							href={`/juegos/${game.id}/`}
-							class="suggestion-card"
-						>
-							<CoverArtwork
-								src={game.data.coverImage}
-								alt={game.data.coverAlt ?? game.data.title}
-								title={game.data.title}
-							/>
-							<div class="suggestion-info">
-								<h3>{game.data.title}</h3>
-								<p class="suggestion-meta">
-									{game.data.releaseYear} ·
-									{game.data.genres.slice(0, 2).join(" · ")}
-								</p>
-							</div>
-						</a>
-					))}
-				</div>
-			</section>
-		)}
+    {featuredGames.length > 0 && (
+      <section class="not-found-suggestions">
+        <h2>Quizá te interese…</h2>
+        <div class="suggestions-grid">
+          {featuredGames.map((game) => (
+            <a href={`/juegos/${game.id}/`} class="suggestion-card">
+              <CoverArtwork
+                src={game.data.coverImage}
+                alt={game.data.coverAlt ?? game.data.title}
+                title={game.data.title}
+              />
+              <div class="suggestion-info">
+                <h3>{game.data.title}</h3>
+                <p class="suggestion-meta">
+                  {game.data.releaseYear} ·
+                  {game.data.genres.slice(0, 2).join(" · ")}
+                </p>
+              </div>
+            </a>
+          ))}
+        </div>
+      </section>
+    )}
 
-		{featuredReviews.length > 0 && (
-			<section class="not-found-suggestions">
-				<h2>Reseñas recientes</h2>
-				<div class="suggestions-list">
-					{featuredReviews.map((review) => (
-						<a href={`/resenas/${review.id}/`} class="suggestion-item">
-							<span class="suggestion-title">{review.data.title}</span>
-							<ScoreBadge score={review.data.score} compact />
-						</a>
-					))}
-				</div>
-			</section>
-		)}
+    {featuredReviews.length > 0 && (
+      <section class="not-found-suggestions">
+        <h2>Reseñas recientes</h2>
+        <div class="suggestions-list">
+          {featuredReviews.map((review) => (
+            <a href={`/resenas/${review.id}/`} class="suggestion-item">
+              <span class="suggestion-title">{review.data.title}</span>
+              <ScoreBadge score={review.data.score} compact />
+            </a>
+          ))}
+        </div>
+      </section>
+    )}
 
-		<section class="not-found-search">
-			<h2>¿Buscás algo específico?</h2>
-			<form class="not-found-search-form" action="/buscar/" method="get" role="search">
-				<svg
-					viewBox="0 0 24 24"
-					fill="none"
-					stroke="currentColor"
-					stroke-width="2.2"
-					stroke-linecap="round"
-					aria-hidden="true"
-				>
-					<circle cx="10.5" cy="10.5" r="6.5" />
-					<path d="m20 20-4.8-4.8" />
-				</svg>
-				<input
-					type="search"
-					name="q"
-					placeholder="Juegos, reseñas, noticias…"
-					aria-label="Buscar en Netti"
-					autocomplete="off"
-					required
-				/>
-				<button type="submit">Buscar</button>
-			</form>
-		</section>
-	</article>
+    <section class="not-found-search">
+      <h2>¿Buscás algo específico?</h2>
+      <form
+        class="not-found-search-form"
+        action="/buscar/"
+        method="get"
+        role="search"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.2"
+          stroke-linecap="round"
+          aria-hidden="true"
+        >
+          <circle cx="10.5" cy="10.5" r="6.5" />
+          <path d="m20 20-4.8-4.8" />
+        </svg>
+        <input
+          type="search"
+          name="q"
+          placeholder="Juegos, reseñas, noticias…"
+          aria-label="Buscar en Netti"
+          autocomplete="off"
+          required
+        />
+        <button type="submit">Buscar</button>
+      </form>
+    </section>
+  </article>
 </BaseLayout>
 
-
-
 <style>
-	.not-found-page {
-		max-width: 720px;
-		margin: 0 auto;
-		padding: clamp(2rem, 4vw, 3rem) clamp(1.25rem, 3vw, 2.5rem) 1.5rem;
-		text-align: center;
-	}
-	.not-found-header {
-		margin-bottom: 2.5rem;
-	}
-	.error-code {
-		font-size: clamp(4rem, 12vw, 8rem);
-		font-weight: 900;
-		color: var(--accent);
-		letter-spacing: -0.05em;
-		margin: 0;
-		text-shadow: 3px 3px 0 var(--border);
-	}
-	.not-found-header h1 {
-		font-size: clamp(2rem, 5vw, 3rem);
-		margin: 0.5rem 0 0.75rem;
-		line-height: 1.1;
-	}
-	.not-found-intro {
-		color: var(--muted);
-		font-size: 1.1rem;
-		line-height: 1.7;
-		margin: 0;
-		max-width: 48ch;
-		margin: 0 auto;
-	}
-	.not-found-actions {
-		margin-bottom: 2.5rem;
-	}
-	.btn-primary {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.6rem;
-		min-height: 56px;
-		padding: 0 1.75rem;
-		border: 1px solid var(--border-card);
-		border-radius: 999px;
-		background: var(--surface);
-		color: var(--text);
-		font-weight: 700;
-		font-size: 1.05rem;
-		box-shadow: var(--shadow-hard-sm);
-		transition:
-			border-color 160ms ease,
-			box-shadow 160ms ease,
-			transform 160ms ease;
-		text-decoration: none;
-	}
-	.btn-primary svg {
-		width: 20px;
-		height: 20px;
-	}
-	.btn-primary:hover {
-		border-color: var(--accent);
-		box-shadow: var(--shadow-hard);
-		transform: translateY(-2px);
-	}
-	.btn-primary svg {
-		color: var(--accent);
-	}
-	.not-found-suggestions {
-		margin-bottom: 2.5rem;
-		text-align: left;
-	}
-	.not-found-suggestions h2 {
-		font-size: 1.25rem;
-		margin: 0 0 1rem;
-		color: var(--accent);
-		border-left: 2px solid var(--accent);
-		padding-left: 0.75rem;
-	}
-	.suggestions-grid {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-		gap: 1rem;
-	}
-	.suggestion-card {
-		display: block;
-		text-decoration: none;
-		border: 1px solid var(--border-card);
-		border-radius: 1rem;
-		background: color-mix(in srgb, var(--surface) 92%, transparent);
-		padding: 1rem;
-		transition:
-			border-color 160ms ease,
-			box-shadow 160ms ease,
-			transform 160ms ease;
-	}
-	.suggestion-card:hover {
-		border-color: var(--accent);
-		box-shadow: var(--shadow-hard-sm);
-		transform: translateY(-3px);
-	}
-	.suggestion-card .cover {
-		width: 100%;
-		aspect-ratio: 16/9;
-		border-radius: 0.75rem;
-		margin-bottom: 0.75rem;
-		background: linear-gradient(135deg, var(--cover-from), var(--cover-to) 72%);
-		display: grid;
-		place-items: center;
-	}
-	.suggestion-card .cover::before {
-		content: "";
-		display: block;
-		padding-top: 56.25%;
-		grid-area: 1 / 1 / 2 / 2;
-	}
-	.suggestion-card img {
-		grid-area: 1 / 1 / 2 / 2;
-		width: 100%;
-		height: 100%;
-		object-fit: cover;
-		border-radius: 0.75rem;
-	}
-	.suggestion-info h3 {
-		margin: 0 0 0.4rem;
-		font-size: 1rem;
-		color: var(--text);
-	}
-	.suggestion-meta {
-		margin: 0;
-		color: var(--muted);
-		font-size: 0.85rem;
-	}
-	.suggestions-list {
-		display: flex;
-		flex-direction: column;
-		gap: 0.75rem;
-	}
-	.suggestion-item {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 1rem;
-		padding: 0.75rem 1rem;
-		border: 1px solid var(--border-card);
-		border-radius: 0.9rem;
-		background: color-mix(in srgb, var(--surface) 92%, transparent);
-		text-decoration: none;
-		transition:
-			border-color 160ms ease,
-			box-shadow 160ms ease;
-	}
-	.suggestion-item:hover {
-		border-color: var(--accent);
-		box-shadow: var(--shadow-hard-sm);
-	}
-	.suggestion-title {
-		color: var(--text);
-		font-weight: 600;
-		font-size: 0.95rem;
-	}
-	.not-found-search {
-		text-align: center;
-	}
-	.not-found-search h2 {
-		font-size: 1.25rem;
-		margin: 0 0 1rem;
-		color: var(--accent);
-		border-left: 2px solid var(--accent);
-		padding-left: 0.75rem;
-		text-align: left;
-	}
-	.not-found-search-form {
-		display: flex;
-		gap: 0.6rem;
-		width: min(100%, 520px);
-		margin: 0 auto;
-		padding: 0.5rem 0.5rem 0.5rem 1.1rem;
-		border: 2px solid var(--border-card);
-		border-radius: 999px;
-		background: color-mix(in srgb, var(--surface) 88%, transparent);
-		box-shadow: var(--shadow-hard-sm);
-	}
-	.not-found-search-form svg {
-		flex: none;
-		align-self: center;
-		width: 20px;
-		height: 20px;
-		color: var(--accent);
-	}
-	.not-found-search-form input {
-		flex: 1;
-		min-width: 0;
-		min-height: 44px;
-		border: 0;
-		background: transparent;
-		color: var(--text);
-		font: 500 1rem "Quicksand", system-ui, sans-serif;
-	}
-	.not-found-search-form input:focus-visible {
-		outline: none;
-	}
-	.not-found-search-form button {
-		min-height: 44px;
-		padding: 0.5rem 1.3rem;
-		border: 0;
-		border-radius: 999px;
-		background: var(--accent);
-		color: var(--on-accent);
-		font-weight: 700;
-		cursor: pointer;
-	}
-	.not-found-search-form button:hover {
-		background: var(--accent-strong);
-	}
-	@media (max-width: 640px) {
-		.suggestions-grid {
-			grid-template-columns: 1fr;
-		}
-		.not-found-search-form {
-			width: 100%;
-		}
-	}
+  .not-found-page {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: clamp(2rem, 4vw, 3rem) clamp(1.25rem, 3vw, 2.5rem) 1.5rem;
+    text-align: center;
+  }
+  .not-found-header {
+    margin-bottom: 2.5rem;
+  }
+  .error-code {
+    font-size: clamp(4rem, 12vw, 8rem);
+    font-weight: 900;
+    color: var(--accent);
+    letter-spacing: -0.05em;
+    margin: 0;
+    text-shadow: 3px 3px 0 var(--border);
+  }
+  .not-found-header h1 {
+    font-size: clamp(2rem, 5vw, 3rem);
+    margin: 0.5rem 0 0.75rem;
+    line-height: 1.1;
+  }
+  .not-found-intro {
+    color: var(--muted);
+    font-size: 1.1rem;
+    line-height: 1.7;
+    margin: 0;
+    max-width: 48ch;
+    margin: 0 auto;
+  }
+  .not-found-actions {
+    margin-bottom: 2.5rem;
+  }
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    min-height: 56px;
+    padding: 0 1.75rem;
+    border: 1px solid var(--border-card);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--text);
+    font-weight: 700;
+    font-size: 1.05rem;
+    box-shadow: var(--shadow-hard-sm);
+    transition:
+      border-color 160ms ease,
+      box-shadow 160ms ease,
+      transform 160ms ease;
+    text-decoration: none;
+  }
+  .btn-primary svg {
+    width: 20px;
+    height: 20px;
+  }
+  .btn-primary:hover {
+    border-color: var(--accent);
+    box-shadow: var(--shadow-hard);
+    transform: translateY(-2px);
+  }
+  .btn-primary svg {
+    color: var(--accent);
+  }
+  .not-found-suggestions {
+    margin-bottom: 2.5rem;
+    text-align: left;
+  }
+  .not-found-suggestions h2 {
+    font-size: 1.25rem;
+    margin: 0 0 1rem;
+    color: var(--accent);
+    border-left: 2px solid var(--accent);
+    padding-left: 0.75rem;
+  }
+  .suggestions-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 1rem;
+  }
+  .suggestion-card {
+    display: block;
+    text-decoration: none;
+    border: 1px solid var(--border-card);
+    border-radius: 1rem;
+    background: color-mix(in srgb, var(--surface) 92%, transparent);
+    padding: 1rem;
+    transition:
+      border-color 160ms ease,
+      box-shadow 160ms ease,
+      transform 160ms ease;
+  }
+  .suggestion-card:hover {
+    border-color: var(--accent);
+    box-shadow: var(--shadow-hard-sm);
+    transform: translateY(-3px);
+  }
+  .suggestion-card .cover {
+    width: 100%;
+    aspect-ratio: 16/9;
+    border-radius: 0.75rem;
+    margin-bottom: 0.75rem;
+    background: linear-gradient(135deg, var(--cover-from), var(--cover-to) 72%);
+    display: grid;
+    place-items: center;
+  }
+  .suggestion-card .cover::before {
+    content: "";
+    display: block;
+    padding-top: 56.25%;
+    grid-area: 1 / 1 / 2 / 2;
+  }
+  .suggestion-card img {
+    grid-area: 1 / 1 / 2 / 2;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 0.75rem;
+  }
+  .suggestion-info h3 {
+    margin: 0 0 0.4rem;
+    font-size: 1rem;
+    color: var(--text);
+  }
+  .suggestion-meta {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
+  .suggestions-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  .suggestion-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--border-card);
+    border-radius: 0.9rem;
+    background: color-mix(in srgb, var(--surface) 92%, transparent);
+    text-decoration: none;
+    transition:
+      border-color 160ms ease,
+      box-shadow 160ms ease;
+  }
+  .suggestion-item:hover {
+    border-color: var(--accent);
+    box-shadow: var(--shadow-hard-sm);
+  }
+  .suggestion-title {
+    color: var(--text);
+    font-weight: 600;
+    font-size: 0.95rem;
+  }
+  .not-found-search {
+    text-align: center;
+  }
+  .not-found-search h2 {
+    font-size: 1.25rem;
+    margin: 0 0 1rem;
+    color: var(--accent);
+    border-left: 2px solid var(--accent);
+    padding-left: 0.75rem;
+    text-align: left;
+  }
+  .not-found-search-form {
+    display: flex;
+    gap: 0.6rem;
+    width: min(100%, 520px);
+    margin: 0 auto;
+    padding: 0.5rem 0.5rem 0.5rem 1.1rem;
+    border: 2px solid var(--border-card);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--surface) 88%, transparent);
+    box-shadow: var(--shadow-hard-sm);
+  }
+  .not-found-search-form svg {
+    flex: none;
+    align-self: center;
+    width: 20px;
+    height: 20px;
+    color: var(--accent);
+  }
+  .not-found-search-form input {
+    flex: 1;
+    min-width: 0;
+    min-height: 44px;
+    border: 0;
+    background: transparent;
+    color: var(--text);
+    font:
+      500 1rem "Quicksand",
+      system-ui,
+      sans-serif;
+  }
+  .not-found-search-form input:focus-visible {
+    outline: none;
+  }
+  .not-found-search-form button {
+    min-height: 44px;
+    padding: 0.5rem 1.3rem;
+    border: 0;
+    border-radius: 999px;
+    background: var(--accent);
+    color: var(--on-accent);
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .not-found-search-form button:hover {
+    background: var(--accent-strong);
+  }
+  @media (max-width: 640px) {
+    .suggestions-grid {
+      grid-template-columns: 1fr;
+    }
+    .not-found-search-form {
+      width: 100%;
+    }
+  }
 </style>

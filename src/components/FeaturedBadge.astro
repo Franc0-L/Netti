@@ -1,29 +1,29 @@
 ---
 interface Props {
-	featured?: boolean;
+  featured?: boolean;
 }
 
 const { featured = false } = Astro.props;
 ---
 
 {featured && (
-	<span class="featured-badge" aria-label="Destacado">
-		★
-	</span>
+  <span class="featured-badge" aria-label="Destacado">
+    ★
+  </span>
 )}
 
 <style>
-	.featured-badge {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		width: 2rem;
-		height: 2rem;
-		border-radius: 50%;
-		background: var(--gold);
-		color: var(--on-accent);
-		font-weight: 800;
-		font-size: 0.85rem;
-		line-height: 1;
-	}
+  .featured-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 50%;
+    background: var(--gold);
+    color: var(--on-accent);
+    font-weight: 800;
+    font-size: 0.85rem;
+    line-height: 1;
+  }
 </style>
