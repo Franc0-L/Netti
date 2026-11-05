@@ -1,0 +1,174 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+---
+
+<BaseLayout
+	title="Política de privacidad · Netti"
+	description="Política de privacidad de Netti. Qué datos recopilamos, cómo usamos las cookies de sesión del panel y cómo contactarnos."
+>
+	<article class="privacy-page">
+		<header class="privacy-header">
+			<h1>Política de privacidad</h1>
+			<p class="privacy-intro">
+				Última actualización: <time>{new Date().getFullYear()}-11-05</time>
+			</p>
+		</header>
+
+		<section class="privacy-section">
+			<h2>1. Responsable del sitio</h2>
+			<p>
+				Netti es un blog editorial de videojuegos gestionado de forma
+				independiente. No somos una empresa ni recabamos datos personales
+				de los visitantes para fines comerciales.
+			</p>
+		</section>
+
+		<section class="privacy-section">
+			<h2>2. Datos que no recopilamos</h2>
+			<p>
+				Este sitio <strong>no utiliza cookies de rastreo</strong>, no
+				incorpora herramientas de análisis de terceros (como Google
+				Analytics) y no vende ni cede información de los usuarios a
+				ninguna empresa externa.
+			</p>
+		</section>
+
+		<section class="privacy-section">
+			<h2>3. Cookies de sesión del panel editorial</h2>
+			<p>
+				El área de administración ubicada en <code>/admin/</code>
+				utiliza una cookie de sesión llamada
+				<code>netti_admin</code> únicamente para mantener tu
+				autenticación mientras editas contenido. Sus características son:
+			</p>
+			<ul class="privacy-list">
+				<li><strong>Nombre:</strong> <code>netti_admin</code></li>
+				<li><strong>Tipo:</strong> de sesión (técnica, necesaria)</li>
+				<li><strong>Duración:</strong> 8 horas desde el inicio de sesión</li>
+				<li>
+					<strong>Atributos:</strong>
+					<code>HttpOnly</code>,
+					<code>Secure</code> (en producción),
+					<code>SameSite=Strict</code>
+				</li>
+				<li>
+					<strong>Propósito:</strong> identificar que tenés una sesión
+					de editor válida. No se usa para rastreo ni publicidad.
+				</li>
+			</ul>
+			<p>
+				Al cerrar sesión desde el panel, la cookie se elimina del
+				navador.
+			</p>
+		</section>
+
+		<section class="privacy-section">
+			<h2>4. Enlaces externos</h2>
+			<p>
+				Nuestro sitio puede contener enlaces a plataformas externas como
+				YouTube, Instagram o TikTok. Al hacer clic en esos enlaces
+				salís de Netti y quedás sujeto a las políticas de privacidad de
+				cada plataforma. No nos hacemos responsables de sus prácticas.
+			</p>
+		</section>
+
+		<section class="privacy-section">
+			<h2>5. Tus derechos</h2>
+			<p>
+				Como no recopilamos datos personales de los visitantes, no hay
+				archivos que podamos entregar, modificar o eliminar sobre vos.
+				Si accedés al panel editorial y querés eliminar tu sesión,
+				solo tenés que cerrar sesión desde la interfaz.
+			</p>
+		</section>
+
+		<section class="privacy-section">
+			<h2>6. Contacto</h2>
+			<p>
+				Si tenés consultas sobre esta política o sobre el manejo de tu
+				sesión en el panel, podés escribirnos a:
+			</p>
+			<p class="privacy-contact">
+				<a href="mailto:nettivideojuegos@gmail.com">
+					nettivideojuegos@gmail.com
+				</a>
+			</p>
+		</section>
+
+		<footer class="privacy-footer">
+			<p>
+				© {new Date().getFullYear()} Netti. Todos los derechos
+				reservados.
+			</p>
+		</footer>
+	</article>
+</BaseLayout>
+
+<style>
+	.privacy-page {
+		max-width: 68ch;
+		margin: 0 auto;
+		padding: clamp(2rem, 4vw, 3rem) clamp(1.25rem, 3vw, 2.5rem) 1.5rem;
+	}
+	.privacy-header {
+		margin-bottom: 2rem;
+		border-bottom: 1px solid var(--border-card);
+		padding-bottom: 1rem;
+	}
+	.privacy-header h1 {
+		font-size: clamp(2rem, 5vw, 3rem);
+		margin: 0 0 0.5rem;
+	}
+	.privacy-intro {
+		color: var(--muted);
+		font-size: 1.05rem;
+		margin: 0;
+	}
+	.privacy-section {
+		margin-bottom: 2rem;
+	}
+	.privacy-section h2 {
+		font-size: 1.25rem;
+		margin-top: 1.5rem;
+		margin-bottom: 0.75rem;
+		color: var(--accent);
+	}
+	.privacy-section p {
+		margin-bottom: 1rem;
+		color: var(--prose);
+		line-height: 1.7;
+	}
+	.privacy-list {
+		margin: 0.75rem 0 1rem;
+		padding-left: 1.25rem;
+		color: var(--prose);
+		line-height: 1.7;
+	}
+	.privacy-list li {
+		margin-bottom: 0.5rem;
+	}
+	code {
+		background: var(--field);
+		padding: 0.1rem 0.4rem;
+		border-radius: 0.3rem;
+		font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+		font-size: 0.9em;
+		color: var(--accent-strong);
+	}
+	.privacy-contact a {
+		color: var(--accent);
+		text-decoration: underline;
+		text-underline-offset: 3px;
+	}
+	.privacy-contact a:hover {
+		color: var(--accent-strong);
+	}
+	.privacy-footer {
+		margin-top: 3rem;
+		padding-top: 1rem;
+		border-top: 1px solid var(--border-card);
+		font-size: 0.85rem;
+		color: var(--muted);
+		text-align: center;
+	}
+</style>
