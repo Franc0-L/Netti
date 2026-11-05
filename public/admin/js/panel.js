@@ -17,6 +17,7 @@ const collectionBadges = {
 let currentCollection = null;
 let currentPage = 1;
 let isAuthenticated = false;
+let editSha = "";
 
 // Elementos DOM
 const sidebarLinks = document.querySelectorAll(".nav-link");
@@ -177,7 +178,7 @@ function renderFilteredList(page, pageCount, total) {
   const filter = panelSearch.value.toLowerCase();
   const filtered = allEntries.filter(
     (entry) =>
-      entry.fields.title?.toLowerCase().includes(filter) ||
+      (entry.fields?.title || "").toLowerCase().includes(filter) ||
       entry.slug.toLowerCase().includes(filter)
   );
   renderList(filtered, page, pageCount, total);
@@ -197,9 +198,9 @@ function renderList(entries, page, pageCount, total) {
   const rows = entries
     .map((entry) => {
       const badgeClass = collectionBadges[entry.collection] || "";
-      const title = escapeHtml(entry.fields.title || entry.slug);
+      const title = escapeHtml(entry.fields?.title || entry.slug);
       const slug = escapeHtml(entry.slug);
-      const updated = entry.fields.updatedAt || entry.fields.publishedAt || "";
+      const updated = entry.fields?.updatedAt || entry.fields?.publishedAt || "";
       return `
       <tr>
         <td><span class="badge ${badgeClass}">${entry.collection}</span></td>
@@ -208,7 +209,7 @@ function renderList(entries, page, pageCount, total) {
         <td>${updated}</td>
         <td>
           <button class="btn-secondary" onclick="app.editArticle('${escapeHtml(entry.slug)}', '${escapeHtml(entry.collection)}', '${escapeHtml(entry.sha || "")}')">Editar</button>
-          <button class="btn-danger" onclick="app.deleteArticle('${escapeHtml(entry.slug)}', '${escapeHtml(entry.collection)}')">Borrar</button>
+          <button class="btn-danger" onclick="app.deleteArticle('${escapeHtml(entry.slug)}', '${escapeHtml(entry.collection)}', '${escapeHtml(entry.sha || "")}')">Borrar</button>
         </td>
       </tr>
     `;
@@ -245,6 +246,7 @@ function renderList(entries, page, pageCount, total) {
 
 async function createArticle() {
   editId.value = "";
+  editSha = "";
   editCollection.value = currentCollection;
   editTitle.value = "";
   editSlug.value = "";
@@ -287,6 +289,7 @@ async function editArticle(slug, collection, sha) {
     const entry = data.entry;
 
     editId.value = entry.slug;
+    editSha = entry.sha || "";
     editCollection.value = entry.collection;
     editTitle.value = entry.fields.title || "";
     editSlug.value = entry.slug;
@@ -319,14 +322,14 @@ async function editArticle(slug, collection, sha) {
   }
 }
 
-async function deleteArticle(slug, collection) {
+async function deleteArticle(slug, collection, sha) {
   if (!confirm(`¿Estás seguro de que querés borrar "${slug}"?`)) return;
 
   try {
     const res = await fetch(`${API_BASE}/content`, {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ collection, slug, sha: "" }),
+      body: JSON.stringify({ collection, slug, sha }),
     });
     if (!res.ok) {
       const err = await res.json();
@@ -370,7 +373,7 @@ editorForm.addEventListener("submit", async (event) => {
     fields,
     body: fields.body,
   };
-  if (isEdit) body.sha = "";
+  if (isEdit) body.sha = editSha;
 
   try {
     const res = await fetch(`${API_BASE}/content`, {
