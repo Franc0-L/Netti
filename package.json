@@ -8,6 +8,7 @@
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
+    "validate:content": "tsx scripts/content-validator.ts",
     "check": "astro check"
   },
   "engines": {
