@@ -26,6 +26,7 @@ const contentArea = document.getElementById("content-area");
 const errorMsg = document.getElementById("error-msg");
 const successMsg = document.getElementById("success-msg");
 const newBtn = document.getElementById("new-btn");
+const previewBtn = document.getElementById("preview-btn");
 
 // Modal
 const modalOverlay = document.getElementById("modal-overlay");
@@ -258,6 +259,7 @@ async function createArticle() {
   modalTitle.textContent = `Nuevo ${collectionLabels[currentCollection]}`;
   modalOverlay.style.display = "flex";
   editTitle.focus();
+  previewBtn.disabled = true;
 }
 
 async function editArticle(slug, collection, sha) {
@@ -296,6 +298,7 @@ async function editArticle(slug, collection, sha) {
     modalTitle.textContent = `Editar ${collectionLabels[collection]}`;
     modalOverlay.style.display = "flex";
     editTitle.focus();
+    previewBtn.disabled = false;
   } catch (err) {
     showError(err.message || "No se pudo cargar el artículo");
   }
@@ -671,6 +674,20 @@ removeImageBtn.addEventListener("click", () => {
 
 insertImageBtn.addEventListener("click", () => {
   insertSelectedMediaIntoBody();
+});
+
+previewBtn.addEventListener("click", () => {
+  const collection = editCollection.value;
+  const slug = editSlug.value.trim();
+  if (!slug) return;
+  const pathMap = {
+    games: "/juegos/",
+    reviews: "/resenas/",
+    news: "/noticias/",
+    guides: "/guias/",
+  };
+  const path = pathMap[collection] || "/";
+  window.open(`${path}${slug}/`, "_blank");
 });
 
 async function uploadImage(collection, slug) {
