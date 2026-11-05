@@ -1,4 +1,5 @@
 import sharp from "sharp";
+import { randomUUID } from "node:crypto";
 import {
   assertSameOrigin,
   hasSession,
@@ -140,21 +141,18 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    // Optimizar imagen con sharp: convertir a WebP con calidad 80
+    // Preservar GIF animados; optimizar los demás formatos a WebP.
     let optimizedBytes = bytes;
     let outputExt = formats[mimeType].extension;
     try {
-      if (mimeType !== "image/webp") {
-        optimizedBytes = await sharp(bytes)
-          .webp({ quality: 80 })
-          .toBuffer();
+      if (mimeType !== "image/webp" && mimeType !== "image/gif") {
+        optimizedBytes = await sharp(bytes).webp({ quality: 80 }).toBuffer();
         outputExt = "webp";
       }
     } catch {
-      // Si sharp falla, usar los bytes originales
+      // Si Sharp no puede procesar el archivo, conservar el original validado.
     }
-
-    const filename = `${require("node:crypto").randomUUID()}.${outputExt}`;
+    const filename = `${randomUUID()}.${outputExt}`;
 
     const saved = await writeMediaFile(collection, slug, filename, optimizedBytes.toString("base64"));
     if (!saved || typeof saved.commit !== "string") {

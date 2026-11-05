@@ -373,6 +373,13 @@ editorForm.addEventListener("submit", async (event) => {
     fields,
     body: fields.body,
   };
+  if (currentImageFile) {
+    const uploaded = await uploadImage(collection, slug);
+    if (!uploaded) return;
+    fields.coverImage = uploaded;
+  } else if (currentImageUrl) {
+    fields.coverImage = currentImageUrl;
+  }
   if (isEdit) body.sha = editSha;
 
   try {
@@ -718,16 +725,21 @@ previewBtn.addEventListener("click", () => {
 });
 
 async function uploadImage(collection, slug) {
-  if (!currentImageFile) return null;
-  const formData = new FormData();
-  formData.append("file", currentImageFile);
-  formData.append("collection", collection);
-  formData.append("slug", slug);
-  formData.append("alt", imageAlt.value || currentImageFile.name);
+  if (!currentImageFile) return currentImageUrl;
   try {
+    const file = currentImageFile;
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    let binary = "";
+    for (let i = 0; i < bytes.length; i += 0x8000) {
+      binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    }
     const res = await fetch(`${API_BASE}/upload`, {
       method: "POST",
-      body: formData,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        collection, slug, mimeType: file.type, filename: file.name,
+        alt: imageAlt.value || file.name, data: btoa(binary),
+      }),
     });
     if (!res.ok) {
       const err = await res.json();
@@ -737,17 +749,11 @@ async function uploadImage(collection, slug) {
     currentImageFile = null;
     currentImageUrl = data.url;
     imageInput.value = "";
-    imagePreview.style.display = "none";
-    imageAlt.value = "";
-    showSuccess("Imagen subida correctamente");
-    // Agregar a la lista de medios y recargar
-    mediaItems.unshift({
-      name: data.path.split("/").pop() || data.url.split("/").pop(),
-      url: data.url,
-      alt: imageAlt.value || currentImageFile.name,
-      slug: data.slug || "",
-    });
+    imagePreviewImg.src = data.url;
+    imagePreview.style.display = "block";
+    mediaItems.unshift({ name: file.name, url: data.url, alt: data.alt || imageAlt.value, slug });
     renderMediaList(mediaItems);
+    showSuccess("Imagen subida correctamente");
     return data.url;
   } catch (err) {
     showError(err.message || "No se pudo subir la imagen");
