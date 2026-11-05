@@ -6,7 +6,7 @@ import {
 } from "../_lib/security.js";
 import { getRequiredEnv } from "../../src/lib/env-config.js";
 import { dryRunDelete, performDelete } from "../_lib/content/trash.js";
-import { listEntries, readEntryBySlug } from "../_lib/content/repository.js";
+import { findEntryBySlug, listEntries, readEntryBySlug } from "../_lib/content/repository.js";
 import { validate } from "../_lib/content/validation.js";
 import { writeMarkdownFile } from "../_lib/github/contents.js";
 
@@ -230,8 +230,7 @@ export default async function handler(req: AdminRequest, res: AdminResponse) {
       }
     }
 
-    const existing = await listEntries(collection, 1);
-    const existingEntry = existing.entries.find((e) => e.slug === slug);
+    const existingEntry = await findEntryBySlug(collection, slug);
 
     if (req.method === "POST" && existingEntry) {
       return json(res, 409, {
@@ -263,11 +262,7 @@ export default async function handler(req: AdminRequest, res: AdminResponse) {
         ok: true,
         commit: saved.commit,
         slug,
-        page: existingEntry
-          ? Math.floor(
-              existing.entries.findIndex((e) => e.slug === slug) / 50,
-            ) + 1
-          : existing.pageCount || 1,
+        page: existingEntry?.page ?? 1,
       });
     } catch (error) {
       logAdminError("content_save", req, error, 500);

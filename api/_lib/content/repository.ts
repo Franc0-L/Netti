@@ -56,7 +56,7 @@ export async function listEntries(
   collection?: string,
   page = 1,
 ): Promise<{
-  entries: { collection: string; slug: string; sha: string }[];
+  entries: { collection: string; slug: string; sha: string; fields: Record<string, unknown> }[];
   page: number;
   pageSize: number;
   pageCount: number;
@@ -78,19 +78,25 @@ export async function listEntries(
     page * LIST_PAGE_SIZE,
   );
   return {
-    entries: paginated.map((item) => {
+    entries: await Promise.all(paginated.map(async (item) => {
       const [, collectionName, filename] = item.path.split("/");
-      return {
-        collection: collectionName,
-        slug: filename.slice(0, -3),
-        sha: item.sha,
-      };
-    }),
+      const slug = filename.slice(0, -3);
+      const markdown = await readMarkdownFile(collectionName, slug);
+      return { collection: collectionName, slug, sha: item.sha, fields: markdown.fields };
+    })),
     page,
     pageSize: LIST_PAGE_SIZE,
     pageCount,
     total: paths.length,
   };
+}
+
+// Busca una publicación en todo el árbol, sin limitarse a la primera página.
+export async function findEntryBySlug(collection: string, slug: string): Promise<{ collection: string; slug: string; sha: string; page: number } | null> {
+  const paths = await contentPaths(collection);
+  const index = paths.findIndex((item) => item.path === `content/${collection}/${slug}.md`);
+  if (index < 0) return null;
+  return { collection, slug, sha: paths[index].sha, page: Math.floor(index / LIST_PAGE_SIZE) + 1 };
 }
 
 // Lee una entrada específica (frontmatter + cuerpo + sha) por colección y slug.

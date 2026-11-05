@@ -326,7 +326,7 @@ export function validate(
     validateRequiredFields.bind(null, collection),
     validateTextLimits,
     validateGamesFields.bind(null, collection),
-    validateReviewsFields,
+    (fields) => collection === "reviews" ? validateReviewsFields(fields) : undefined,
     validateTags,
     validateProsCons,
     validateGameRef,

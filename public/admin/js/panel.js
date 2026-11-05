@@ -17,6 +17,7 @@ const collectionBadges = {
 let currentCollection = null;
 let currentPage = 1;
 let isAuthenticated = false;
+let editSha = "";
 
 // Elementos DOM
 const sidebarLinks = document.querySelectorAll(".nav-link");
@@ -53,6 +54,21 @@ const editScore = document.getElementById("edit-score");
 const editTags = document.getElementById("edit-tags");
 const gameRefGroup = document.getElementById("game-ref-group");
 const scoreGroup = document.getElementById("score-group");
+const metadataFields = {
+  releaseYear: document.getElementById("field-release-year"),
+  platforms: document.getElementById("field-platforms"),
+  genres: document.getElementById("field-genres"),
+  developer: document.getElementById("field-developer"),
+  publisher: document.getElementById("field-publisher"),
+  publishedAt: document.getElementById("field-published-at"),
+  author: document.getElementById("field-author"),
+  category: document.getElementById("field-category"),
+  sourceName: document.getElementById("field-source-name"),
+  sourceUrl: document.getElementById("field-source-url"),
+  scoreReason: document.getElementById("field-score-reason"),
+  verdict: document.getElementById("field-verdict"),
+  featured: document.getElementById("field-featured"),
+};
 
 // Subida de imagen
 const imageInput = document.getElementById("image-input");
@@ -177,7 +193,7 @@ function renderFilteredList(page, pageCount, total) {
   const filter = panelSearch.value.toLowerCase();
   const filtered = allEntries.filter(
     (entry) =>
-      entry.fields.title?.toLowerCase().includes(filter) ||
+      (entry.fields?.title || "").toLowerCase().includes(filter) ||
       entry.slug.toLowerCase().includes(filter)
   );
   renderList(filtered, page, pageCount, total);
@@ -197,9 +213,9 @@ function renderList(entries, page, pageCount, total) {
   const rows = entries
     .map((entry) => {
       const badgeClass = collectionBadges[entry.collection] || "";
-      const title = escapeHtml(entry.fields.title || entry.slug);
+      const title = escapeHtml(entry.fields?.title || entry.slug);
       const slug = escapeHtml(entry.slug);
-      const updated = entry.fields.updatedAt || entry.fields.publishedAt || "";
+      const updated = entry.fields?.updatedAt || entry.fields?.publishedAt || "";
       return `
       <tr>
         <td><span class="badge ${badgeClass}">${entry.collection}</span></td>
@@ -207,8 +223,8 @@ function renderList(entries, page, pageCount, total) {
         <td><code style="color:#b6adc9;">${slug}</code></td>
         <td>${updated}</td>
         <td>
-          <button class="btn-secondary" onclick="app.editArticle('${escapeHtml(entry.slug)}', '${escapeHtml(entry.collection)}', '${escapeHtml(entry.sha || "")}')">Editar</button>
-          <button class="btn-danger" onclick="app.deleteArticle('${escapeHtml(entry.slug)}', '${escapeHtml(entry.collection)}')">Borrar</button>
+          <button class="btn-secondary" data-action="edit" data-slug="${slug}" data-collection="${entry.collection}" data-sha="${entry.sha || ""}">Editar</button>
+          <button class="btn-danger" data-action="delete" data-slug="${slug}" data-collection="${entry.collection}" data-sha="${entry.sha || ""}">Borrar</button>
         </td>
       </tr>
     `;
@@ -219,9 +235,9 @@ function renderList(entries, page, pageCount, total) {
     pageCount > 1
       ? `
       <div class="pagination">
-        ${page > 1 ? `<a onclick="app.loadPage(${page - 1})">← Anterior</a>` : `<span class="disabled">← Anterior</span>`}
+        ${page > 1 ? `<a data-page="${page - 1}">← Anterior</a>` : `<span class="disabled">← Anterior</span>`}
         <span class="current">Página ${page} de ${pageCount}</span>
-        ${page < pageCount ? `<a onclick="app.loadPage(${page + 1})">Siguiente →</a>` : `<span class="disabled">Siguiente →</span>`}
+        ${page < pageCount ? `<a data-page="${page + 1}">Siguiente →</a>` : `<span class="disabled">Siguiente →</span>`}
       </div>
     `
       : "";
@@ -243,8 +259,66 @@ function renderList(entries, page, pageCount, total) {
   `;
 }
 
+function resetMetadataFields() {
+  Object.entries(metadataFields).forEach(([key, input]) => {
+    if (!input) return;
+    if (key === "featured") input.checked = false;
+    else input.value = "";
+  });
+  Array.from(editTags.options).forEach((option) => { option.selected = false; });
+}
+
+function populateMetadataFields(fields = {}) {
+  Object.entries(metadataFields).forEach(([key, input]) => {
+    if (!input) return;
+    if (key === "featured") input.checked = Boolean(fields[key]);
+    else if (key === "platforms" || key === "genres") input.value = Array.isArray(fields[key]) ? fields[key].join(", ") : "";
+    else input.value = fields[key] ? String(fields[key]).slice(0, key === "publishedAt" ? 10 : undefined) : "";
+  });
+  const selected = new Set(Array.isArray(fields.tags) ? fields.tags : []);
+  Array.from(editTags.options).forEach((option) => { option.selected = selected.has(option.value); });
+}
+
+function setMetadataVisibility(collection) {
+  document.querySelectorAll("[data-collections]").forEach((group) => {
+    group.hidden = !group.dataset.collections.split(",").includes(collection);
+  });
+  if (metadataFields.author && !metadataFields.author.value) {
+    metadataFields.author.value = collection === "news" ? "Netti" : "Redacción";
+  }
+  if (metadataFields.category && !metadataFields.category.value) metadataFields.category.value = "Noticias";
+}
+
+function collectMetadataFields(collection) {
+  const value = (key) => metadataFields[key]?.value?.trim() || "";
+  const fields = {};
+  if (collection === "games") {
+    if (value("releaseYear")) fields.releaseYear = Number(value("releaseYear"));
+    fields.platforms = value("platforms").split(",").map((v) => v.trim()).filter(Boolean);
+    fields.genres = value("genres").split(",").map((v) => v.trim()).filter(Boolean);
+    fields.developer = value("developer");
+    if (value("publisher")) fields.publisher = value("publisher");
+  }
+  if (["reviews", "news", "guides"].includes(collection)) {
+    fields.publishedAt = value("publishedAt");
+    if (value("author")) fields.author = value("author");
+  }
+  if (collection === "news") {
+    fields.category = value("category") || "Noticias";
+    if (value("sourceName")) fields.sourceName = value("sourceName");
+    if (value("sourceUrl")) fields.sourceUrl = value("sourceUrl");
+  }
+  if (collection === "reviews") {
+    fields.scoreReason = value("scoreReason");
+    fields.verdict = value("verdict");
+  }
+  if (metadataFields.featured?.checked) fields.featured = true;
+  return fields;
+}
+
 async function createArticle() {
   editId.value = "";
+  editSha = "";
   editCollection.value = currentCollection;
   editTitle.value = "";
   editSlug.value = "";
@@ -253,7 +327,8 @@ async function createArticle() {
   editPreview.innerHTML = "";
   editGame.value = "";
   editScore.value = "";
-  editTags.value = "";
+  resetMetadataFields();
+  setMetadataVisibility(currentCollection);
 
   currentImageFile = null;
   currentImageUrl = null;
@@ -287,6 +362,7 @@ async function editArticle(slug, collection, sha) {
     const entry = data.entry;
 
     editId.value = entry.slug;
+    editSha = entry.sha || "";
     editCollection.value = entry.collection;
     editTitle.value = entry.fields.title || "";
     editSlug.value = entry.slug;
@@ -295,13 +371,16 @@ async function editArticle(slug, collection, sha) {
     editPreview.innerHTML = renderMarkdownPreview(entry.body || "");
     editGame.value = entry.fields.game || "";
     editScore.value = entry.fields.score || "";
-    editTags.value = (entry.fields.tags || []).join(", ");
+    populateMetadataFields(entry.fields);
+    setMetadataVisibility(collection);
 
     currentImageFile = null;
     currentImageUrl = null;
     imageInput.value = "";
     imagePreview.style.display = "none";
     imageAlt.value = entry.fields.coverAlt || "";
+    currentImageUrl = entry.fields.coverImage || null;
+    if (currentImageUrl) { imagePreviewImg.src = currentImageUrl; imagePreview.style.display = "block"; }
 
     gameRefGroup.style.display =
       entry.collection === "reviews" || entry.collection === "guides"
@@ -319,14 +398,14 @@ async function editArticle(slug, collection, sha) {
   }
 }
 
-async function deleteArticle(slug, collection) {
+async function deleteArticle(slug, collection, sha) {
   if (!confirm(`¿Estás seguro de que querés borrar "${slug}"?`)) return;
 
   try {
     const res = await fetch(`${API_BASE}/content`, {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ collection, slug, sha: "" }),
+      body: JSON.stringify({ collection, slug, sha }),
     });
     if (!res.ok) {
       const err = await res.json();
@@ -347,12 +426,9 @@ editorForm.addEventListener("submit", async (event) => {
   const fields = {
     title: editTitle.value.trim(),
     description: editDescription.value.trim(),
-    body: editBody.value.trim(),
-    tags: editTags.value
-      .split(",")
-      .map((t) => t.trim())
-      .filter(Boolean),
+    tags: Array.from(editTags.selectedOptions).map((option) => option.value),
     coverAlt: imageAlt.value.trim(),
+    ...collectMetadataFields(collection),
   };
 
   if (collection === "reviews" || collection === "guides") {
@@ -368,9 +444,16 @@ editorForm.addEventListener("submit", async (event) => {
     collection,
     slug,
     fields,
-    body: fields.body,
+    body: editBody.value.trim(),
   };
-  if (isEdit) body.sha = "";
+  if (currentImageFile) {
+    const uploaded = await uploadImage(collection, slug);
+    if (!uploaded) return;
+    fields.coverImage = uploaded;
+  } else if (currentImageUrl) {
+    fields.coverImage = currentImageUrl;
+  }
+  if (isEdit) body.sha = editSha;
 
   try {
     const res = await fetch(`${API_BASE}/content`, {
@@ -504,7 +587,7 @@ async function loadTrash() {
           <td><code style="color: var(--muted);">${slug}</code></td>
           <td>${deletedAt}</td>
           <td>
-            <button class="btn-secondary" onclick="app.recoverArticle('${escapeHtml(slug)}', '${escapeHtml(deletedCollection)}')">Recuperar</button>
+            <button class="btn-secondary" data-action="recover" data-slug="${slug}" data-collection="${deletedCollection}">Recuperar</button>
           </td>
         </tr>
       `;
@@ -589,7 +672,7 @@ function renderMediaList(items) {
   mediaList.innerHTML = items
     .map(
       (item) => `
-      <div class="media-item" onclick="selectMediaItem(this, '${item.url}', '${item.alt}')">
+      <div class="media-item" data-media-index="${mediaItems.indexOf(item)}">
         ${item.url ? `<img src="${item.url}" alt="${item.alt}" />` : `<div style="width:100%;height:100px;background:var(--field);border-radius:0.4rem;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:0.75rem">Sin imagen</div>`}
         <div class="media-item-name">${escapeHtml(item.name)}</div>
       </div>
@@ -639,7 +722,29 @@ function insertTextAtCursor(text) {
   updatePreview();
 }
 
-// Exponer API global para onclick en HTML
+document.addEventListener("click", (event) => {
+  const target = event.target.closest("[data-action], [data-page], [data-media-index], [data-markdown-open]");
+  if (!target) return;
+  if (target.dataset.markdownOpen !== undefined) {
+    insertMarkdown(target.dataset.markdownOpen, target.dataset.markdownClose || "");
+    return;
+  }
+  if (target.dataset.page) {
+    loadCollection(currentCollection, Number(target.dataset.page));
+    return;
+  }
+  if (target.dataset.mediaIndex !== undefined) {
+    const item = mediaItems[Number(target.dataset.mediaIndex)];
+    if (item) selectMediaItem(target, item.url, item.alt);
+    return;
+  }
+  const { action, slug, collection, sha } = target.dataset;
+  if (action === "edit") editArticle(slug, collection, sha);
+  else if (action === "delete") deleteArticle(slug, collection, sha);
+  else if (action === "recover") recoverArticle(slug, collection);
+});
+
+// API pública del panel
 window.app = {
   loadCollection,
   loadPage: (page) => loadCollection(currentCollection, page),
@@ -715,16 +820,21 @@ previewBtn.addEventListener("click", () => {
 });
 
 async function uploadImage(collection, slug) {
-  if (!currentImageFile) return null;
-  const formData = new FormData();
-  formData.append("file", currentImageFile);
-  formData.append("collection", collection);
-  formData.append("slug", slug);
-  formData.append("alt", imageAlt.value || currentImageFile.name);
+  if (!currentImageFile) return currentImageUrl;
   try {
+    const file = currentImageFile;
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    let binary = "";
+    for (let i = 0; i < bytes.length; i += 0x8000) {
+      binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    }
     const res = await fetch(`${API_BASE}/upload`, {
       method: "POST",
-      body: formData,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        collection, slug, mimeType: file.type, filename: file.name,
+        alt: imageAlt.value || file.name, data: btoa(binary),
+      }),
     });
     if (!res.ok) {
       const err = await res.json();
@@ -734,17 +844,11 @@ async function uploadImage(collection, slug) {
     currentImageFile = null;
     currentImageUrl = data.url;
     imageInput.value = "";
-    imagePreview.style.display = "none";
-    imageAlt.value = "";
-    showSuccess("Imagen subida correctamente");
-    // Agregar a la lista de medios y recargar
-    mediaItems.unshift({
-      name: data.path.split("/").pop() || data.url.split("/").pop(),
-      url: data.url,
-      alt: imageAlt.value || currentImageFile.name,
-      slug: data.slug || "",
-    });
+    imagePreviewImg.src = data.url;
+    imagePreview.style.display = "block";
+    mediaItems.unshift({ name: file.name, url: data.url, alt: data.alt || imageAlt.value, slug });
     renderMediaList(mediaItems);
+    showSuccess("Imagen subida correctamente");
     return data.url;
   } catch (err) {
     showError(err.message || "No se pudo subir la imagen");
