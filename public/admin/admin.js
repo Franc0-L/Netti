@@ -17,7 +17,7 @@ async function checkSession() {
 }
 
 function initPanel() {
-  console.log("Panel editorial Netti inicializado.");
+  window.location.href = "/admin/panel.html";
   // Aquí se agregan las secciones del panel: listado de contenido, editor, subida de medios, etc.
 }
 

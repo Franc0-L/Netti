@@ -1,0 +1,454 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Panel editorial — Netti</title>
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        font-family:
+          "Quicksand",
+          ui-rounded,
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+        background: #141218;
+        color: #f4effc;
+        height: 100vh;
+        display: flex;
+        overflow: hidden;
+      }
+      aside {
+        width: 260px;
+        border-right: 1px solid #352d45;
+        background: #1e1b24;
+        display: flex;
+        flex-direction: column;
+        z-index: 10;
+      }
+      .brand {
+        padding: 1.5rem;
+        border-bottom: 1px solid #352d45;
+        text-align: center;
+      }
+      .brand h1 {
+        font-size: 1.5rem;
+        letter-spacing: -0.04em;
+        color: #a78bfa;
+      }
+      nav {
+        flex: 1;
+        padding: 1rem;
+        overflow-y: auto;
+      }
+      nav ul {
+        list-style: none;
+      }
+      nav li {
+        margin-bottom: 0.5rem;
+      }
+      nav a {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.75rem 1rem;
+        border-radius: 0.8rem;
+        color: #b6adc9;
+        text-decoration: none;
+        font-size: 0.9rem;
+        transition: all 160ms ease;
+      }
+      nav a:hover {
+        background: #272232;
+        color: #f4effc;
+      }
+      nav a.active {
+        background: #a78bfa;
+        color: #17111f;
+      }
+      nav a.logout {
+        color: #f16c79;
+      }
+      nav a.logout.active {
+        background: #f16c79;
+        color: #ffffff;
+      }
+      main {
+        flex: 1;
+        overflow-y: auto;
+        padding: 2rem;
+      }
+      header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2rem;
+      }
+      header h2 {
+        font-size: 1.75rem;
+        letter-spacing: -0.04em;
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.6rem 1.3rem;
+        border: 0;
+        border-radius: 0.8rem;
+        background: #a78bfa;
+        color: #17111f;
+        font-weight: 700;
+        font-size: 0.9rem;
+        cursor: pointer;
+        transition: all 160ms ease;
+      }
+      .btn:hover {
+        background: #c9bbff;
+      }
+      .btn-secondary {
+        background: #352d45;
+        color: #f4effc;
+      }
+      .btn-secondary:hover {
+        background: #453d55;
+      }
+      .btn-danger {
+        background: #f16c79;
+        color: #ffffff;
+      }
+      .btn-danger:hover {
+        background: #f48a93;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        background: #1e1b24;
+        border: 1px solid #352d45;
+        border-radius: 1rem;
+        overflow: hidden;
+      }
+      th,
+      td {
+        padding: 1rem;
+        text-align: left;
+        border-bottom: 1px solid #352d45;
+      }
+      th {
+        background: #17141d;
+        color: #b6adc9;
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+      }
+      tr:hover {
+        background: #272232;
+      }
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.15rem 0.6rem;
+        border-radius: 999px;
+        font-size: 0.75rem;
+        font-weight: 700;
+        text-transform: uppercase;
+      }
+      .badge-games {
+        background: #5ac7e81a;
+        color: #5ac7e8;
+      }
+      .badge-reviews {
+        background: #e6bd551a;
+        color: #e6bd55;
+      }
+      .badge-news {
+        background: #f16c791a;
+        color: #f16c79;
+      }
+      .badge-guides {
+        background: #53bd831a;
+        color: #53bd83;
+      }
+      .empty {
+        text-align: center;
+        padding: 3rem;
+        color: #b6adc9;
+      }
+      .pagination {
+        display: flex;
+        justify-content: center;
+        gap: 0.5rem;
+        margin-top: 1.5rem;
+      }
+      .pagination a,
+      .pagination span {
+        padding: 0.5rem 1rem;
+        border: 1px solid #352d45;
+        border-radius: 0.8rem;
+        color: #b6adc9;
+        text-decoration: none;
+        font-size: 0.9rem;
+      }
+      .pagination a:hover {
+        border-color: #a78bfa;
+        color: #a78bfa;
+      }
+      .pagination span.current {
+        background: #a78bfa;
+        color: #17111f;
+        border-color: #a78bfa;
+      }
+      .modal-overlay {
+        position: fixed;
+        inset: 0;
+        background: #000000cc;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 100;
+        padding: 1rem;
+      }
+      .modal {
+        background: #1e1b24;
+        border: 1px solid #352d45;
+        border-radius: 1.5rem;
+        width: min(90vw, 800px);
+        max-height: 90vh;
+        overflow-y: auto;
+        padding: 2rem;
+      }
+      .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1.5rem;
+      }
+      .modal-header h3 {
+        font-size: 1.5rem;
+      }
+      .close-modal {
+        background: none;
+        border: 0;
+        color: #b6adc9;
+        font-size: 1.5rem;
+        cursor: pointer;
+      }
+      .close-modal:hover {
+        color: #f4effc;
+      }
+      .form-group {
+        margin-bottom: 1.25rem;
+      }
+      .form-group label {
+        display: block;
+        margin-bottom: 0.5rem;
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: #b6adc9;
+      }
+      .form-group input,
+      .form-group textarea,
+      .form-group select {
+        width: 100%;
+        min-height: 44px;
+        padding: 0.6rem 0.8rem;
+        border: 1px solid #352d45;
+        border-radius: 0.8rem;
+        background: #17141d;
+        color: #f4effc;
+        font:
+          500 0.95rem "Quicksand",
+          system-ui,
+          sans-serif;
+      }
+      .form-group textarea {
+        min-height: 12rem;
+        resize: vertical;
+        font-family: inherit;
+      }
+      .form-group input:focus,
+      .form-group textarea:focus,
+      .form-group select:focus {
+        outline: none;
+        border-color: #a78bfa;
+      }
+      .row-2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+      }
+      .actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.75rem;
+        margin-top: 1.5rem;
+      }
+      .error-msg {
+        color: #f16c79;
+        font-size: 0.85rem;
+        margin-bottom: 1rem;
+        padding: 0.75rem;
+        background: #f16c791a;
+        border-radius: 0.8rem;
+        border: 1px solid #f16c7944;
+      }
+      .success-msg {
+        color: #53bd83;
+        font-size: 0.85rem;
+        margin-bottom: 1rem;
+        padding: 0.75rem;
+        background: #53bd831a;
+        border-radius: 0.8rem;
+        border: 1px solid #53bd8344;
+      }
+      @media (max-width: 768px) {
+        aside {
+          position: absolute;
+          height: 100vh;
+          transform: translateX(-100%);
+          transition: transform 250ms ease;
+          z-index: 20;
+        }
+        aside.open {
+          transform: translateX(0);
+        }
+        .menu-toggle {
+          display: block;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <aside id="sidebar">
+      <div class="brand">
+        <h1>Netti</h1>
+      </div>
+      <nav>
+        <ul>
+          <li>
+            <a href="#" data-collection="games" class="nav-link">🎮 Juegos</a>
+          </li>
+          <li>
+            <a href="#" data-collection="reviews" class="nav-link"
+              >⭐ Reseñas</a
+            >
+          </li>
+          <li>
+            <a href="#" data-collection="news" class="nav-link">📰 Noticias</a>
+          </li>
+          <li>
+            <a href="#" data-collection="guides" class="nav-link">📖 Guías</a>
+          </li>
+          <li style="margin-top: 1rem">
+            <a href="#" id="upload-link" class="nav-link">🖼️ Subir medios</a>
+          </li>
+          <li style="margin-top: 1rem">
+            <a href="#" id="logout-link" class="nav-link logout"
+              >🚪 Cerrar sesión</a
+            >
+          </li>
+        </ul>
+      </nav>
+    </aside>
+
+    <main>
+      <header>
+        <div>
+          <h2 id="page-title">Juegos</h2>
+          <p id="page-subtitle" style="color: #b6adc9; font-size: 0.9rem">
+            Gestioná los artículos de la colección.
+          </p>
+        </div>
+        <button class="btn" id="new-btn">Nuevo artículo</button>
+      </header>
+
+      <div id="error-msg" class="error-msg" style="display: none"></div>
+      <div id="success-msg" class="success-msg" style="display: none"></div>
+
+      <div id="content-area">
+        <div class="empty">Seleccioná una colección del menú izquierdo.</div>
+      </div>
+    </main>
+
+    <div class="modal-overlay" id="modal-overlay">
+      <div class="modal" id="modal">
+        <div class="modal-header">
+          <h3 id="modal-title">Nuevo artículo</h3>
+          <button class="close-modal" id="close-modal">×</button>
+        </div>
+        <form id="editor-form">
+          <input type="hidden" id="edit-id" />
+          <input type="hidden" id="edit-collection" />
+
+          <div class="row-2">
+            <div class="form-group">
+              <label for="edit-title">Título</label>
+              <input type="text" id="edit-title" required />
+            </div>
+            <div class="form-group">
+              <label for="edit-slug">Slug</label>
+              <input
+                type="text"
+                id="edit-slug"
+                required
+                placeholder="mi-articulo"
+              />
+              <small style="color: #b6adc9; font-size: 0.8rem"
+                >Solo minúsculas, números y guiones.</small
+              >
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="edit-description">Descripción</label>
+            <textarea id="edit-description" required></textarea>
+          </div>
+
+          <div class="form-group">
+            <label for="edit-body">Cuerpo (Markdown)</label>
+            <textarea id="edit-body" required></textarea>
+          </div>
+
+          <div class="form-group" id="game-ref-group" style="display: none">
+            <label for="edit-game">Juego relacionado (slug)</label>
+            <input type="text" id="edit-game" placeholder="slug-del-juego" />
+          </div>
+
+          <div class="form-group" id="score-group" style="display: none">
+            <label for="edit-score">Puntuación (1-100)</label>
+            <input type="number" id="edit-score" min="1" max="100" />
+          </div>
+
+          <div class="form-group" id="tags-group">
+            <label for="edit-tags">Etiquetas editoriales</label>
+            <input
+              type="text"
+              id="edit-tags"
+              placeholder="Ej: Recomendado, Indie"
+            />
+            <small style="color: #b6adc9; font-size: 0.8rem"
+              >Separá por comas.</small
+            >
+          </div>
+
+          <div class="actions">
+            <button type="button" class="btn-secondary" id="cancel-btn">
+              Cancelar
+            </button>
+            <button type="submit" class="btn">Guardar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <script src="/admin/js/platform-picker.js"></script>
+    <script src="/admin/js/panel.js"></script>
+  </body>
+</html>
