@@ -3,7 +3,7 @@ import { defineMiddleware } from "astro:middleware";
 // Caché HTTP de las respuestas generadas en el servidor.
 const CACHEABLE_CONTENT_TYPES = ["text/html", "application/json"];
 const CACHE_CONTROL =
-  "public, max-age=0, s-maxage=60, stale-while-revalidate=300";
+  "public, max-age=0, s-maxage=300, stale-while-revalidate=600";
 
 export const onRequest = defineMiddleware(async (context, next) => {
   const response = await next();
