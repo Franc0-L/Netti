@@ -1,3 +1,4 @@
+import sharp from "sharp";
 import {
   assertSameOrigin,
   hasSession,
@@ -139,9 +140,23 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    const filename = `${require("node:crypto").randomUUID()}.${formats[mimeType].extension}`;
+    // Optimizar imagen con sharp: convertir a WebP con calidad 80
+    let optimizedBytes = bytes;
+    let outputExt = formats[mimeType].extension;
+    try {
+      if (mimeType !== "image/webp") {
+        optimizedBytes = await sharp(bytes)
+          .webp({ quality: 80 })
+          .toBuffer();
+        outputExt = "webp";
+      }
+    } catch {
+      // Si sharp falla, usar los bytes originales
+    }
 
-    const saved = await writeMediaFile(collection, slug, filename, data);
+    const filename = `${require("node:crypto").randomUUID()}.${outputExt}`;
+
+    const saved = await writeMediaFile(collection, slug, filename, optimizedBytes.toString("base64"));
     if (!saved || typeof saved.commit !== "string") {
       throw new Error("GitHub no confirmó la ruta de la imagen guardada.");
     }
