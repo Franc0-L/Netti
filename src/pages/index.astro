@@ -15,26 +15,29 @@ const guides = await getCollectionEntries("guides");
 const gamesById = new Map(games.map((game) => [game.id, game]));
 
 const byDateDesc = <T extends { data: { publishedAt?: Date } }>(
-	a: T,
-	b: T,
+  a: T,
+  b: T,
 ): number => {
-	const aDate = a.data.publishedAt;
-	const bDate = b.data.publishedAt;
-	if (!aDate || !bDate) return 0;
-	return bDate.valueOf() - aDate.valueOf();
+  const aDate = a.data.publishedAt;
+  const bDate = b.data.publishedAt;
+  if (!aDate || !bDate) return 0;
+  return bDate.valueOf() - aDate.valueOf();
 };
 const formatDate = (date: Date) =>
-	date.toLocaleDateString("es-AR", {
-		day: "numeric",
-		month: "short",
-		year: "numeric",
-		timeZone: "UTC",
-	});
+  date.toLocaleDateString("es-AR", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  });
 
-const pickFeatured = <T extends { data: { featured?: boolean; publishedAt?: Date } }>(
-	entries: T[],
+const pickFeatured = <
+  T extends { data: { featured?: boolean; publishedAt?: Date } },
+>(
+  entries: T[],
 ): T | undefined =>
-	entries.find((entry) => entry.data.featured) ?? [...entries].sort(byDateDesc)[0];
+  entries.find((entry) => entry.data.featured) ??
+  [...entries].sort(byDateDesc)[0];
 
 const featuredReview = pickFeatured(reviews);
 const featuredGame = games.find((game) => game.data.featured) ?? games[0];
@@ -43,536 +46,946 @@ const featuredGuide = pickFeatured(guides);
 const latestReviews = [...reviews].sort(byDateDesc).slice(0, 3);
 const latestNews = [...news].sort(byDateDesc).slice(0, 3);
 
-const reviewedGames = new Set(
-	reviews.map((review) => review.data.game),
-).size;
-const progress = games.length ? Math.round((reviewedGames / games.length) * 100) : 0;
+const reviewedGames = new Set(reviews.map((review) => review.data.game)).size;
+const progress = games.length
+  ? Math.round((reviewedGames / games.length) * 100)
+  : 0;
 const missing = games.length - reviewedGames;
 const questNote = !games.length
-	? "La biblioteca está esperando su primer juego."
-	: progress >= 100
-		? "Logro desbloqueado: set completo de reseñas."
-		: missing === 1
-			? "Falta reseñar 1 juego para desbloquear el logro «Set completo»."
-			: `Faltan reseñar ${missing} juegos para desbloquear el logro «Set completo».`;
+  ? "La biblioteca está esperando su primer juego."
+  : progress >= 100
+    ? "Logro desbloqueado: set completo de reseñas."
+    : missing === 1
+      ? "Falta reseñar 1 juego para desbloquear el logro «Set completo»."
+      : `Faltan reseñar ${missing} juegos para desbloquear el logro «Set completo».`;
 
 const gameHrefs = games.map((game: { id: string }) => `/juegos/${game.id}/`);
 
 interface SpotlightCard {
-	label: string;
-	title: string;
-	description: string;
-	meta: string;
-	cover?: string;
-	coverAlt?: string;
-	href?: string;
-	cta?: string;
-	featured?: boolean;
-	tags?: string[];
-	platforms?: string[];
+  label: string;
+  title: string;
+  description: string;
+  meta: string;
+  cover?: string;
+  coverAlt?: string;
+  href?: string;
+  cta?: string;
+  featured?: boolean;
+  tags?: string[];
+  platforms?: string[];
 }
 
 const cards: SpotlightCard[] = [];
 
 if (featuredReview) {
-	cards.push({
-		label: "Reseña destacada",
-		title: featuredReview.data.title,
-		description: featuredReview.data.description,
-		meta: `${featuredReview.data.score} · ${formatDate(featuredReview.data.publishedAt)}`,
-		cover: featuredReview.data.coverImage,
-		coverAlt: featuredReview.data.coverAlt ?? featuredReview.data.title,
-		href: `/resenas/${featuredReview.id}/`,
-		cta: "Leer la reseña",
-		featured: featuredReview.data.featured,
-		tags: featuredReview.data.tags,
-		platforms: gamesById.get(featuredReview.data.game)?.data.platforms,
-	});
+  cards.push({
+    label: "Reseña destacada",
+    title: featuredReview.data.title,
+    description: featuredReview.data.description,
+    meta: `${featuredReview.data.score} · ${formatDate(featuredReview.data.publishedAt)}`,
+    cover: featuredReview.data.coverImage,
+    coverAlt: featuredReview.data.coverAlt ?? featuredReview.data.title,
+    href: `/resenas/${featuredReview.id}/`,
+    cta: "Leer la reseña",
+    featured: featuredReview.data.featured,
+    tags: featuredReview.data.tags,
+    platforms: gamesById.get(featuredReview.data.game)?.data.platforms,
+  });
 }
 if (featuredGame) {
-	cards.push({
-		label: "Juego destacado",
-		title: featuredGame.data.title,
-		description: featuredGame.data.description,
-		meta: `${featuredGame.data.releaseYear} · ${featuredGame.data.genres.slice(0, 2).join(" · ")}`,
-		cover: featuredGame.data.coverImage,
-		coverAlt: featuredGame.data.coverAlt ?? featuredGame.data.title,
-		href: `/juegos/${featuredGame.id}/`,
-		cta: "Ver la ficha",
-		featured: featuredGame.data.featured,
-		tags: featuredGame.data.tags,
-		platforms: featuredGame.data.platforms,
-	});
+  cards.push({
+    label: "Juego destacado",
+    title: featuredGame.data.title,
+    description: featuredGame.data.description,
+    meta: `${featuredGame.data.releaseYear} · ${featuredGame.data.genres.slice(0, 2).join(" · ")}`,
+    cover: featuredGame.data.coverImage,
+    coverAlt: featuredGame.data.coverAlt ?? featuredGame.data.title,
+    href: `/juegos/${featuredGame.id}/`,
+    cta: "Ver la ficha",
+    featured: featuredGame.data.featured,
+    tags: featuredGame.data.tags,
+    platforms: featuredGame.data.platforms,
+  });
 }
 if (featuredNews) {
-	cards.push({
-		label: "Noticia destacada",
-		title: featuredNews.data.title,
-		description: featuredNews.data.description,
-		meta: `${featuredNews.data.category} · ${formatDate(featuredNews.data.publishedAt)}`,
-		cover: featuredNews.data.coverImage ?? featuredNews.data.heroImage,
-		coverAlt: featuredNews.data.coverAlt ?? featuredNews.data.heroAlt ?? featuredNews.data.title,
-		href: `/noticias/${featuredNews.id}/`,
-		cta: "Leer la noticia",
-		tags: featuredNews.data.tags,
-	});
+  cards.push({
+    label: "Noticia destacada",
+    title: featuredNews.data.title,
+    description: featuredNews.data.description,
+    meta: `${featuredNews.data.category} · ${formatDate(featuredNews.data.publishedAt)}`,
+    cover: featuredNews.data.coverImage ?? featuredNews.data.heroImage,
+    coverAlt:
+      featuredNews.data.coverAlt ??
+      featuredNews.data.heroAlt ??
+      featuredNews.data.title,
+    href: `/noticias/${featuredNews.id}/`,
+    cta: "Leer la noticia",
+    tags: featuredNews.data.tags,
+  });
 }
 if (featuredGuide) {
-	cards.push({
-		label: "Guía destacada",
-		title: featuredGuide.data.title,
-		description: featuredGuide.data.description,
-		meta: `${formatDate(featuredGuide.data.publishedAt)} · Netti`,
-		cover: featuredGuide.data.coverImage,
-		coverAlt: featuredGuide.data.coverAlt ?? featuredGuide.data.title,
-		href: `/guias/${featuredGuide.id}/`,
-		cta: "Leer la guía",
-	});
+  cards.push({
+    label: "Guía destacada",
+    title: featuredGuide.data.title,
+    description: featuredGuide.data.description,
+    meta: `${formatDate(featuredGuide.data.publishedAt)} · Netti`,
+    cover: featuredGuide.data.coverImage,
+    coverAlt: featuredGuide.data.coverAlt ?? featuredGuide.data.title,
+    href: `/guias/${featuredGuide.id}/`,
+    cta: "Leer la guía",
+  });
 }
 
-const latestDate = [
-	...reviews,
-	...news,
-	...guides,
-]
-	.map((item) => item.data.publishedAt)
-	.sort((a: Date, b: Date) => b.valueOf() - a.valueOf())[0];
-const firstCoverIndex = cards.findIndex(
-	(card: SpotlightCard) => Boolean(card.cover),
+const latestDate = [...reviews, ...news, ...guides]
+  .map((item) => item.data.publishedAt)
+  .sort((a: Date, b: Date) => b.valueOf() - a.valueOf())[0];
+const firstCoverIndex = cards.findIndex((card: SpotlightCard) =>
+  Boolean(card.cover),
 );
 ---
 
-<BaseLayout title="Netti. Videojuegos" description="Reseñas honestas, fichas para descubrir tu próxima aventura, noticias con contexto y guías para no perderse en el camino.">
-	<div class="home">
+<BaseLayout
+  title="Netti. Videojuegos"
+  description="Reseñas honestas, fichas para descubrir tu próxima aventura, noticias con contexto y guías para no perderse en el camino."
+>
+  <div class="home">
+    <p class="press-start" aria-hidden="true">
+      <svg viewBox="0 0 12 12" aria-hidden="true">
+        <path d="M2 1l9 5-9 5Z" fill="currentColor" />
+      </svg>
+      Press start
+    </p>
+    <header class="home-intro">
+      <h1 class="home-lead">
+        Reseñas honestas, fichas para descubrir tu próximo juego, noticias con
+        contexto y guías para avanzar a tu ritmo.
+      </h1>
+    </header>
+    <form class="site-search" action="/buscar/" method="get" role="search">
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2.2"
+        stroke-linecap="round"
+        aria-hidden="true"
+      >
+        <circle cx="10.5" cy="10.5" r="6.5" />
+        <path d="m20 20-4.8-4.8" />
+      </svg>
+      <input
+        type="search"
+        name="q"
+        placeholder="¿Qué estás buscando? Juegos, reseñas, noticias…"
+        aria-label="Buscar en Netti"
+        autocomplete="off"
+      />
+      <button type="submit">Buscar</button>
+    </form>
 
-		<p class="press-start" aria-hidden="true">
-			<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 1l9 5-9 5Z" fill="currentColor"/></svg>
-			Press start
-		</p>
-		<header class="home-intro">
-			<h1 class="home-lead">Reseñas honestas, fichas para descubrir tu próximo juego, noticias con contexto y guías para avanzar a tu ritmo.</h1>
-		</header>
-		<form class="site-search" action="/buscar/" method="get" role="search">
-			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
-				<circle cx="10.5" cy="10.5" r="6.5" />
-				<path d="m20 20-4.8-4.8" />
-			</svg>
-			<input type="search" name="q" placeholder="¿Qué estás buscando? Juegos, reseñas, noticias…" aria-label="Buscar en Netti" autocomplete="off" />
-			<button type="submit">Buscar</button>
-		</form>
+    <section class="spotlight" aria-label="Contenido destacado">
+      <div class="grid">
+        {cards.map((card: SpotlightCard, index: number) =>
+          card.href ? (
+            <a class="card" href={card.href}>
+              <div class="spotlight-art">
+                <CoverArtwork
+                  src={card.cover}
+                  alt={card.coverAlt ?? card.title}
+                  title={card.title}
+                  priority={index === firstCoverIndex}
+                />
+                {card.featured && (
+                  <span class="featured-overlay">
+                    <FeaturedBadge featured={card.featured} />
+                  </span>
+                )}
+                {card.tags?.length && (
+                  <span class="tags-overlay">
+                    <EditorialTags tags={card.tags} limit={2} />
+                  </span>
+                )}
+                {card.platforms?.length && (
+                  <span class="platform-overlay">
+                    <PlatformIcons platforms={card.platforms} />
+                  </span>
+                )}
+              </div>
+              <div class="card-body">
+                <p class="label">{card.label}</p>
+                <h2>{card.title}</h2>
+                <p class="summary">{card.description}</p>
+                <p class="meta">{card.meta}</p>
+                <p class="cta">
+                  {card.cta} <span aria-hidden="true">→</span>
+                </p>
+              </div>
+            </a>
+          ) : (
+            <div class="card card-soon">
+              <p class="label">{card.label}</p>
+              <h2>{card.title}</h2>
+              <p class="summary">{card.description}</p>
+              <p class="meta">{card.meta}</p>
+            </div>
+          ),
+        )}
+      </div>
+    </section>
 
-		<section class="spotlight" aria-label="Contenido destacado">
-			<div class="grid">
-				{cards.map((card: SpotlightCard, index: number) =>
-					card.href ? (
-						<a class="card" href={card.href}>
-							<div class="spotlight-art">
-								<CoverArtwork src={card.cover} alt={card.coverAlt ?? card.title} title={card.title} priority={index === firstCoverIndex} />
-								{card.featured && <span class="featured-overlay"><FeaturedBadge featured={card.featured} /></span>}
-								{card.tags?.length && <span class="tags-overlay"><EditorialTags tags={card.tags} limit={2} /></span>}
-								{card.platforms?.length && <span class="platform-overlay"><PlatformIcons platforms={card.platforms} /></span>}
-							</div>
-							<div class="card-body">
-								<p class="label">{card.label}</p>
-								<h2>{card.title}</h2>
-								<p class="summary">{card.description}</p>
-								<p class="meta">{card.meta}</p>
-								<p class="cta">{card.cta} <span aria-hidden="true">→</span></p>
-							</div>
-						</a>
-					) : (
-						<div class="card card-soon">
-							<p class="label">{card.label}</p>
-							<h2>{card.title}</h2>
-							<p class="summary">{card.description}</p>
-							<p class="meta">{card.meta}</p>
-						</div>
-					)
-				)}
-			</div>
-		</section>
+    <section class="quest" aria-label="Progreso de la biblioteca">
+      <div class="quest-head">
+        <p class="quest-title">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M8 3h8v6a4 4 0 0 1-8 0V3Z" />
+            <path d="M8 4H5v2a3 3 0 0 0 3 3M16 4h3v2a3 3 0 0 1-3 3" />
+            <path d="M12 13v3M9 20h6M10 16h4l1 4H9l1-4Z" />
+          </svg>
+          Nivel de biblioteca
+        </p>
+        <p class="quest-value">
+          <strong>{reviewedGames}</strong>/{games.length} reseñados
+        </p>
+      </div>
+      <div
+        class="quest-bar"
+        role="progressbar"
+        aria-label="Juegos con reseña"
+        aria-valuemin="0"
+        aria-valuemax="100"
+        aria-valuenow={progress}
+      >
+        <span style={`width: ${progress}%`}></span>
+      </div>
+      <p class="quest-note">{questNote}</p>
+    </section>
 
-		<section class="quest" aria-label="Progreso de la biblioteca">
-			<div class="quest-head">
-				<p class="quest-title">
-					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-						<path d="M8 3h8v6a4 4 0 0 1-8 0V3Z" />
-						<path d="M8 4H5v2a3 3 0 0 0 3 3M16 4h3v2a3 3 0 0 1-3 3" />
-						<path d="M12 13v3M9 20h6M10 16h4l1 4H9l1-4Z" />
-					</svg>
-					Nivel de biblioteca
-				</p>
-				<p class="quest-value"><strong>{reviewedGames}</strong>/{games.length} reseñados</p>
-			</div>
-			<div class="quest-bar" role="progressbar" aria-label="Juegos con reseña" aria-valuemin="0" aria-valuemax="100" aria-valuenow={progress}>
-				<span style={`width: ${progress}%`}></span>
-			</div>
-			<p class="quest-note">{questNote}</p>
-		</section>
+    <section class="latest" aria-label="Lo último en Netti">
+      <div class="col">
+        <h2>
+          <svg
+            class="ico-gold"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+            aria-hidden="true"
+          >
+            <path d="m12 3 2.7 5.7 6.3 .8-4.6 4.3 1.2 6.2-5.6-3-5.6 3 1.2-6.2L3 9.5l6.3-.8Z" />
+          </svg>
+          Últimas reseñas
+        </h2>
+        {latestReviews.length > 0 ? (
+          <ol class="mini-list">
+            {latestReviews.map((review) => (
+              <li>
+                <a href={`/resenas/${review.id}/`}>
+                  <span class="item-text">
+                    <span class="t">{review.data.title}</span>
+                    <span class="excerpt">{review.data.description}</span>
+                  </span>
+                  <ScoreBadge score={review.data.score} compact />
+                </a>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p class="soon">Primeras reseñas en camino.</p>
+        )}
+        <a class="more" href="/resenas/">
+          Ver todas <span aria-hidden="true">→</span>
+        </a>
+      </div>
+      <div class="col">
+        <h2>
+          <svg
+            class="ico-red"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            aria-hidden="true"
+          >
+            <path d="M4 5h13v14H4Z" />
+            <path d="M17 8h3v8a3 3 0 0 1-3 3" />
+            <path d="M7 8h7M7 11h7M7 14h4" />
+          </svg>
+          Últimas noticias
+        </h2>
+        {latestNews.length > 0 ? (
+          <ol class="mini-list">
+            {latestNews.map((item) => (
+              <li>
+                <a href={`/noticias/${item.id}/`}>
+                  <span class="item-text">
+                    <span class="t">{item.data.title}</span>
+                    <span class="excerpt">{item.data.description}</span>
+                  </span>
+                  <time
+                    class="d"
+                    datetime={item.data.publishedAt.toISOString()}
+                  >
+                    {formatDate(item.data.publishedAt)}
+                  </time>
+                </a>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p class="soon">Próximamente, novedades.</p>
+        )}
+        <a class="more" href="/noticias/">
+          Ver todas <span aria-hidden="true">→</span>
+        </a>
+      </div>
+    </section>
 
-		<section class="latest" aria-label="Lo último en Netti">
-			<div class="col">
-				<h2>
-					<svg class="ico-gold" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="m12 3 2.7 5.7 6.3 .8-4.6 4.3 1.2 6.2-5.6-3-5.6 3 1.2-6.2L3 9.5l6.3-.8Z"/></svg>
-					Últimas reseñas
-				</h2>
-				{latestReviews.length > 0 ? (
-					<ol class="mini-list">
-						{latestReviews.map((review) => (
-							<li>
-								<a href={`/resenas/${review.id}/`}>
-									<span class="item-text">
-										<span class="t">{review.data.title}</span>
-										<span class="excerpt">{review.data.description}</span>
-									</span>
-									<ScoreBadge score={review.data.score} compact />
-								</a>
-							</li>
-						))}
-					</ol>
-				) : <p class="soon">Primeras reseñas en camino.</p>}
-				<a class="more" href="/resenas/">Ver todas <span aria-hidden="true">→</span></a>
-			</div>
-			<div class="col">
-				<h2>
-					<svg class="ico-red" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 5h13v14H4Z"/><path d="M17 8h3v8a3 3 0 0 1-3 3"/><path d="M7 8h7M7 11h7M7 14h4"/></svg>
-					Últimas noticias
-				</h2>
-				{latestNews.length > 0 ? (
-					<ol class="mini-list">
-						{latestNews.map((item) => (
-							<li>
-								<a href={`/noticias/${item.id}/`}>
-									<span class="item-text">
-										<span class="t">{item.data.title}</span>
-										<span class="excerpt">{item.data.description}</span>
-									</span>
-									<time class="d" datetime={item.data.publishedAt.toISOString()}>{formatDate(item.data.publishedAt)}</time>
-								</a>
-							</li>
-						))}
-					</ol>
-				) : <p class="soon">Próximamente, novedades.</p>}
-				<a class="more" href="/noticias/">Ver todas <span aria-hidden="true">→</span></a>
-			</div>
-		</section>
+    <div class="stats-row">
+      <p class="stats">
+        <span class="stat">
+          <svg
+            class="ico-cyan"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            aria-hidden="true"
+          >
+            <path d="M7.5 7h9a5.5 5.5 0 0 1 5.4 6.6l-.8 3.8A2.6 2.6 0 0 1 16.6 18l-1.1-2h-7l-1.1 2a2.6 2.6 0 0 1-4.5-.6l-.8-3.8A5.5 5.5 0 0 1 7.5 7Z" />
+            <path d="M8 11v3M6.5 12.5h3" />
+            <circle
+              cx="16.2"
+              cy="11.5"
+              r=".9"
+              fill="currentColor"
+              stroke="none"
+            />
+            <circle
+              cx="18.6"
+              cy="13.4"
+              r=".9"
+              fill="currentColor"
+              stroke="none"
+            />
+          </svg>
+          <strong>{games.length}</strong> juegos
+        </span>
+        <span aria-hidden="true">·</span>
+        <span class="stat">
+          <svg
+            class="ico-gold"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+            aria-hidden="true"
+          >
+            <path d="m12 3 2.7 5.7 6.3 .8-4.6 4.3 1.2 6.2-5.6-3-5.6 3 1.2-6.2L3 9.5l6.3-.8Z" />
+          </svg>
+          <strong>{reviews.length}</strong> reseñas
+        </span>
+        <span aria-hidden="true">·</span>
+        <span class="stat">
+          <svg
+            class="ico-red"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            aria-hidden="true"
+          >
+            <path d="M4 5h13v14H4Z" />
+            <path d="M17 8h3v8a3 3 0 0 1-3 3" />
+            <path d="M7 8h7M7 11h7M7 14h4" />
+          </svg>
+          <strong>{news.length}</strong> noticias
+        </span>
+        {guides.length > 0 && (
+          <>
+            <span aria-hidden="true">·</span>
+            <span class="stat">
+              <svg
+                class="ico-green"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                aria-hidden="true"
+              >
+                <path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" />
+              </svg>
+              <strong>{guides.length}</strong>{" "}
+              {guides.length === 1 ? "guía" : "guías"}
+            </span>
+          </>
+        )}
+      </p>
+      {games.length > 0 && (
+        <button
+          type="button"
+          class="dice"
+          data-games={JSON.stringify(gameHrefs)}
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            aria-hidden="true"
+          >
+            <rect x="3.5" y="3.5" width="17" height="17" rx="4.5" />
+            <circle
+              cx="8.6"
+              cy="8.6"
+              r="1.5"
+              fill="currentColor"
+              stroke="none"
+            />
+            <circle
+              cx="15.4"
+              cy="8.6"
+              r="1.5"
+              fill="currentColor"
+              stroke="none"
+            />
+            <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none" />
+            <circle
+              cx="8.6"
+              cy="15.4"
+              r="1.5"
+              fill="currentColor"
+              stroke="none"
+            />
+            <circle
+              cx="15.4"
+              cy="15.4"
+              r="1.5"
+              fill="currentColor"
+              stroke="none"
+            />
+          </svg>
+          Juego al azar
+        </button>
+      )}
+    </div>
 
-		<div class="stats-row">
-			<p class="stats">
-				<span class="stat">
-					<svg class="ico-cyan" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M7.5 7h9a5.5 5.5 0 0 1 5.4 6.6l-.8 3.8A2.6 2.6 0 0 1 16.6 18l-1.1-2h-7l-1.1 2a2.6 2.6 0 0 1-4.5-.6l-.8-3.8A5.5 5.5 0 0 1 7.5 7Z"/><path d="M8 11v3M6.5 12.5h3"/><circle cx="16.2" cy="11.5" r=".9" fill="currentColor" stroke="none"/><circle cx="18.6" cy="13.4" r=".9" fill="currentColor" stroke="none"/></svg>
-					<strong>{games.length}</strong> juegos
-				</span>
-				<span aria-hidden="true">·</span>
-				<span class="stat">
-					<svg class="ico-gold" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="m12 3 2.7 5.7 6.3 .8-4.6 4.3 1.2 6.2-5.6-3-5.6 3 1.2-6.2L3 9.5l6.3-.8Z"/></svg>
-					<strong>{reviews.length}</strong> reseñas
-				</span>
-				<span aria-hidden="true">·</span>
-				<span class="stat">
-					<svg class="ico-red" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 5h13v14H4Z"/><path d="M17 8h3v8a3 3 0 0 1-3 3"/><path d="M7 8h7M7 11h7M7 14h4"/></svg>
-					<strong>{news.length}</strong> noticias
-				</span>
-				{guides.length > 0 && (
-					<>
-						<span aria-hidden="true">·</span>
-						<span class="stat">
-							<svg class="ico-green" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z"/></svg>
-							<strong>{guides.length}</strong> {guides.length === 1 ? "guía" : "guías"}
-						</span>
-					</>
-				)}
-			</p>
-			{games.length > 0 && (
-				<button type="button" class="dice" data-games={JSON.stringify(gameHrefs)}>
-					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-						<rect x="3.5" y="3.5" width="17" height="17" rx="4.5" />
-						<circle cx="8.6" cy="8.6" r="1.5" fill="currentColor" stroke="none" />
-						<circle cx="15.4" cy="8.6" r="1.5" fill="currentColor" stroke="none" />
-						<circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none" />
-						<circle cx="8.6" cy="15.4" r="1.5" fill="currentColor" stroke="none" />
-						<circle cx="15.4" cy="15.4" r="1.5" fill="currentColor" stroke="none" />
-					</svg>
-					Juego al azar
-				</button>
-			)}
-		</div>
-
-		{latestDate && <p class="updated">Actualizado el {formatDate(latestDate)}</p>}
-	</div>
+    {latestDate && (
+      <p class="updated">Actualizado el {formatDate(latestDate)}</p>
+    )}
+  </div>
 </BaseLayout>
 
 <script>
-	const dice = document.querySelector<HTMLButtonElement>(".dice");
-	const gameHrefs: string[] = JSON.parse(dice?.dataset.games ?? "[]");
-	dice?.addEventListener("click", () => {
-		if (gameHrefs.length) window.location.href = gameHrefs[Math.floor(Math.random() * gameHrefs.length)];
-	});
+  const dice = document.querySelector<HTMLButtonElement>(".dice");
+  const gameHrefs: string[] = JSON.parse(dice?.dataset.games ?? "[]");
+  dice?.addEventListener("click", () => {
+    if (gameHrefs.length)
+      window.location.href =
+        gameHrefs[Math.floor(Math.random() * gameHrefs.length)];
+  });
 </script>
 
 <style>
-	.home {
-		display: grid;
-		gap: clamp(1.75rem, 4vw, 2.75rem);
-		justify-items: center;
-		padding: clamp(1.5rem, 4vw, 2.75rem) 0 1rem;
-		text-align: center;
-	}
+  .home {
+    display: grid;
+    gap: clamp(1.75rem, 4vw, 2.75rem);
+    justify-items: center;
+    padding: clamp(1.5rem, 4vw, 2.75rem) 0 1rem;
+    text-align: center;
+  }
 
-	.press-start {
-		display: inline-flex;
-		align-items: center;
-		gap: .55rem;
-		margin: 0;
-		color: var(--accent);
-		font-size: .74rem;
-		font-weight: 800;
-		letter-spacing: .34em;
-		text-transform: uppercase;
-	}
-	.press-start svg { width: 10px; height: 10px; }
+  .press-start {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    margin: 0;
+    color: var(--accent);
+    font-size: 0.74rem;
+    font-weight: 800;
+    letter-spacing: 0.34em;
+    text-transform: uppercase;
+  }
+  .press-start svg {
+    width: 10px;
+    height: 10px;
+  }
 
-	.home-intro { display: grid; justify-items: center; gap: .65rem; max-width: 760px; margin: -.35rem 0 .25rem; }
-	.home-lead { max-width: 62ch; margin: 0; color: var(--muted); font-size: clamp(1rem, 1.6vw, 1.18rem); line-height: 1.7; }
-	.press-start { opacity: .9; }
+  .home-intro {
+    display: grid;
+    justify-items: center;
+    gap: 0.65rem;
+    max-width: 760px;
+    margin: -0.35rem 0 0.25rem;
+  }
+  .home-lead {
+    max-width: 62ch;
+    margin: 0;
+    color: var(--muted);
+    font-size: clamp(1rem, 1.6vw, 1.18rem);
+    line-height: 1.7;
+  }
+  .press-start {
+    opacity: 0.9;
+  }
 
-	.site-search {
-		display: flex;
-		gap: .6rem;
-		width: min(100%, 620px);
-		padding: .5rem .5rem .5rem 1.1rem;
-		border: 2px solid var(--border-card);
-		border-radius: 999px;
-		background: color-mix(in srgb, var(--surface) 92%, transparent);
-		box-shadow: var(--shadow-hard-sm);
-		transition: border-color 160ms ease, box-shadow 160ms ease;
-	}
-	.site-search:focus-within { border-color: var(--accent); box-shadow: var(--shadow-hard); }
-	.site-search svg { flex: none; align-self: center; width: 20px; height: 20px; color: var(--accent); }
-	.site-search input {
-		flex: 1;
-		min-width: 0;
-		min-height: 44px;
-		border: 0;
-		background: transparent;
-		color: var(--text);
-		font: 500 1rem "Quicksand", system-ui, sans-serif;
-	}
-	.site-search input:focus-visible { outline: none; }
-	.site-search input::placeholder { color: var(--muted); }
-	.site-search button {
-		min-height: 44px;
-		padding: .5rem 1.3rem;
-		border: 0;
-		border-radius: 999px;
-		background: var(--accent);
-		color: var(--on-accent);
-		font-weight: 700;
-		cursor: pointer;
-	}
-	.site-search button:hover { background: var(--accent-strong); }
+  .site-search {
+    display: flex;
+    gap: 0.6rem;
+    width: min(100%, 620px);
+    padding: 0.5rem 0.5rem 0.5rem 1.1rem;
+    border: 2px solid var(--border-card);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--surface) 92%, transparent);
+    box-shadow: var(--shadow-hard-sm);
+    transition:
+      border-color 160ms ease,
+      box-shadow 160ms ease;
+  }
+  .site-search:focus-within {
+    border-color: var(--accent);
+    box-shadow: var(--shadow-hard);
+  }
+  .site-search svg {
+    flex: none;
+    align-self: center;
+    width: 20px;
+    height: 20px;
+    color: var(--accent);
+  }
+  .site-search input {
+    flex: 1;
+    min-width: 0;
+    min-height: 44px;
+    border: 0;
+    background: transparent;
+    color: var(--text);
+    font:
+      500 1rem "Quicksand",
+      system-ui,
+      sans-serif;
+  }
+  .site-search input:focus-visible {
+    outline: none;
+  }
+  .site-search input::placeholder {
+    color: var(--muted);
+  }
+  .site-search button {
+    min-height: 44px;
+    padding: 0.5rem 1.3rem;
+    border: 0;
+    border-radius: 999px;
+    background: var(--accent);
+    color: var(--on-accent);
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .site-search button:hover {
+    background: var(--accent-strong);
+  }
 
-	.grid {
-		display: grid;
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-		gap: clamp(1.15rem, 2.5vw, 1.75rem);
-		width: 100%;
-		margin-inline: auto;
-	}
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: clamp(1.15rem, 2.5vw, 1.75rem);
+    width: 100%;
+    margin-inline: auto;
+  }
 
-	.card {
-		position: relative;
-		display: grid;
-		gap: .9rem;
-		align-content: start;
-		padding: clamp(1rem, 1.8vw, 1.4rem);
-		border: 1px solid var(--border-card);
-		border-radius: clamp(1.25rem, 3vw, 1.75rem);
-		background: color-mix(in srgb, var(--surface) 92%, transparent);
-		box-shadow: var(--shadow-hard-sm);
-		text-align: left;
-		transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease, background-color 180ms ease;
-	}
-	.card:hover {
-		color: var(--text);
-		border-color: var(--accent);
-		background: var(--surface);
-		box-shadow: var(--shadow-hard);
-		transform: translateY(-4px);
-	}
-	.card-soon { opacity: .75; }
-	.card :global(.cover) { width: 100%; border-radius: .9rem; }
-	.spotlight-art { position: relative; }
-	.spotlight-art :global(.cover) { margin: 0; }
-	.featured-overlay, .tags-overlay, .platform-overlay { position: absolute; z-index: 2; }
-	.tags-overlay { display: block; }
-	.featured-overlay { top: .65rem; left: .65rem; max-width: calc(100% - 1.3rem); }
-	.tags-overlay { bottom: .55rem; left: .55rem; max-width: 70%; }
-	.tags-overlay :global(.editorial-tags) { margin: 0; gap: .25rem; }
-	.tags-overlay :global(.tag) { max-width: 9rem; background: #141218; border-color: color-mix(in srgb, var(--tag-color) 65%, #141218); box-shadow: 0 2px 8px rgb(0 0 0 / 28%); }
-	.platform-overlay { right: .6rem; bottom: .65rem; max-width: calc(100% - 1.2rem); }
-	.spotlight-art :global(.platform-icons) { padding: .3rem .45rem; border: 1px solid rgb(255 255 255 / 14%); border-radius: 999px; background: #141218; color: #fff; box-shadow: 0 2px 8px rgb(0 0 0 / 32%); }
-	.spotlight-art :global(.platform-icons li) { opacity: 1; }
-	.spotlight-art :global(.platform-icons svg) { width: 16px; height: 16px; }
-	.card-body { display: grid; gap: .45rem; align-content: start; }
+  .card {
+    position: relative;
+    display: grid;
+    gap: 0.9rem;
+    align-content: start;
+    padding: clamp(1rem, 1.8vw, 1.4rem);
+    border: 1px solid var(--border-card);
+    border-radius: clamp(1.25rem, 3vw, 1.75rem);
+    background: color-mix(in srgb, var(--surface) 92%, transparent);
+    box-shadow: var(--shadow-hard-sm);
+    text-align: left;
+    transition:
+      border-color 180ms ease,
+      box-shadow 180ms ease,
+      transform 180ms ease,
+      background-color 180ms ease;
+  }
+  .card:hover {
+    color: var(--text);
+    border-color: var(--accent);
+    background: var(--surface);
+    box-shadow: var(--shadow-hard);
+    transform: translateY(-4px);
+  }
+  .card-soon {
+    opacity: 0.75;
+  }
+  .card :global(.cover) {
+    width: 100%;
+    border-radius: 0.9rem;
+  }
+  .spotlight-art {
+    position: relative;
+  }
+  .spotlight-art :global(.cover) {
+    margin: 0;
+  }
+  .featured-overlay,
+  .tags-overlay,
+  .platform-overlay {
+    position: absolute;
+    z-index: 2;
+  }
+  .tags-overlay {
+    display: block;
+  }
+  .featured-overlay {
+    top: 0.65rem;
+    left: 0.65rem;
+    max-width: calc(100% - 1.3rem);
+  }
+  .tags-overlay {
+    bottom: 0.55rem;
+    left: 0.55rem;
+    max-width: 70%;
+  }
+  .tags-overlay :global(.editorial-tags) {
+    margin: 0;
+    gap: 0.25rem;
+  }
+  .tags-overlay :global(.tag) {
+    max-width: 9rem;
+    background: #141218;
+    border-color: color-mix(in srgb, var(--tag-color) 65%, #141218);
+    box-shadow: 0 2px 8px rgb(0 0 0 / 28%);
+  }
+  .platform-overlay {
+    right: 0.6rem;
+    bottom: 0.65rem;
+    max-width: calc(100% - 1.2rem);
+  }
+  .spotlight-art :global(.platform-icons) {
+    padding: 0.3rem 0.45rem;
+    border: 1px solid rgb(255 255 255 / 14%);
+    border-radius: 999px;
+    background: #141218;
+    color: #fff;
+    box-shadow: 0 2px 8px rgb(0 0 0 / 32%);
+  }
+  .spotlight-art :global(.platform-icons li) {
+    opacity: 1;
+  }
+  .spotlight-art :global(.platform-icons svg) {
+    width: 16px;
+    height: 16px;
+  }
+  .card-body {
+    display: grid;
+    gap: 0.45rem;
+    align-content: start;
+  }
 
-	.label {
-		margin: 0;
-		color: var(--accent);
-		font-size: .74rem;
-		font-weight: 800;
-		letter-spacing: .16em;
-		text-transform: uppercase;
-	}
-	.card h2 {
-		margin: 0;
-		font-size: clamp(1.35rem, 2.2vw, 1.75rem);
-		line-height: 1.18;
-	}
-	.summary {
-		display: -webkit-box;
-		overflow: hidden;
-		margin: .1rem 0 0;
-		color: var(--muted);
-		font-size: .95rem;
-		line-height: 1.6;
-		-webkit-box-orient: vertical;
-		-webkit-line-clamp: 3;
-	}
-	.meta { margin: 0; color: var(--muted); font-size: .85rem; }
-	.cta { margin: .15rem 0 0; color: var(--accent); font-size: .92rem; font-weight: 700; }
-	.card:hover .cta { color: var(--accent-strong); }
-	.card:focus-visible { border-radius: clamp(1.25rem, 3vw, 1.75rem); }
+  .label {
+    margin: 0;
+    color: var(--accent);
+    font-size: 0.74rem;
+    font-weight: 800;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+  .card h2 {
+    margin: 0;
+    font-size: clamp(1.35rem, 2.2vw, 1.75rem);
+    line-height: 1.18;
+  }
+  .summary {
+    display: -webkit-box;
+    overflow: hidden;
+    margin: 0.1rem 0 0;
+    color: var(--muted);
+    font-size: 0.95rem;
+    line-height: 1.6;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+  }
+  .meta {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
+  .cta {
+    margin: 0.15rem 0 0;
+    color: var(--accent);
+    font-size: 0.92rem;
+    font-weight: 700;
+  }
+  .card:hover .cta {
+    color: var(--accent-strong);
+  }
+  .card:focus-visible {
+    border-radius: clamp(1.25rem, 3vw, 1.75rem);
+  }
 
-	.quest {
-		display: grid;
-		gap: .55rem;
-		width: 100%;
-		padding: 1.25rem clamp(1.2rem, 2.5vw, 1.75rem);
-		border: 1px solid var(--border-card);
-		border-radius: 1.25rem;
-		background: color-mix(in srgb, var(--surface) 92%, transparent);
-		box-shadow: var(--shadow-hard-sm);
-		text-align: left;
-	}
-	.quest-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
-	.quest-title { display: flex; align-items: center; gap: .5rem; margin: 0; font-weight: 700; font-size: .95rem; }
-	.quest-title svg { width: 18px; height: 18px; color: var(--gold); }
-	.quest-value { margin: 0; color: var(--muted); font-size: .85rem; font-variant-numeric: tabular-nums; }
-	.quest-value strong { color: var(--gold); }
-	.quest-bar { height: .65rem; overflow: hidden; border: 1px solid var(--border); border-radius: 999px; background: var(--field); }
-	.quest-bar span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--green), var(--gold) 70%, var(--accent)); }
-	.quest-note { margin: 0; color: var(--muted); font-size: .82rem; }
+  .quest {
+    display: grid;
+    gap: 0.55rem;
+    width: 100%;
+    padding: 1.25rem clamp(1.2rem, 2.5vw, 1.75rem);
+    border: 1px solid var(--border-card);
+    border-radius: 1.25rem;
+    background: color-mix(in srgb, var(--surface) 92%, transparent);
+    box-shadow: var(--shadow-hard-sm);
+    text-align: left;
+  }
+  .quest-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+  .quest-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0;
+    font-weight: 700;
+    font-size: 0.95rem;
+  }
+  .quest-title svg {
+    width: 18px;
+    height: 18px;
+    color: var(--gold);
+  }
+  .quest-value {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.85rem;
+    font-variant-numeric: tabular-nums;
+  }
+  .quest-value strong {
+    color: var(--gold);
+  }
+  .quest-bar {
+    height: 0.65rem;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--field);
+  }
+  .quest-bar span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(
+      90deg,
+      var(--green),
+      var(--gold) 70%,
+      var(--accent)
+    );
+  }
+  .quest-note {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.82rem;
+  }
 
-	.latest {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr));
-		gap: clamp(1.15rem, 2.5vw, 1.75rem);
-		width: 100%;
-	}
-	.col {
-		display: grid;
-		gap: 1rem;
-		align-content: start;
-		padding: clamp(1.25rem, 2.5vw, 1.6rem);
-		border: 1px solid var(--border-card);
-		border-radius: 1.25rem;
-		background: color-mix(in srgb, var(--surface) 92%, transparent);
-		box-shadow: var(--shadow-hard-sm);
-		text-align: left;
-	}
-	.col h2 { display: flex; align-items: center; gap: .5rem; margin: 0; font-size: 1.2rem; }
-	.col h2 svg { width: 18px; height: 18px; }
-	.mini-list { display: grid; gap: .7rem; margin: 0; padding: 0; list-style: none; }
-	.mini-list a {
-		display: flex;
-		align-items: flex-start;
-		justify-content: space-between;
-		gap: 1rem;
-		padding: .85rem 1rem;
-		border: 1px solid var(--border);
-		border-radius: .85rem;
-		background: color-mix(in srgb, var(--surface-raised) 55%, transparent);
-		transition: border-color 160ms ease, transform 160ms ease;
-	}
-	.mini-list a:hover { border-color: var(--accent); transform: translateY(-2px); }
-	.item-text { display: grid; gap: .2rem; min-width: 0; flex: 1; }
-	.mini-list .t { font-weight: 600; line-height: 1.35; }
-	.mini-list .excerpt {
-		display: -webkit-box;
-		overflow: hidden;
-		color: var(--muted);
-		font-size: .84rem;
-		line-height: 1.5;
-		-webkit-box-orient: vertical;
-		-webkit-line-clamp: 2;
-	}
-	.mini-list .d { color: var(--muted); font-size: .78rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
-	.soon { margin: 0; color: var(--muted); font-size: .9rem; }
-	.more { justify-self: start; color: var(--accent); font-size: .9rem; font-weight: 700; }
-	.more:hover { color: var(--accent-strong); }
+  .latest {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr));
+    gap: clamp(1.15rem, 2.5vw, 1.75rem);
+    width: 100%;
+  }
+  .col {
+    display: grid;
+    gap: 1rem;
+    align-content: start;
+    padding: clamp(1.25rem, 2.5vw, 1.6rem);
+    border: 1px solid var(--border-card);
+    border-radius: 1.25rem;
+    background: color-mix(in srgb, var(--surface) 92%, transparent);
+    box-shadow: var(--shadow-hard-sm);
+    text-align: left;
+  }
+  .col h2 {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0;
+    font-size: 1.2rem;
+  }
+  .col h2 svg {
+    width: 18px;
+    height: 18px;
+  }
+  .mini-list {
+    display: grid;
+    gap: 0.7rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .mini-list a {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.85rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: 0.85rem;
+    background: color-mix(in srgb, var(--surface-raised) 55%, transparent);
+    transition:
+      border-color 160ms ease,
+      transform 160ms ease;
+  }
+  .mini-list a:hover {
+    border-color: var(--accent);
+    transform: translateY(-2px);
+  }
+  .item-text {
+    display: grid;
+    gap: 0.2rem;
+    min-width: 0;
+    flex: 1;
+  }
+  .mini-list .t {
+    font-weight: 600;
+    line-height: 1.35;
+  }
+  .mini-list .excerpt {
+    display: -webkit-box;
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 0.84rem;
+    line-height: 1.5;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+  .mini-list .d {
+    color: var(--muted);
+    font-size: 0.78rem;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .soon {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.9rem;
+  }
+  .more {
+    justify-self: start;
+    color: var(--accent);
+    font-size: 0.9rem;
+    font-weight: 700;
+  }
+  .more:hover {
+    color: var(--accent-strong);
+  }
 
-	.stats-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: .8rem; }
-	.stat { display: inline-flex; align-items: center; gap: .45rem; }
-	.stat svg { width: 16px; height: 16px; }
-	.ico-cyan { color: var(--cyan); }
-	.ico-gold { color: var(--gold); }
-	.ico-red { color: var(--red); }
-	.ico-green { color: var(--green); }
-	.stats {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: baseline;
-		justify-content: center;
-		gap: .4rem .6rem;
-		margin: 0;
-		padding: .9rem 1.9rem;
-		border: 1px solid var(--border-card);
-		border-radius: 999px;
-		background: color-mix(in srgb, var(--surface) 92%, transparent);
-		box-shadow: var(--shadow-hard-sm);
-		color: var(--muted);
-		font-size: .95rem;
-	}
-	.stats strong {
-		color: var(--text);
-		font-family: var(--font-display);
-		font-size: 1.1rem;
-		font-variant-numeric: tabular-nums;
-	}
+  .stats-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 0.8rem;
+  }
+  .stat {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+  }
+  .stat svg {
+    width: 16px;
+    height: 16px;
+  }
+  .ico-cyan {
+    color: var(--cyan);
+  }
+  .ico-gold {
+    color: var(--gold);
+  }
+  .ico-red {
+    color: var(--red);
+  }
+  .ico-green {
+    color: var(--green);
+  }
+  .stats {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: center;
+    gap: 0.4rem 0.6rem;
+    margin: 0;
+    padding: 0.9rem 1.9rem;
+    border: 1px solid var(--border-card);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--surface) 92%, transparent);
+    box-shadow: var(--shadow-hard-sm);
+    color: var(--muted);
+    font-size: 0.95rem;
+  }
+  .stats strong {
+    color: var(--text);
+    font-family: var(--font-display);
+    font-size: 1.1rem;
+    font-variant-numeric: tabular-nums;
+  }
 
-	.dice {
-		display: inline-flex;
-		align-items: center;
-		gap: .5rem;
-		min-height: 44px;
-		margin: 0;
-		padding: .55rem 1.3rem;
-		border: 1px solid var(--border-card);
-		border-radius: 999px;
-		background: var(--surface);
-		color: var(--text);
-		box-shadow: var(--shadow-hard-sm);
-		font: 700 .9rem "Quicksand", system-ui, sans-serif;
-		cursor: pointer;
-		transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
-	}
-	.dice svg { width: 18px; height: 18px; color: var(--accent); }
-	.dice:hover { border-color: var(--accent); transform: translateY(-2px); box-shadow: var(--shadow-hard); }
-	.dice:active { transform: translateY(1px); box-shadow: none; }
+  .dice {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 44px;
+    margin: 0;
+    padding: 0.55rem 1.3rem;
+    border: 1px solid var(--border-card);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: var(--shadow-hard-sm);
+    font:
+      700 0.9rem "Quicksand",
+      system-ui,
+      sans-serif;
+    cursor: pointer;
+    transition:
+      border-color 160ms ease,
+      box-shadow 160ms ease,
+      transform 160ms ease;
+  }
+  .dice svg {
+    width: 18px;
+    height: 18px;
+    color: var(--accent);
+  }
+  .dice:hover {
+    border-color: var(--accent);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-hard);
+  }
+  .dice:active {
+    transform: translateY(1px);
+    box-shadow: none;
+  }
 
-	.updated {
-		width: fit-content;
-		margin: 0;
-		padding: .32rem .9rem;
-		border: 1px solid var(--border-card);
-		border-radius: 999px;
-		background: color-mix(in srgb, var(--background) 74%, transparent);
-		color: var(--muted);
-		font-size: .82rem;
-	}
+  .updated {
+    width: fit-content;
+    margin: 0;
+    padding: 0.32rem 0.9rem;
+    border: 1px solid var(--border-card);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--background) 74%, transparent);
+    color: var(--muted);
+    font-size: 0.82rem;
+  }
 
-	@media (max-width: 760px) {
-		.grid { grid-template-columns: 1fr; }
-	}
+  @media (max-width: 760px) {
+    .grid {
+      grid-template-columns: 1fr;
+    }
+  }
 </style>

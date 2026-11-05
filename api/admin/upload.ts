@@ -140,7 +140,6 @@ export default async function handler(req: any, res: any) {
     }
 
     const filename = `${require("node:crypto").randomUUID()}.${formats[mimeType].extension}`;
-    const filePath = `media/${collection}/${slug}/${filename}`;
 
     const saved = await writeMediaFile(collection, slug, filename, data);
     if (!saved || typeof saved.commit !== "string") {

@@ -3,448 +3,448 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
 import PageIntro from "../../components/PageIntro.astro";
 
 const types = [
-	{ value: "all", label: "Todo" },
-	{ value: "Juego", label: "Juegos" },
-	{ value: "Reseña", label: "Reseñas" },
-	{ value: "Noticia", label: "Noticias" },
-	{ value: "Guía", label: "Guías" },
+  { value: "all", label: "Todo" },
+  { value: "Juego", label: "Juegos" },
+  { value: "Reseña", label: "Reseñas" },
+  { value: "Noticia", label: "Noticias" },
+  { value: "Guía", label: "Guías" },
 ];
 ---
 
 <BaseLayout
-	title="Buscar"
-	description="Buscá en todas las reseñas, fichas, noticias y guías de Netti."
+  title="Buscar"
+  description="Buscá en todas las reseñas, fichas, noticias y guías de Netti."
 >
-	<PageIntro
-		eyebrow="Buscador"
-		title="Buscar en Netti"
-		description="Encontrá juegos, reseñas, noticias y guías desde un solo lugar."
-	/>
+  <PageIntro
+    eyebrow="Buscador"
+    title="Buscar en Netti"
+    description="Encontrá juegos, reseñas, noticias y guías desde un solo lugar."
+  />
 
-	<section class="search" aria-label="Buscador general de Netti">
-		<form class="search-form" action="/buscar/" method="get" role="search">
-			<svg
-				viewBox="0 0 24 24"
-				fill="none"
-				stroke="currentColor"
-				stroke-width="2.2"
-				stroke-linecap="round"
-				aria-hidden="true"
-			>
-				<circle cx="10.5" cy="10.5" r="6.5" />
-				<path d="m20 20-4.8-4.8" />
-			</svg>
-			<input
-				id="search-input"
-				type="search"
-				name="q"
-				placeholder="¿Qué estás buscando?"
-				aria-label="Buscar en Netti"
-				autocomplete="off"
-			/>
-			<button type="submit">Buscar</button>
-		</form>
+  <section class="search" aria-label="Buscador general de Netti">
+    <form class="search-form" action="/buscar/" method="get" role="search">
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2.2"
+        stroke-linecap="round"
+        aria-hidden="true"
+      >
+        <circle cx="10.5" cy="10.5" r="6.5" />
+        <path d="m20 20-4.8-4.8" />
+      </svg>
+      <input
+        id="search-input"
+        type="search"
+        name="q"
+        placeholder="¿Qué estás buscando?"
+        aria-label="Buscar en Netti"
+        autocomplete="off"
+      />
+      <button type="submit">Buscar</button>
+    </form>
 
-		<p class="hint">
-			Atajo de teclado: presioná <kbd>/</kbd> para volver al buscador desde
-			cualquier parte de esta página. La búsqueda ignora tildes. Presioná{" "}
-			<kbd>Esc</kbd> para limpiar.
-		</p>
+    <p class="hint">
+      Atajo de teclado: presioná <kbd>/</kbd> para volver al buscador desde
+      cualquier parte de esta página. La búsqueda ignora tildes. Presioná{" "}
+      <kbd>Esc</kbd> para limpiar.
+    </p>
 
-		<div class="chips" role="group" aria-label="Filtrar resultados por tipo">
-			{types.map((type, index) => (
-				<button
-					type="button"
-					data-type={type.value}
-					aria-pressed={index === 0 ? "true" : "false"}
-				>
-					{type.label}
-				</button>
-			))}
-		</div>
+    <div class="chips" role="group" aria-label="Filtrar resultados por tipo">
+      {types.map((type, index) => (
+        <button
+          type="button"
+          data-type={type.value}
+          aria-pressed={index === 0 ? "true" : "false"}
+        >
+          {type.label}
+        </button>
+      ))}
+    </div>
 
-		<p id="search-count" class="count" aria-live="polite"></p>
-		<ol id="search-results" class="results"></ol>
-		<p id="search-empty" class="empty" hidden>
-			No encontramos nada con esa búsqueda. Probá otra palabra o cambiá el
-			filtro de tipo.
-		</p>
-		<p id="search-error" class="empty" role="alert" hidden>
-			No pudimos cargar el índice de búsqueda. Recargá la página e intentá de
-			nuevo.
-		</p>
-	</section>
+    <p id="search-count" class="count" aria-live="polite"></p>
+    <ol id="search-results" class="results"></ol>
+    <p id="search-empty" class="empty" hidden>
+      No encontramos nada con esa búsqueda. Probá otra palabra o cambiá el
+      filtro de tipo.
+    </p>
+    <p id="search-error" class="empty" role="alert" hidden>
+      No pudimos cargar el índice de búsqueda. Recargá la página e intentá de
+      nuevo.
+    </p>
+  </section>
 </BaseLayout>
 
 <script>
-	const input = document.querySelector<HTMLInputElement>("#search-input");
-	const list = document.querySelector<HTMLOListElement>("#search-results");
-	const count = document.querySelector<HTMLElement>("#search-count");
-	const empty = document.querySelector<HTMLElement>("#search-empty");
-	const error = document.querySelector<HTMLElement>("#search-error");
-	const chips = [
-		...document.querySelectorAll<HTMLButtonElement>("[data-type]"),
-	];
-	const params = new URLSearchParams(location.search);
+  const input = document.querySelector<HTMLInputElement>("#search-input");
+  const list = document.querySelector<HTMLOListElement>("#search-results");
+  const count = document.querySelector<HTMLElement>("#search-count");
+  const empty = document.querySelector<HTMLElement>("#search-empty");
+  const error = document.querySelector<HTMLElement>("#search-error");
+  const chips = [
+    ...document.querySelectorAll<HTMLButtonElement>("[data-type]"),
+  ];
+  const params = new URLSearchParams(location.search);
 
-	interface SearchItem {
-		type: string;
-		slug: string;
-		title: string;
-		description: string;
-		url: string;
-		meta: string;
-	}
+  interface SearchItem {
+    type: string;
+    slug: string;
+    title: string;
+    description: string;
+    url: string;
+    meta: string;
+  }
 
-	let items: SearchItem[] = [];
-	let type = "all";
+  let items: SearchItem[] = [];
+  let type = "all";
 
-	if (input && params.get("q")) input.value = params.get("q") ?? "";
-	const initial = chips.find(
-		(chip) => chip.dataset.type === params.get("tipo"),
-	);
-	if (initial) {
-		type = initial.dataset.type ?? "all";
-		chips.forEach((chip) =>
-			chip.setAttribute("aria-pressed", String(chip === initial)),
-		);
-	}
+  if (input && params.get("q")) input.value = params.get("q") ?? "";
+  const initial = chips.find(
+    (chip) => chip.dataset.type === params.get("tipo"),
+  );
+  if (initial) {
+    type = initial.dataset.type ?? "all";
+    chips.forEach((chip) =>
+      chip.setAttribute("aria-pressed", String(chip === initial)),
+    );
+  }
 
-	const normalize = (value: string) =>
-		value
-			.toLocaleLowerCase("es")
-			.normalize("NFD")
-			.replace(/[\u0300-\u036f]/g, "");
+  const normalize = (value: string) =>
+    value
+      .toLocaleLowerCase("es")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
 
-	function syncUrl() {
-		const next = new URLSearchParams();
-		if (input?.value.trim()) next.set("q", input.value.trim());
-		if (type !== "all") next.set("tipo", type);
-		const query = next.toString();
-		history.replaceState(
-			null,
-			"",
-			query ? `${location.pathname}?${query}` : location.pathname,
-		);
-	}
+  function syncUrl() {
+    const next = new URLSearchParams();
+    if (input?.value.trim()) next.set("q", input.value.trim());
+    if (type !== "all") next.set("tipo", type);
+    const query = next.toString();
+    history.replaceState(
+      null,
+      "",
+      query ? `${location.pathname}?${query}` : location.pathname,
+    );
+  }
 
-	function apply() {
-		const query = normalize(input?.value.trim() ?? "");
-		const visible = items.filter(
-			(item) =>
-				(type === "all" || item.type === type) &&
-				(!query ||
-					normalize(`${item.title} ${item.description} ${item.type}`).includes(
-						query,
-					)),
-		);
+  function apply() {
+    const query = normalize(input?.value.trim() ?? "");
+    const visible = items.filter(
+      (item) =>
+        (type === "all" || item.type === type) &&
+        (!query ||
+          normalize(`${item.title} ${item.description} ${item.type}`).includes(
+            query,
+          )),
+    );
 
-		if (list) {
-			list.replaceChildren();
-			for (const item of visible) {
-				const link = document.createElement("a");
-				link.href = item.url;
+    if (list) {
+      list.replaceChildren();
+      for (const item of visible) {
+        const link = document.createElement("a");
+        link.href = item.url;
 
-				const typeTag = document.createElement("span");
-				typeTag.className = `type type-${item.slug}`;
-				typeTag.textContent = item.type;
+        const typeTag = document.createElement("span");
+        typeTag.className = `type type-${item.slug}`;
+        typeTag.textContent = item.type;
 
-				const body = document.createElement("span");
-				body.className = "body";
-				const title = document.createElement("span");
-				title.className = "t";
-				title.textContent = item.title;
-				const description = document.createElement("span");
-				description.className = "d";
-				description.textContent = item.description;
-				body.append(title, description);
+        const body = document.createElement("span");
+        body.className = "body";
+        const title = document.createElement("span");
+        title.className = "t";
+        title.textContent = item.title;
+        const description = document.createElement("span");
+        description.className = "d";
+        description.textContent = item.description;
+        body.append(title, description);
 
-				const meta = document.createElement("span");
-				meta.className = "m";
-				meta.textContent = item.meta;
+        const meta = document.createElement("span");
+        meta.className = "m";
+        meta.textContent = item.meta;
 
-				link.append(typeTag, body, meta);
-				const row = document.createElement("li");
-				row.append(link);
-				list.append(row);
-			}
-		}
-		if (count)
-			count.textContent = `${visible.length} ${visible.length === 1 ? "resultado" : "resultados"}`;
-		if (empty) empty.hidden = visible.length > 0;
-		syncUrl();
-	}
+        link.append(typeTag, body, meta);
+        const row = document.createElement("li");
+        row.append(link);
+        list.append(row);
+      }
+    }
+    if (count)
+      count.textContent = `${visible.length} ${visible.length === 1 ? "resultado" : "resultados"}`;
+    if (empty) empty.hidden = visible.length > 0;
+    syncUrl();
+  }
 
-	chips.forEach((chip: HTMLButtonElement) =>
-		chip.addEventListener("click", () => {
-			type = chip.dataset.type ?? "all";
-			chips.forEach((other) =>
-				other.setAttribute("aria-pressed", String(other === chip)),
-			);
-			apply();
-		}),
-	);
-	input?.addEventListener("input", () => apply());
-	input?.addEventListener("keydown", (event: KeyboardEvent) => {
-		if (event.key === "Escape" && input.value) {
-			event.preventDefault();
-			input.value = "";
-			apply();
-		}
-	});
+  chips.forEach((chip: HTMLButtonElement) =>
+    chip.addEventListener("click", () => {
+      type = chip.dataset.type ?? "all";
+      chips.forEach((other) =>
+        other.setAttribute("aria-pressed", String(other === chip)),
+      );
+      apply();
+    }),
+  );
+  input?.addEventListener("input", () => apply());
+  input?.addEventListener("keydown", (event: KeyboardEvent) => {
+    if (event.key === "Escape" && input.value) {
+      event.preventDefault();
+      input.value = "";
+      apply();
+    }
+  });
 
-	window.addEventListener("popstate", () => {
-		const restored = new URLSearchParams(location.search);
-		if (input) input.value = restored.get("q") ?? "";
-		const selected = chips.find(
-			(chip) => chip.dataset.type === restored.get("tipo"),
-		);
-		type = selected?.dataset.type ?? "all";
-		chips.forEach((chip) =>
-			chip.setAttribute("aria-pressed", String(chip === selected)),
-		);
-		apply();
-	});
+  window.addEventListener("popstate", () => {
+    const restored = new URLSearchParams(location.search);
+    if (input) input.value = restored.get("q") ?? "";
+    const selected = chips.find(
+      (chip) => chip.dataset.type === restored.get("tipo"),
+    );
+    type = selected?.dataset.type ?? "all";
+    chips.forEach((chip) =>
+      chip.setAttribute("aria-pressed", String(chip === selected)),
+    );
+    apply();
+  });
 
-	document.addEventListener("keydown", (event: KeyboardEvent) => {
-		if (event.key === "/" && document.activeElement !== input) {
-			event.preventDefault();
-			input?.focus();
-		}
-	});
+  document.addEventListener("keydown", (event: KeyboardEvent) => {
+    if (event.key === "/" && document.activeElement !== input) {
+      event.preventDefault();
+      input?.focus();
+    }
+  });
 
-	try {
-		const response = await fetch("/search-index.json");
-		if (!response.ok) throw new Error(String(response.status));
-		items = (await response.json()) as SearchItem[];
-		apply();
-	} catch {
-		if (error) error.hidden = false;
-	}
+  try {
+    const response = await fetch("/search-index.json");
+    if (!response.ok) throw new Error(String(response.status));
+    items = (await response.json()) as SearchItem[];
+    apply();
+  } catch {
+    if (error) error.hidden = false;
+  }
 </script>
 
 <style>
-	.search {
-		display: grid;
-		gap: 1rem;
-		width: min(100%, 1080px);
-		margin: clamp(1.25rem, 4vw, 2rem) auto 0;
-		padding: clamp(1.5rem, 4vw, 2.5rem) clamp(1.1rem, 4vw, 2rem) 1rem;
-		border: 1px solid var(--border-card);
-		border-radius: 1.75rem;
-		background: color-mix(in srgb, var(--background) 90%, transparent);
-		box-shadow: var(--shadow-hard-sm);
-	}
+  .search {
+    display: grid;
+    gap: 1rem;
+    width: min(100%, 1080px);
+    margin: clamp(1.25rem, 4vw, 2rem) auto 0;
+    padding: clamp(1.5rem, 4vw, 2.5rem) clamp(1.1rem, 4vw, 2rem) 1rem;
+    border: 1px solid var(--border-card);
+    border-radius: 1.75rem;
+    background: color-mix(in srgb, var(--background) 90%, transparent);
+    box-shadow: var(--shadow-hard-sm);
+  }
 
-	.search-form {
-		display: flex;
-		gap: 0.6rem;
-		padding: 0.5rem 0.5rem 0.5rem 1.1rem;
-		border: 2px solid var(--border-card);
-		border-radius: 999px;
-		background: color-mix(in srgb, var(--surface) 88%, transparent);
-		box-shadow: var(--shadow-hard-sm);
-	}
-	.search-form:focus-within {
-		border-color: var(--accent);
-	}
-	.search-form svg {
-		flex: none;
-		align-self: center;
-		width: 20px;
-		height: 20px;
-		color: var(--accent);
-	}
-	.search-form input {
-		flex: 1;
-		min-width: 0;
-		min-height: 44px;
-		border: 0;
-		background: transparent;
-		color: var(--text);
-		font:
-			500 1rem "Quicksand",
-			system-ui,
-			sans-serif;
-	}
-	.search-form input:focus-visible {
-		outline: none;
-	}
-	.search-form input::placeholder {
-		color: var(--muted);
-	}
-	.search-form button {
-		min-height: 44px;
-		padding: 0.5rem 1.3rem;
-		border: 0;
-		border-radius: 999px;
-		background: var(--accent);
-		color: var(--on-accent);
-		font-weight: 700;
-		cursor: pointer;
-	}
-	.search-form button:hover {
-		background: var(--accent-strong);
-	}
+  .search-form {
+    display: flex;
+    gap: 0.6rem;
+    padding: 0.5rem 0.5rem 0.5rem 1.1rem;
+    border: 2px solid var(--border-card);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--surface) 88%, transparent);
+    box-shadow: var(--shadow-hard-sm);
+  }
+  .search-form:focus-within {
+    border-color: var(--accent);
+  }
+  .search-form svg {
+    flex: none;
+    align-self: center;
+    width: 20px;
+    height: 20px;
+    color: var(--accent);
+  }
+  .search-form input {
+    flex: 1;
+    min-width: 0;
+    min-height: 44px;
+    border: 0;
+    background: transparent;
+    color: var(--text);
+    font:
+      500 1rem "Quicksand",
+      system-ui,
+      sans-serif;
+  }
+  .search-form input:focus-visible {
+    outline: none;
+  }
+  .search-form input::placeholder {
+    color: var(--muted);
+  }
+  .search-form button {
+    min-height: 44px;
+    padding: 0.5rem 1.3rem;
+    border: 0;
+    border-radius: 999px;
+    background: var(--accent);
+    color: var(--on-accent);
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .search-form button:hover {
+    background: var(--accent-strong);
+  }
 
-	.hint {
-		margin: 0;
-		color: var(--muted);
-		font-size: 0.82rem;
-		text-align: center;
-	}
-	kbd {
-		padding: 0.05rem 0.4rem;
-		border: 1px solid var(--border-strong);
-		border-bottom-width: 2px;
-		border-radius: 0.35rem;
-		background: var(--field);
-		font-family: ui-monospace, monospace;
-		font-size: 0.78rem;
-	}
+  .hint {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.82rem;
+    text-align: center;
+  }
+  kbd {
+    padding: 0.05rem 0.4rem;
+    border: 1px solid var(--border-strong);
+    border-bottom-width: 2px;
+    border-radius: 0.35rem;
+    background: var(--field);
+    font-family: ui-monospace, monospace;
+    font-size: 0.78rem;
+  }
 
-	.chips {
-		display: flex;
-		flex-wrap: wrap;
-		justify-content: center;
-		gap: 0.5rem;
-	}
-	.chips button {
-		min-height: 44px;
-		padding: 0.45rem 1.05rem;
-		border: 2px solid var(--border-card);
-		border-radius: 999px;
-		color: var(--muted);
-		background: var(--surface);
-		box-shadow: var(--shadow-hard-sm);
-		font:
-			600 0.86rem "Quicksand",
-			system-ui,
-			sans-serif;
-		cursor: pointer;
-	}
-	.chips button:hover {
-		color: var(--text);
-		border-color: var(--accent);
-	}
-	.chips button[aria-pressed="true"] {
-		color: var(--on-accent);
-		border-color: var(--accent);
-		background: var(--accent);
-		box-shadow: none;
-	}
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5rem;
+  }
+  .chips button {
+    min-height: 44px;
+    padding: 0.45rem 1.05rem;
+    border: 2px solid var(--border-card);
+    border-radius: 999px;
+    color: var(--muted);
+    background: var(--surface);
+    box-shadow: var(--shadow-hard-sm);
+    font:
+      600 0.86rem "Quicksand",
+      system-ui,
+      sans-serif;
+    cursor: pointer;
+  }
+  .chips button:hover {
+    color: var(--text);
+    border-color: var(--accent);
+  }
+  .chips button[aria-pressed="true"] {
+    color: var(--on-accent);
+    border-color: var(--accent);
+    background: var(--accent);
+    box-shadow: none;
+  }
 
-	.count {
-		width: fit-content;
-		margin: 0.4rem 0 0;
-		padding: 0.32rem 0.85rem;
-		border: 1px solid var(--border-card);
-		border-radius: 999px;
-		background: color-mix(in srgb, var(--background) 74%, transparent);
-		color: var(--muted);
-		font-size: 0.82rem;
-	}
+  .count {
+    width: fit-content;
+    margin: 0.4rem 0 0;
+    padding: 0.32rem 0.85rem;
+    border: 1px solid var(--border-card);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--background) 74%, transparent);
+    color: var(--muted);
+    font-size: 0.82rem;
+  }
 
-	.results {
-		display: grid;
-		gap: 0.8rem;
-		margin: 0;
-		padding: 0 0 2rem;
-		list-style: none;
-	}
-	.results a {
-		display: grid;
-		grid-template-columns: auto minmax(0, 1fr) auto;
-		gap: 1.1rem;
-		align-items: center;
-		padding: 1rem 1.2rem;
-		border: 1px solid var(--border-card);
-		border-radius: 1rem;
-		background: color-mix(in srgb, var(--surface) 92%, transparent);
-		box-shadow: var(--shadow-hard-sm);
-		transition:
-			border-color 160ms ease,
-			box-shadow 160ms ease,
-			transform 160ms ease;
-	}
-	.results a:hover {
-		border-color: var(--accent);
-		transform: translateY(-2px);
-		box-shadow: var(--shadow-hard);
-	}
+  .results {
+    display: grid;
+    gap: 0.8rem;
+    margin: 0;
+    padding: 0 0 2rem;
+    list-style: none;
+  }
+  .results a {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 1.1rem;
+    align-items: center;
+    padding: 1rem 1.2rem;
+    border: 1px solid var(--border-card);
+    border-radius: 1rem;
+    background: color-mix(in srgb, var(--surface) 92%, transparent);
+    box-shadow: var(--shadow-hard-sm);
+    transition:
+      border-color 160ms ease,
+      box-shadow 160ms ease,
+      transform 160ms ease;
+  }
+  .results a:hover {
+    border-color: var(--accent);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-hard);
+  }
 
-	.type {
-		padding: 0.18rem 0.6rem;
-		border: 1px solid;
-		border-radius: 999px;
-		font-size: 0.68rem;
-		font-weight: 800;
-		letter-spacing: 0.08em;
-		text-transform: uppercase;
-		white-space: nowrap;
-	}
-	.type-juego {
-		color: var(--cyan);
-		border-color: rgb(90 199 232 / 45%);
-		background: rgb(90 199 232 / 10%);
-	}
-	.type-resena {
-		color: var(--gold);
-		border-color: rgb(230 189 85 / 45%);
-		background: rgb(230 189 85 / 10%);
-	}
-	.type-noticia {
-		color: var(--red);
-		border-color: rgb(241 108 121 / 45%);
-		background: rgb(241 108 121 / 10%);
-	}
-	.type-guia {
-		color: var(--green);
-		border-color: rgb(83 189 131 / 45%);
-		background: rgb(83 189 131 / 10%);
-	}
+  .type {
+    padding: 0.18rem 0.6rem;
+    border: 1px solid;
+    border-radius: 999px;
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .type-juego {
+    color: var(--cyan);
+    border-color: rgb(90 199 232 / 45%);
+    background: rgb(90 199 232 / 10%);
+  }
+  .type-resena {
+    color: var(--gold);
+    border-color: rgb(230 189 85 / 45%);
+    background: rgb(230 189 85 / 10%);
+  }
+  .type-noticia {
+    color: var(--red);
+    border-color: rgb(241 108 121 / 45%);
+    background: rgb(241 108 121 / 10%);
+  }
+  .type-guia {
+    color: var(--green);
+    border-color: rgb(83 189 131 / 45%);
+    background: rgb(83 189 131 / 10%);
+  }
 
-	.body {
-		display: grid;
-		gap: 0.2rem;
-		min-width: 0;
-	}
-	.t {
-		font-weight: 700;
-		font-size: 1.08rem;
-		line-height: 1.3;
-	}
-	.d {
-		color: var(--muted);
-		font-size: 0.9rem;
-		line-height: 1.5;
-	}
-	.m {
-		color: var(--muted);
-		font-size: 0.76rem;
-		white-space: nowrap;
-	}
+  .body {
+    display: grid;
+    gap: 0.2rem;
+    min-width: 0;
+  }
+  .t {
+    font-weight: 700;
+    font-size: 1.08rem;
+    line-height: 1.3;
+  }
+  .d {
+    color: var(--muted);
+    font-size: 0.9rem;
+    line-height: 1.5;
+  }
+  .m {
+    color: var(--muted);
+    font-size: 0.76rem;
+    white-space: nowrap;
+  }
 
-	.empty {
-		width: fit-content;
-		margin: 1rem 0 3rem;
-		padding: 0.45rem 1.05rem;
-		border: 1px solid var(--border-card);
-		border-radius: 999px;
-		background: color-mix(in srgb, var(--background) 74%, transparent);
-		color: var(--muted);
-	}
+  .empty {
+    width: fit-content;
+    margin: 1rem 0 3rem;
+    padding: 0.45rem 1.05rem;
+    border: 1px solid var(--border-card);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--background) 74%, transparent);
+    color: var(--muted);
+  }
 
-	@media (max-width: 560px) {
-		.results a {
-			grid-template-columns: minmax(0, 1fr);
-			gap: 0.5rem;
-		}
-		.type {
-			justify-self: start;
-		}
-		.m {
-			white-space: normal;
-		}
-	}
+  @media (max-width: 560px) {
+    .results a {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 0.5rem;
+    }
+    .type {
+      justify-self: start;
+    }
+    .m {
+      white-space: normal;
+    }
+  }
 </style>

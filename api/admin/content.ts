@@ -5,14 +5,8 @@ import {
   logAdminError,
 } from "../_lib/security.js";
 import { getRequiredEnv } from "../../src/lib/env-config.js";
-import {
-  dryRunDelete,
-  performDelete,
-} from "../_lib/content/trash.js";
-import {
-  listEntries,
-  readEntryBySlug,
-} from "../_lib/content/repository.js";
+import { dryRunDelete, performDelete } from "../_lib/content/trash.js";
+import { listEntries, readEntryBySlug } from "../_lib/content/repository.js";
 import { validate } from "../_lib/content/validation.js";
 import { writeMarkdownFile } from "../_lib/github/contents.js";
 
@@ -216,11 +210,12 @@ export default async function handler(req: AdminRequest, res: AdminResponse) {
       return json(res, 400, { error: "El cuerpo del artículo no es válido." });
     }
 
-    const invalid = validate(collection, data.fields, data.body);
+    const fields = data.fields as Record<string, unknown>;
+    const invalid = validate(collection, fields, data.body);
     if (invalid) return json(res, 400, { error: invalid });
 
     if (collection === "reviews" || collection === "guides") {
-      const game = data.fields.game;
+      const game = fields.game;
       if (typeof game === "string" && game) {
         // Verificar que el juego existe
         try {
@@ -233,7 +228,6 @@ export default async function handler(req: AdminRequest, res: AdminResponse) {
       }
     }
 
-    const filePath = `content/${collection}/${slug}.md`;
     const existing = await listEntries(collection, 1);
     const existingEntry = existing.entries.find((e) => e.slug === slug);
 
@@ -259,7 +253,7 @@ export default async function handler(req: AdminRequest, res: AdminResponse) {
       const saved = await writeMarkdownFile(
         collection,
         slug,
-        data.fields,
+        fields,
         data.body,
         existingEntry?.sha,
       );

@@ -1,0 +1,513 @@
+---
+import { getCollectionEntries } from "../../lib/fetch-content";
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import PageIntro from "../../components/PageIntro.astro";
+import CoverArtwork from "../../components/CoverArtwork.astro";
+import EditorialTags from "../../components/EditorialTags.astro";
+import PlatformIcons from "../../components/PlatformIcons.astro";
+import CatalogEmpty from "../../components/CatalogEmpty.astro";
+import CatalogCount from "../../components/CatalogCount.astro";
+import "../../styles/main.css";
+
+const games = (await getCollectionEntries("games")).sort(
+  (a: { data: { title: string } }, b: { data: { title: string } }) =>
+    a.data.title.localeCompare(b.data.title, "es"),
+);
+const genres = [
+  ...new Set(
+    games.flatMap((game: { data: { genres: string[] } }) => game.data.genres),
+  ),
+].sort((a: string, b: string) => a.localeCompare(b, "es"));
+const platforms = [
+  ...new Set(
+    games.flatMap(
+      (game: { data: { platforms: string[] } }) => game.data.platforms,
+    ),
+  ),
+].sort((a: string, b: string) => a.localeCompare(b, "es"));
+const years = [
+  ...new Set(
+    games.map(
+      (game: { data: { releaseYear: number } }) => game.data.releaseYear,
+    ),
+  ),
+].sort((a: number, b: number) => b - a);
+---
+
+<BaseLayout
+  title="Juegos"
+  description="Explora el catálogo de videojuegos de Netti."
+>
+  <PageIntro
+    eyebrow="Biblioteca"
+    title="Juegos"
+    description="Explorá el catálogo, filtrá por plataforma, género o año y encontrá tu próxima partida."
+  />
+
+  {games.length > 0 ? (
+    <>
+      <section class="filters" aria-label="Filtros del catálogo">
+        <label class="search">
+          <span>Buscar</span>
+          <input
+            id="game-search"
+            type="search"
+            placeholder="Nombre o descripción…"
+            autocomplete="off"
+          />
+        </label>
+        <label>
+          <span>Género</span>
+          <select id="genre-filter">
+            <option value="">Todos los géneros</option>
+            {genres.map((genre: string) => (
+              <option value={genre}>{genre}</option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span>Plataforma</span>
+          <select id="platform-filter">
+            <option value="">Todas las plataformas</option>
+            {platforms.map((platform: string) => (
+              <option value={platform}>{platform}</option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span>Año</span>
+          <select id="year-filter">
+            <option value="">Todos los años</option>
+            {years.map((year: number) => (
+              <option value={year}>{year}</option>
+            ))}
+          </select>
+        </label>
+      </section>
+
+      <div class="toolbar">
+        <CatalogCount
+          count={games.length}
+          label="juegos en el catálogo"
+          id="catalog-count"
+        />
+        <div
+          class="view-switch"
+          role="group"
+          aria-label="Modo de visualización"
+        >
+          <button type="button" data-view-choice="list" aria-pressed="true">
+            Lista
+          </button>
+          <button type="button" data-view-choice="grid" aria-pressed="false">
+            Cuadrícula
+          </button>
+          <button type="button" data-view-choice="details" aria-pressed="false">
+            Detalles
+          </button>
+        </div>
+      </div>
+
+      <div class="catalog" id="game-grid" data-view="list">
+        {games.map(
+          (game: {
+            id: string;
+            data: {
+              title: string;
+              description: string;
+              coverImage?: string;
+              coverAlt?: string;
+              developer: string;
+              genres: string[];
+              releaseYear: number;
+              platforms: string[];
+              tags?: string[];
+            };
+          }) => (
+            <article
+              class="card"
+              data-title={game.data.title.toLocaleLowerCase("es")}
+              data-description={game.data.description.toLocaleLowerCase("es")}
+              data-genres={game.data.genres.join("|")}
+              data-platforms={game.data.platforms.join("|")}
+              data-year={game.data.releaseYear}
+            >
+              <a
+                class="thumb"
+                href={`/juegos/${game.id}/`}
+                aria-label={`Ver ficha de ${game.data.title}`}
+              >
+                <CoverArtwork
+                  src={game.data.coverImage}
+                  alt={game.data.coverAlt ?? game.data.title}
+                  title={game.data.title}
+                />
+              </a>
+              <div class="body">
+                <h2>
+                  <a href={`/juegos/${game.id}/`}>{game.data.title}</a>
+                </h2>
+                <p class="summary">{game.data.description}</p>
+                <p class="meta">
+                  {game.data.developer} · {game.data.genres.join(" · ")}
+                </p>
+                <PlatformIcons platforms={game.data.platforms} />
+                <EditorialTags tags={game.data.tags} limit={2} />
+              </div>
+              <div class="aside">
+                <span class="year">{game.data.releaseYear}</span>
+                <a class="open" href={`/juegos/${game.id}/`}>
+                  Ver ficha <span aria-hidden="true">→</span>
+                </a>
+              </div>
+            </article>
+          ),
+        )}
+        <CatalogEmpty
+          label="No hay juegos que coincidan con esos filtros. Probá cambiar la búsqueda."
+          id="catalog-empty"
+          hidden
+        />
+      </div>
+    </>
+  ) : (
+    <p class="empty">Todavía no hay juegos publicados.</p>
+  )}
+</BaseLayout>
+
+<script>
+  const search = document.querySelector<HTMLInputElement>("#game-search");
+  const genre = document.querySelector<HTMLSelectElement>("#genre-filter");
+  const platform =
+    document.querySelector<HTMLSelectElement>("#platform-filter");
+  const year = document.querySelector<HTMLSelectElement>("#year-filter");
+  const catalog = document.querySelector<HTMLElement>("#game-grid");
+  const cards = [...document.querySelectorAll<HTMLElement>("#game-grid .card")];
+  const viewButtons = [
+    ...document.querySelectorAll<HTMLButtonElement>("[data-view-choice]"),
+  ];
+  const count = document.querySelector<HTMLElement>("#catalog-count");
+  const empty = document.querySelector<HTMLElement>("#catalog-empty");
+  const params = new URLSearchParams(location.search);
+  const views = ["list", "grid", "details"];
+
+  function syncUrl() {
+    const next = new URLSearchParams();
+    if (search?.value.trim()) next.set("q", search.value.trim());
+    if (genre?.value) next.set("genero", genre.value);
+    if (platform?.value) next.set("plataforma", platform.value);
+    if (year?.value) next.set("anio", year.value);
+    const view = catalog?.dataset.view;
+    if (view && view !== "list") next.set("vista", view);
+    const query = next.toString();
+    history.replaceState(
+      null,
+      "",
+      query ? `${location.pathname}?${query}` : location.pathname,
+    );
+  }
+
+  function setView(view: string, persist = true) {
+    if (!catalog || !views.includes(view)) return;
+    catalog.dataset.view = view;
+    viewButtons.forEach((button) =>
+      button.setAttribute(
+        "aria-pressed",
+        String(button.dataset.viewChoice === view),
+      ),
+    );
+    if (persist) {
+      try {
+        localStorage.setItem("netti-games-view", view);
+      } catch {}
+      syncUrl();
+    }
+  }
+
+  function filterGames() {
+    const query = search?.value.trim().toLocaleLowerCase("es") ?? "";
+    const selectedGenre = genre?.value ?? "";
+    const selectedPlatform = platform?.value ?? "";
+    const selectedYear = year?.value ?? "";
+    let visible = 0;
+
+    for (const card of cards) {
+      const matches =
+        (card.dataset.title ?? "").includes(query) ||
+        (card.dataset.description ?? "").includes(query);
+      const matchesGenre =
+        !selectedGenre ||
+        (card.dataset.genres ?? "").split("|").includes(selectedGenre);
+      const matchesPlatform =
+        !selectedPlatform ||
+        (card.dataset.platforms ?? "").split("|").includes(selectedPlatform);
+      const matchesYear = !selectedYear || card.dataset.year === selectedYear;
+      const show = matches && matchesGenre && matchesPlatform && matchesYear;
+      card.hidden = !show;
+      if (show) visible++;
+    }
+    if (count) count.textContent = `${visible} de ${cards.length} juegos`;
+    if (empty) empty.hidden = visible !== 0;
+  }
+
+  const initialView = params.get("vista");
+  if (initialView && views.includes(initialView)) setView(initialView, false);
+  else {
+    try {
+      setView(localStorage.getItem("netti-games-view") ?? "list", false);
+    } catch {
+      setView("list", false);
+    }
+  }
+  if (search && params.get("q")) search.value = params.get("q") ?? "";
+  if (genre && params.get("genero")) genre.value = params.get("genero") ?? "";
+  if (platform && params.get("plataforma"))
+    platform.value = params.get("plataforma") ?? "";
+  if (year && params.get("anio")) year.value = params.get("anio") ?? "";
+  filterGames();
+
+  viewButtons.forEach((button) =>
+    button.addEventListener("click", () =>
+      setView(button.dataset.viewChoice ?? "list"),
+    ),
+  );
+  const onChange = () => {
+    filterGames();
+    syncUrl();
+  };
+  search?.addEventListener("input", onChange);
+  genre?.addEventListener("change", onChange);
+  platform?.addEventListener("change", onChange);
+  year?.addEventListener("change", onChange);
+</script>
+
+<style>
+  .filters {
+    display: grid;
+    grid-template-columns: minmax(220px, 2fr) repeat(3, minmax(130px, 1fr));
+    gap: 0.85rem;
+    align-items: end;
+    margin: clamp(1rem, 3vw, 1.75rem) 0 1.25rem;
+    padding: 1.15rem;
+    border: 1px solid var(--border-card);
+    border-radius: 1.15rem;
+    background: color-mix(in srgb, var(--surface) 94%, transparent);
+    box-shadow: var(--shadow-hard-sm);
+  }
+  .filters label {
+    display: grid;
+    gap: 0.45rem;
+    color: var(--muted);
+    font-size: 0.78rem;
+    font-weight: 600;
+  }
+  .filters input,
+  .filters select {
+    width: 100%;
+    min-height: 44px;
+    padding: 0.6rem 0.8rem;
+    border: 1px solid var(--border-card);
+    border-radius: 0.8rem;
+    color: var(--text);
+    background: var(--field);
+    font:
+      500 0.92rem "Quicksand",
+      system-ui,
+      sans-serif;
+    transition: border-color 160ms ease;
+  }
+  .filters select {
+    padding-right: 2.3rem;
+  }
+  .filters input:hover,
+  .filters select:hover,
+  .filters input:focus-visible,
+  .filters select:focus-visible {
+    border-color: var(--accent);
+  }
+  .filters input::placeholder {
+    color: color-mix(in srgb, var(--muted) 75%, transparent);
+  }
+  .filters input:focus-visible,
+  .filters select:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1rem;
+  }
+  .view-switch {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+  .view-switch button {
+    min-height: 44px;
+    padding: 0.4rem 1rem;
+    border: 1px solid var(--border-card);
+    border-radius: 999px;
+    color: var(--muted);
+    background: var(--surface);
+    box-shadow: var(--shadow-hard-sm);
+    font:
+      600 0.8rem "Quicksand",
+      system-ui,
+      sans-serif;
+    cursor: pointer;
+    transition:
+      border-color 160ms ease,
+      box-shadow 160ms ease,
+      transform 160ms ease;
+  }
+  .view-switch button:hover {
+    color: var(--text);
+    border-color: var(--accent);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-hard);
+  }
+  .view-switch button[aria-pressed="true"] {
+    color: var(--on-accent);
+    border-color: var(--accent);
+    background: var(--accent);
+    box-shadow: none;
+  }
+
+  .catalog {
+    display: grid;
+    gap: 1.15rem;
+    padding-bottom: 2rem;
+  }
+  .card {
+    display: grid;
+    grid-template-columns: 220px minmax(0, 1fr) auto;
+    gap: 1.75rem;
+    align-items: center;
+    min-width: 0;
+    padding: 1.35rem;
+    border: 1px solid var(--border-card);
+    border-radius: 1.2rem;
+    background: color-mix(in srgb, var(--surface) 92%, transparent);
+    box-shadow: var(--shadow-hard-sm);
+    transition:
+      border-color 160ms ease,
+      box-shadow 160ms ease,
+      transform 160ms ease;
+  }
+  .card:hover {
+    border-color: var(--accent);
+    box-shadow: var(--shadow-hard);
+    transform: translateY(-3px);
+  }
+  .card[hidden] {
+    display: none;
+  }
+  .body h2 {
+    margin: 0 0 0.4rem;
+    font-size: 1.55rem;
+    line-height: 1.2;
+  }
+  .summary {
+    margin: 0 0 0.5rem;
+    color: var(--muted);
+    font-size: 1rem;
+    line-height: 1.6;
+  }
+  .meta {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
+  .aside {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.7rem;
+  }
+  .year {
+    color: var(--accent);
+    font-size: 0.88rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  .open {
+    color: var(--accent);
+    font-size: 0.88rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .catalog[data-view="grid"] {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+  }
+  .catalog[data-view="grid"] .card {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .catalog[data-view="grid"] .thumb {
+    width: 100%;
+  }
+  .catalog[data-view="grid"] .body {
+    display: grid;
+    gap: 0.1rem;
+  }
+  .catalog[data-view="grid"] .aside {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .catalog[data-view="details"] .card {
+    grid-template-columns: 84px minmax(0, 1fr) auto;
+    gap: 1.1rem;
+    padding: 0.75rem 1.1rem;
+  }
+  .catalog[data-view="details"] .summary {
+    display: none;
+  }
+
+  @media (max-width: 900px) {
+    .filters {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .search {
+      grid-column: 1 / -1;
+    }
+    .card {
+      grid-template-columns: 170px minmax(0, 1fr);
+      gap: 1.25rem;
+    }
+    .aside {
+      grid-column: 2;
+      flex-direction: row;
+      align-items: center;
+      justify-content: space-between;
+    }
+  }
+  @media (max-width: 620px) {
+    .toolbar {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+    .card {
+      grid-template-columns: 110px minmax(0, 1fr);
+      gap: 1rem;
+    }
+    .body h2 {
+      font-size: 1.25rem;
+    }
+  }
+  @media (max-width: 420px) {
+    .filters {
+      grid-template-columns: 1fr;
+    }
+    .card {
+      grid-template-columns: 90px minmax(0, 1fr);
+      padding: 0.9rem;
+    }
+  }
+</style>

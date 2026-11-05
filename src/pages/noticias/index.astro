@@ -1,0 +1,423 @@
+---
+import { getCollectionEntries } from "../../lib/fetch-content";
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import PageIntro from "../../components/PageIntro.astro";
+import CoverArtwork from "../../components/CoverArtwork.astro";
+import EditorialTags from "../../components/EditorialTags.astro";
+import CatalogEmpty from "../../components/CatalogEmpty.astro";
+import CatalogCount from "../../components/CatalogCount.astro";
+import "../../styles/main.css";
+
+const news = (await getCollectionEntries("news")).sort(
+  (a: { data: { publishedAt: Date } }, b: { data: { publishedAt: Date } }) =>
+    b.data.publishedAt.valueOf() - a.data.publishedAt.valueOf(),
+);
+const [lead, ...rest] = news;
+const categories = [
+  "Todas",
+  ...new Set(
+    news.map((item: { data: { category: string } }) => item.data.category),
+  ),
+];
+const formatDate = (date: Date) =>
+  date.toLocaleDateString("es-AR", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+---
+
+<BaseLayout
+  title="Noticias"
+  description="Noticias y novedades del mundo de los videojuegos, en Netti."
+>
+  <PageIntro
+    eyebrow="Actualidad gamer"
+    title="Noticias"
+    description="Novedades del mundo de los videojuegos, con contexto y sin perder de vista lo importante."
+  />
+
+  {news.length > 0 ? (
+    <>
+      <div
+        class="chips"
+        role="group"
+        aria-label="Filtrar noticias por categoría"
+      >
+        {categories.map((category: string, index: number) => (
+          <button
+            type="button"
+            data-cat={category === "Todas" ? "all" : category}
+            aria-pressed={index === 0 ? "true" : "false"}
+          >
+            {category}
+          </button>
+        ))}
+      </div>
+      <CatalogCount count={news.length} label="noticias" id="news-count" />
+
+      <div class="mosaic" id="news-mosaic">
+        {lead && (
+          <a
+            class="lead news-item"
+            data-category={lead.data.category}
+            href={`/noticias/${lead.id}/`}
+          >
+            <CoverArtwork
+              src={lead.data.coverImage ?? lead.data.heroImage}
+              alt={lead.data.coverAlt ?? lead.data.title}
+              title={lead.data.title}
+              variant="hero"
+            />
+            <div class="overlay">
+              <p class="meta">
+                <span>{lead.data.category}</span> ·{" "}
+                <time datetime={lead.data.publishedAt.toISOString()}>
+                  {formatDate(lead.data.publishedAt)}
+                </time>
+              </p>
+              <EditorialTags tags={lead.data.tags} limit={2} />
+              <h2>{lead.data.title}</h2>
+              <p class="desc">{lead.data.description}</p>
+            </div>
+          </a>
+        )}
+        {rest.length > 1 && (
+          <aside class="top" id="news-top" aria-labelledby="top-title">
+            <h2 id="top-title">Historias principales</h2>
+            <ol>
+              {rest.slice(0, 4).map(
+                (item: {
+                  id: string;
+                  data: {
+                    title: string;
+                    category: string;
+                    description: string;
+                    coverImage?: string;
+                    coverAlt?: string;
+                    heroImage?: string;
+                    heroAlt?: string;
+                    publishedAt: Date;
+                    tags?: string[];
+                  };
+                }) => (
+                  <li class="news-item" data-category={item.data.category}>
+                    <a href={`/noticias/${item.id}/`}>
+                      <span class="meta">
+                        <span>{item.data.category}</span> ·{" "}
+                        <time datetime={item.data.publishedAt.toISOString()}>
+                          {formatDate(item.data.publishedAt)}
+                        </time>
+                      </span>
+                      <span class="t">{item.data.title}</span>
+                    </a>
+                  </li>
+                ),
+              )}
+            </ol>
+          </aside>
+        )}
+      </div>
+
+      {rest.length > 4 && (
+        <div class="grid" id="news-grid">
+          {rest.slice(4).map(
+            (item: {
+              id: string;
+              data: {
+                title: string;
+                category: string;
+                description: string;
+                coverImage?: string;
+                coverAlt?: string;
+                heroImage?: string;
+                heroAlt?: string;
+                publishedAt: Date;
+                tags?: string[];
+              };
+            }) => (
+              <article
+                class="card news-item"
+                data-category={item.data.category}
+              >
+                <a class="card-link" href={`/noticias/${item.id}/`}>
+                  <CoverArtwork
+                    src={item.data.coverImage ?? item.data.heroImage}
+                    alt={item.data.coverAlt ?? item.data.title}
+                    title={item.data.title}
+                  />
+                  <div class="card-body">
+                    <p class="meta">
+                      <span>{item.data.category}</span> ·{" "}
+                      <time datetime={item.data.publishedAt.toISOString()}>
+                        {formatDate(item.data.publishedAt)}
+                      </time>
+                    </p>
+                    <h3>{item.data.title}</h3>
+                    <EditorialTags tags={item.data.tags} limit={2} />
+                    <p>{item.data.description}</p>
+                  </div>
+                </a>
+              </article>
+            ),
+          )}
+        </div>
+      )}
+      <CatalogEmpty
+        label="No hay noticias en esa categoría."
+        id="news-empty"
+        hidden
+      />
+    </>
+  ) : (
+    <CatalogEmpty label="Todavía no hay noticias publicadas." />
+  )}
+</BaseLayout>
+
+<script>
+  const chips = [...document.querySelectorAll<HTMLButtonElement>("[data-cat]")];
+  const mosaic = document.querySelector<HTMLElement>("#news-mosaic");
+  const top = document.querySelector<HTMLElement>("#news-top");
+  const leadEl = document.querySelector<HTMLElement>(".mosaic .lead");
+  const topItems = [
+    ...document.querySelectorAll<HTMLElement>("#news-top .news-item"),
+  ];
+  const items = [...document.querySelectorAll<HTMLElement>(".news-item")];
+  const count = document.querySelector<HTMLElement>("#news-count");
+  const empty = document.querySelector<HTMLElement>("#news-empty");
+  const params = new URLSearchParams(location.search);
+  const total = items.length;
+
+  function apply(category: string) {
+    let visible = 0;
+    const show = (el: HTMLElement) => {
+      const match = category === "all" || el.dataset.category === category;
+      el.hidden = !match;
+      return match;
+    };
+    for (const el of items) if (show(el)) visible++;
+    const topVisible = topItems.some((el) => !el.hidden);
+    if (top) top.hidden = !topVisible;
+    if (mosaic) {
+      mosaic.classList.toggle("no-lead", Boolean(leadEl?.hidden));
+      mosaic.hidden = Boolean(leadEl?.hidden) && !topVisible;
+    }
+    if (count) count.textContent = `${visible} de ${total} noticias`;
+    if (empty) empty.hidden = visible !== 0;
+  }
+
+  const initial = params.get("categoria");
+  if (initial && initial !== "all") {
+    const match = chips.find(
+      (chip: HTMLElement) => chip.dataset.cat === initial,
+    );
+    if (match) {
+      chips.forEach((chip: HTMLElement) =>
+        chip.setAttribute("aria-pressed", String(chip === match)),
+      );
+      apply(initial);
+    }
+  }
+
+  for (const chip of chips) {
+    chip.addEventListener("click", () => {
+      const category = chip.dataset.cat ?? "all";
+      chips.forEach((other: HTMLElement) =>
+        other.setAttribute("aria-pressed", String(other === chip)),
+      );
+      apply(category);
+      const next = new URLSearchParams(location.search);
+      if (category === "all") next.delete("categoria");
+      else next.set("categoria", category);
+      const query = next.toString();
+      history.replaceState(
+        null,
+        "",
+        query ? `${location.pathname}?${query}` : location.pathname,
+      );
+    });
+  }
+</script>
+
+<style>
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin: clamp(1rem, 3vw, 1.75rem) 0 0;
+  }
+  .chips button {
+    min-height: 44px;
+    padding: 0.45rem 1.05rem;
+    border: 1px solid var(--border-card);
+    border-radius: 999px;
+    color: var(--muted);
+    background: var(--surface);
+    box-shadow: var(--shadow-hard-sm);
+    font:
+      600 0.86rem "Quicksand",
+      system-ui,
+      sans-serif;
+    cursor: pointer;
+  }
+  .chips button:hover {
+    color: var(--text);
+    border-color: var(--accent);
+  }
+  .chips button[aria-pressed="true"] {
+    color: var(--on-accent);
+    border-color: var(--gold);
+    background: var(--gold);
+  }
+
+  .mosaic {
+    display: grid;
+    grid-template-columns: minmax(0, 1.7fr) minmax(300px, 0.9fr);
+    gap: 1.15rem;
+    margin-bottom: 1.15rem;
+  }
+  .mosaic.no-lead {
+    grid-template-columns: 1fr;
+  }
+  .mosaic > .lead:only-child {
+    grid-column: 1 / -1;
+  }
+  .lead {
+    position: relative;
+    display: block;
+    overflow: hidden;
+    border: 1px solid var(--border-card);
+    border-radius: 1.2rem;
+    background: var(--surface);
+    box-shadow: var(--shadow-hard);
+  }
+  .lead :global(.cover) {
+    border: 0;
+    border-radius: 0;
+    aspect-ratio: 16/8;
+  }
+  .overlay {
+    position: absolute;
+    inset: auto 0 0 0;
+    padding: clamp(1.2rem, 3vw, 2rem);
+    background: linear-gradient(180deg, transparent, var(--overlay) 58%);
+  }
+  .overlay h2 {
+    margin: 0.4rem 0 0.5rem;
+    font-size: clamp(1.6rem, 3.2vw, 2.3rem);
+    line-height: 1.12;
+  }
+  .overlay .desc {
+    max-width: 62ch;
+    margin: 0;
+    color: var(--prose);
+    font-size: 1rem;
+    line-height: 1.6;
+  }
+  .meta {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.78rem;
+  }
+  .meta span {
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  .top {
+    padding: 1.4rem;
+    border: 1px solid var(--border-card);
+    border-radius: 1.2rem;
+    background: color-mix(in srgb, var(--surface) 92%, transparent);
+    box-shadow: var(--shadow-hard-sm);
+  }
+  .top h2 {
+    margin: 0 0 1rem;
+    font-size: 1.15rem;
+  }
+  .top ol {
+    display: grid;
+    gap: 1rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .top li + li {
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+  }
+  .news-item :global(.cover) {
+    border-radius: 0.7rem;
+  }
+  .top a {
+    display: grid;
+    gap: 0.3rem;
+  }
+  .top .t {
+    font-weight: 600;
+    line-height: 1.35;
+    font-size: 1rem;
+  }
+  .top a:hover .t {
+    color: var(--accent-strong);
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+    gap: 1.15rem;
+    padding-bottom: 1rem;
+  }
+  .card {
+    overflow: hidden;
+    border: 1px solid var(--border-card);
+    border-radius: 1.1rem;
+    background: color-mix(in srgb, var(--surface) 92%, transparent);
+    box-shadow: var(--shadow-hard-sm);
+    transition:
+      border-color 160ms ease,
+      box-shadow 160ms ease,
+      transform 160ms ease;
+  }
+  .card[hidden],
+  .top li[hidden],
+  .lead[hidden] {
+    display: none;
+  }
+  .card:hover {
+    border-color: var(--accent);
+    box-shadow: var(--shadow-hard);
+    transform: translateY(-4px);
+  }
+  .card-link {
+    display: grid;
+  }
+  .card :global(.cover) {
+    border: 0;
+    border-radius: 0;
+  }
+  .card-body {
+    padding: 1.15rem 1.3rem 1.35rem;
+  }
+  .card-body h3 {
+    margin: 0.4rem 0 0.45rem;
+    font-size: 1.28rem;
+    line-height: 1.25;
+  }
+  .card-body p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.95rem;
+    line-height: 1.6;
+  }
+
+  @media (max-width: 780px) {
+    .mosaic {
+      grid-template-columns: 1fr;
+    }
+    .lead :global(.cover) {
+      aspect-ratio: 16/9;
+    }
+  }
+</style>

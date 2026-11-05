@@ -1,0 +1,262 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import CoverArtwork from "../../components/CoverArtwork.astro";
+import ScoreBadge from "../../components/ScoreBadge.astro";
+import { getRawdGame } from "../../lib/rawg";
+import MediaGallery from "../../components/MediaGallery.astro";
+import MediaVideo from "../../components/MediaVideo.astro";
+import EditorialTags from "../../components/EditorialTags.astro";
+import PlatformIcons from "../../components/PlatformIcons.astro";
+import RelatedCards from "../../components/RelatedCards.astro";
+import {
+  getCollectionEntry,
+  getCollectionEntries,
+} from "../../lib/fetch-content";
+import { getSimilarGames } from "../../lib/similar-games";
+import { renderMarkdown } from "../../lib/markdown";
+import { resolveImageUrl } from "../../lib/image-url";
+import "../../styles/main.css";
+
+const params = Astro.params as { slug: string };
+const game = await getCollectionEntry("games", params.slug);
+if (!game) {
+  return Astro.rewrite("/404");
+}
+const rawgGame = await getRawdGame(game.data.title);
+
+const relatedReviews = (await getCollectionEntries("reviews"))
+  .filter(
+    (review: { data: { game: string; publishedAt: Date } }) =>
+      review.data.game === game.id,
+  )
+  .sort(
+    (a: { data: { publishedAt: Date } }, b: { data: { publishedAt: Date } }) =>
+      b.data.publishedAt.valueOf() - a.data.publishedAt.valueOf(),
+  );
+const similarGames = getSimilarGames(game);
+const jsonLd = (value: unknown) =>
+  JSON.stringify(value).replace(/</g, "\\u003c");
+const backdropImage =
+  game.data.gallery?.[0]?.src ?? game.data.heroImage ?? game.data.coverImage;
+const ogImage = "/images/logo-netti.png";
+const absolute = (path: string) =>
+  Astro.site ? new URL(path, Astro.site).href : path;
+---
+
+<BaseLayout
+  title={game.data.title}
+  description={game.data.description}
+  ogType="article"
+  ogImage={ogImage}
+>
+  <article class="article game-article">
+    {backdropImage && (
+      <img
+        class="game-backdrop"
+        src={resolveImageUrl(backdropImage)}
+        alt=""
+        width="1200"
+        height="800"
+        loading="eager"
+        decoding="async"
+        aria-hidden="true"
+      />
+    )}
+    <a class="back-link" href="/juegos/">
+      ← Todos los juegos
+    </a>
+    <p class="eyebrow">
+      {game.data.releaseYear} · {game.data.genres.join(" / ")}
+    </p>
+    <PlatformIcons platforms={game.data.platforms} />
+    <h1>{game.data.title}</h1>
+    <p class="lead">{game.data.description}</p>
+    <EditorialTags tags={game.data.tags} />
+    <CoverArtwork
+      src={game.data.heroImage ?? game.data.coverImage}
+      alt={game.data.coverAlt ?? game.data.title}
+      title={game.data.title}
+      variant="hero"
+    />
+    <dl class="metadata card-panel" style="--card-radius: 1rem;">
+      <dt>Desarrollador</dt>
+      <dd>{game.data.developer}</dd>
+      {game.data.publisher && (
+        <>
+          <dt>Distribuidor</dt>
+          <dd>{game.data.publisher}</dd>
+        </>
+      )}
+      <dt>Plataformas</dt>
+      <dd>{game.data.platforms.join(", ")}</dd>
+      {rawgGame?.released && (
+        <>
+          <dt>Fecha de lanzamiento (RAWG)</dt>
+          <dd>{rawgGame.released}</dd>
+        </>
+      )}
+      {rawgGame?.rating !== null && rawgGame?.rating !== undefined && (
+        <>
+          <dt>Valoración RAWG</dt>
+          <dd>
+            {new Intl.NumberFormat("es-AR", {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            }).format(rawgGame.rating)}
+            / 5
+          </dd>
+        </>
+      )}
+      {rawgGame?.metacritic !== null && rawgGame?.metacritic !== undefined && (
+        <>
+          <dt>Metacritic (RAWG)</dt>
+          <dd>{rawgGame.metacritic} / 100</dd>
+        </>
+      )}
+      {rawgGame?.platforms.length ? (
+        <>
+          <dt>Plataformas (RAWG)</dt>
+          <dd>{rawgGame.platforms.join(", ")}</dd>
+        </>
+      ) : null}
+    </dl>
+    {rawgGame && (
+      <p class="source-note">
+        Datos complementarios:{" "}
+        <a href={rawgGame.url} target="_blank" rel="noopener noreferrer">
+          RAWG
+        </a>
+        . La ficha editorial es la fuente principal de esta página.
+      </p>
+    )}
+    <MediaVideo
+      url={game.data.videoUrl}
+      title={game.data.videoTitle ?? `Video de ${game.data.title}`}
+    />
+    <div class="prose" set:html={renderMarkdown(game.body)} />
+    <MediaGallery items={game.data.gallery} heading="Galería del juego" />
+    <RelatedCards heading="Juegos similares" cards={similarGames} />
+    {relatedReviews.length > 0 && (
+      <section
+        class="related card-panel"
+        aria-labelledby="related-title"
+        style="--card-radius: 1rem;"
+      >
+        <h2 id="related-title">Reseñas de este juego</h2>
+        <ul>
+          {relatedReviews.map(
+            (review: {
+              id: string;
+              data: { title: string; score: number };
+            }) => (
+              <li>
+                <a href={`/resenas/${review.id}/`}>{review.data.title}</a>
+                <ScoreBadge score={review.data.score} compact />
+              </li>
+            ),
+          )}
+        </ul>
+      </section>
+    )}
+  </article>
+
+  <script
+    is:inline
+    type="application/ld+json"
+    set:html={jsonLd({
+      "@context": "https://schema.org",
+      "@type": "VideoGame",
+      name: game.data.title,
+      description: game.data.description,
+      releaseYear: game.data.releaseYear,
+      genre: game.data.genres.join(", "),
+      image: absolute(ogImage),
+    })}
+  />
+  <script
+    is:inline
+    type="application/ld+json"
+    set:html={jsonLd({
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      itemListElement: [
+        {
+          "@type": "ListItem",
+          position: 1,
+          name: "Inicio",
+          item: absolute("/"),
+        },
+        {
+          "@type": "ListItem",
+          position: 2,
+          name: "Juegos",
+          item: absolute("/juegos/"),
+        },
+        {
+          "@type": "ListItem",
+          position: 3,
+          name: game.data.title,
+          item: absolute(`/juegos/${game.id}/`),
+        },
+      ],
+    })}
+  />
+</BaseLayout>
+
+<style>
+  h1 {
+    margin: 0.75rem 0;
+    font-size: clamp(2.8rem, 8vw, 5rem);
+    line-height: 1;
+    letter-spacing: -0.055em;
+    text-wrap: balance;
+  }
+  .metadata dt {
+    font-weight: 600;
+    letter-spacing: 0.01em;
+  }
+  .metadata div {
+    min-width: 0;
+  }
+  dt {
+    color: var(--muted);
+    font-size: 0.8rem;
+  }
+  dd {
+    margin: 0.4rem 0 0;
+    font-weight: 700;
+    line-height: 1.5;
+  }
+  .source-note {
+    margin: 0 0 3rem;
+    color: var(--muted);
+    font-size: 0.82rem;
+    line-height: 1.6;
+  }
+  .related h2 {
+    font-size: 1.5rem;
+  }
+  .related ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .related li {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1rem 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .related li a {
+    font-weight: 700;
+  }
+  .related li span {
+    color: var(--accent);
+    white-space: nowrap;
+  }
+  .game-article :global(.related-cards) {
+    padding-top: 1.5rem;
+    border-top: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  }
+</style>

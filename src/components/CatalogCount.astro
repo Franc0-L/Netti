@@ -1,0 +1,23 @@
+---
+interface Props {
+  count: number;
+  label: string;
+  id?: string;
+}
+
+const { count, label, id } = Astro.props;
+---
+
+<span class="catalog-count" id={id}>
+  <strong>{count}</strong> {label}
+</span>
+
+<style>
+  .catalog-count {
+    font-size: 0.9rem;
+    color: var(--muted);
+  }
+  .catalog-count strong {
+    color: var(--text);
+  }
+</style>

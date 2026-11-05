@@ -1,5 +1,4 @@
 import { getTree, readMarkdownFile } from "../github/contents.js";
-import { parseMarkdown, markdownFor } from "./serialization.js";
 
 const LIST_PAGE_SIZE = 50;
 

@@ -2,65 +2,64 @@
 import { platformSymbol, platformImage } from "../lib/platform-logos.js";
 
 interface Props {
-	platforms?: string[];
+  platforms?: string[];
 }
 
 const { platforms = [] } = Astro.props;
 const unique: string[] = Array.from(
-	new Set(
-		(platforms || []).map((platform) => platform?.toString()).filter(Boolean),
-	),
+  new Set(
+    (platforms || []).map((platform) => platform?.toString()).filter(Boolean),
+  ),
 );
-
 ---
 
 {unique.length > 0 && (
-	<ul class="platform-icons" aria-label="Plataformas">
-		{unique.map((platform) => {
-			const symbol = platformSymbol(platform);
-			const src = platformImage(symbol);
-			return (
-				<li title={platform} aria-label={platform}>
-					<span class="sr-only">{platform}</span>
-					<img
-						class="platform-icon"
-						src={src}
-						alt={platform}
-						width="20"
-						height="20"
-						loading="lazy"
-						decoding="async"
-					/>
-				</li>
-			);
-		})}
-	</ul>
+  <ul class="platform-icons" aria-label="Plataformas">
+    {unique.map((platform) => {
+      const symbol = platformSymbol(platform);
+      const src = platformImage(symbol);
+      return (
+        <li title={platform} aria-label={platform}>
+          <span class="sr-only">{platform}</span>
+          <img
+            class="platform-icon"
+            src={src}
+            alt={platform}
+            width="20"
+            height="20"
+            loading="lazy"
+            decoding="async"
+          />
+        </li>
+      );
+    })}
+  </ul>
 )}
 
 <style>
-	.platform-icons {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 4px;
-		margin: 0;
-		padding: 0;
-		list-style: none;
-		color: var(--muted);
-	}
-	.platform-icons li {
-		display: grid;
-		width: 24px;
-		height: 24px;
-		place-items: center;
-		opacity: 0.7;
-	}
-	.platform-icons li:hover {
-		opacity: 1;
-	}
-	.platform-icons img {
-		display: block;
-		width: 20px;
-		height: 20px;
-		flex: none;
-	}
+  .platform-icons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    color: var(--muted);
+  }
+  .platform-icons li {
+    display: grid;
+    width: 24px;
+    height: 24px;
+    place-items: center;
+    opacity: 0.7;
+  }
+  .platform-icons li:hover {
+    opacity: 1;
+  }
+  .platform-icons img {
+    display: block;
+    width: 20px;
+    height: 20px;
+    flex: none;
+  }
 </style>

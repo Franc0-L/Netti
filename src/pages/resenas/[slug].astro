@@ -1,0 +1,270 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import CoverArtwork from "../../components/CoverArtwork.astro";
+import MediaGallery from "../../components/MediaGallery.astro";
+import MediaVideo from "../../components/MediaVideo.astro";
+import EditorialTags from "../../components/EditorialTags.astro";
+import FeaturedBadge from "../../components/FeaturedBadge.astro";
+import PlatformIcons from "../../components/PlatformIcons.astro";
+import ProsCons from "../../components/ProsCons.astro";
+import RelatedCards from "../../components/RelatedCards.astro";
+import ScoreBreakdown from "../../components/ScoreBreakdown.astro";
+import {
+  getCollectionEntry,
+  getCollectionEntries,
+} from "../../lib/fetch-content";
+import { getSimilarGames } from "../../lib/similar-games";
+import { renderMarkdown } from "../../lib/markdown";
+import { resolveImageUrl } from "../../lib/image-url";
+import "../../styles/main.css";
+
+const params = Astro.params as { slug: string };
+const review = await getCollectionEntry("reviews", params.slug);
+if (!review) {
+  return Astro.rewrite("/404");
+}
+const games = await getCollectionEntries("games");
+const game = games.find((g: { id: string }) => g.id === review.data.game);
+if (!game)
+  throw new Error(
+    `La reseña "${review.id}" referencia un juego inexistente: "${review.data.game}".`,
+  );
+
+const backdropImage =
+  game?.data.gallery?.[0]?.src ?? game?.data.heroImage ?? game?.data.coverImage;
+const hero = review.data.heroImage ?? review.data.coverImage;
+const similarGames = getSimilarGames(game);
+const otherAuthorReviews = (await getCollectionEntries("reviews"))
+  .filter(
+    (candidate: { id: string; data: { author: string } }) =>
+      candidate.id !== review.id &&
+      candidate.data.author === review.data.author,
+  )
+  .sort(
+    (a: { data: { publishedAt: Date } }, b: { data: { publishedAt: Date } }) =>
+      b.data.publishedAt.valueOf() - a.data.publishedAt.valueOf(),
+  )
+  .slice(0, 4)
+  .map(
+    (candidate: {
+      id: string;
+      data: {
+        title: string;
+        coverImage?: string;
+        coverAlt?: string;
+        score: number;
+      };
+    }) => ({
+      title: candidate.data.title,
+      href: `/resenas/${candidate.id}/`,
+      image: candidate.data.coverImage,
+      alt: candidate.data.coverAlt ?? candidate.data.title,
+      score: candidate.data.score,
+    }),
+  );
+const jsonLd = (value: unknown) =>
+  JSON.stringify(value).replace(/</g, "\\u003c");
+const ogImage = "/images/logo-netti.png";
+const absolute = (path: string) =>
+  Astro.site ? new URL(path, Astro.site).href : path;
+---
+
+<BaseLayout
+  title={review.data.title}
+  description={review.data.description}
+  ogType="article"
+  ogImage={ogImage}
+>
+  <article class="article review-article">
+    {backdropImage && (
+      <img
+        class="review-backdrop"
+        src={resolveImageUrl(backdropImage)}
+        alt=""
+        width="1200"
+        height="800"
+        loading="eager"
+        decoding="async"
+        aria-hidden="true"
+      />
+    )}
+    <a class="back-link" href="/resenas/">
+      ← Todas las reseñas
+    </a>
+    <p class="eyebrow">
+      Reseña ·
+      {review.data.publishedAt.toLocaleDateString("es-AR", {
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+        timeZone: "UTC",
+      })}
+    </p>
+    <FeaturedBadge featured={review.data.featured} />
+    <h1>{review.data.title}</h1>
+    <p class="lead">{review.data.description}</p>
+    <div class="review-meta">
+      <PlatformIcons platforms={game.data.platforms} />
+      <EditorialTags tags={review.data.tags} />
+    </div>
+    <div class="byline">
+      <span>Por {review.data.author}</span>
+      <a href={`/juegos/${game.id}/`}>Ficha de {game.data.title} ↗</a>
+    </div>
+    {hero && (
+      <CoverArtwork
+        src={hero}
+        alt={review.data.coverAlt ?? review.data.heroAlt ?? review.data.title}
+        title={review.data.title}
+        variant="hero"
+      />
+    )}
+    <aside
+      class="verdict card-panel"
+      aria-label="Puntuación y veredicto"
+      style="--card-radius: 1.1rem;"
+    >
+      <p class="verdict-label">Veredicto editorial</p>
+      <div class="score-block">
+        <ScoreBreakdown
+          score={review.data.score}
+          details={review.data.scoreDetails}
+        />
+        <span class="caption">Puntuación editorial</span>
+      </div>
+      <div class="reason">
+        <h2>Por qué esta nota</h2>
+        <p>{review.data.scoreReason}</p>
+      </div>
+      <p class="verdict-text">{review.data.verdict}</p>
+    </aside>
+    <ProsCons pros={review.data.pros} cons={review.data.cons} />
+    <MediaVideo
+      url={review.data.videoUrl}
+      title={review.data.videoTitle ?? `Video de ${review.data.title}`}
+    />
+    <div class="prose" set:html={renderMarkdown(review.body)} />
+    <MediaGallery items={review.data.gallery} heading="Galería de la reseña" />
+    <RelatedCards
+      heading="Si te gustó este juego, quizá te interese…"
+      cards={similarGames}
+    />
+    <RelatedCards
+      heading={`Otras reseñas de ${review.data.author}`}
+      cards={otherAuthorReviews}
+    />
+  </article>
+
+  <script
+    is:inline
+    type="application/ld+json"
+    set:html={jsonLd({
+      "@context": "https://schema.org",
+      "@type": "Review",
+      itemReviewed: { "@type": "VideoGame", name: game.data.title },
+      reviewRating: {
+        "@type": "Rating",
+        ratingValue: review.data.score,
+        bestRating: 100,
+      },
+      datePublished: review.data.publishedAt.toISOString(),
+      author: { "@type": "Organization", name: review.data.author },
+      name: review.data.title,
+      description: review.data.description,
+      image: absolute(ogImage),
+    })}
+  />
+  <script
+    is:inline
+    type="application/ld+json"
+    set:html={jsonLd({
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      itemListElement: [
+        {
+          "@type": "ListItem",
+          position: 1,
+          name: "Inicio",
+          item: absolute("/"),
+        },
+        {
+          "@type": "ListItem",
+          position: 2,
+          name: "Reseñas",
+          item: absolute("/resenas/"),
+        },
+        {
+          "@type": "ListItem",
+          position: 3,
+          name: review.data.title,
+          item: absolute(`/resenas/${review.id}/`),
+        },
+      ],
+    })}
+  />
+</BaseLayout>
+
+<style>
+  h1 {
+    margin: 0.75rem 0;
+    font-size: clamp(2.6rem, 6.5vw, 4.4rem);
+    line-height: 1.03;
+    letter-spacing: -0.05em;
+    text-wrap: balance;
+  }
+  .byline {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 1rem;
+    margin: 1.5rem 0;
+    color: var(--muted);
+    font-size: 0.9rem;
+  }
+  .verdict-label {
+    grid-column: 1 / -1;
+    margin: 0;
+    color: var(--accent);
+    font-size: 0.78rem;
+    font-weight: 700;
+  }
+  .score-block {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+    align-items: flex-start;
+  }
+  .review-meta {
+    display: grid;
+    gap: 0.15rem;
+    justify-items: start;
+  }
+  .caption {
+    color: var(--muted);
+    font-size: 0.8rem;
+  }
+  .review-article :global(.editorial-tags .tag:hover) {
+    background: color-mix(in srgb, var(--tag-color) 20%, transparent);
+  }
+  .reason h2 {
+    margin: 0 0 0.45rem;
+    font-size: 1.15rem;
+  }
+  .reason p {
+    margin: 0;
+    color: var(--prose);
+    line-height: 1.7;
+  }
+  .verdict-text {
+    grid-column: 1 / -1;
+    margin: 0;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+    line-height: 1.7;
+  }
+  @media (max-width: 560px) {
+    .verdict {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

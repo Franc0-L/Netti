@@ -1,5 +1,4 @@
 import {
-  editorialSchemas,
   editorialTagValues,
   imageAltRequired,
   requiredFields,

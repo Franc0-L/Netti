@@ -6,8 +6,6 @@ import {
 import { stringify } from "yaml";
 import { readEntryBySlug, invalidateTreeCache } from "./repository.js";
 
-const collections = new Set(["games", "reviews", "news", "guides"]);
-
 // Dry run: analiza qué se borraría sin tocar nada. Devuelve info del archivo y listas vacías de medios (pendiente de implementar).
 export async function dryRunDelete(
   collection: string,
@@ -27,8 +25,9 @@ export async function dryRunDelete(
 }> {
   const tree = await getTree();
   const filePath = `content/${collection}/${slug}.md`;
-  const fileEntry = tree.tree.find(
-    (item) => item.type === "blob" && item.path === filePath,
+  const fileEntry = tree.find(
+    (item: { type: string; path: string; sha: string }) =>
+      item.type === "blob" && item.path === filePath,
   );
   if (!fileEntry) {
     throw new Error("No se encontró la publicación solicitada.");
@@ -72,8 +71,9 @@ export async function performDelete(
 }> {
   const tree = await getTree();
   const filePath = `content/${collection}/${slug}.md`;
-  const fileEntry = tree.tree.find(
-    (item) => item.type === "blob" && item.path === filePath,
+  const fileEntry = tree.find(
+    (item: { type: string; path: string; sha: string }) =>
+      item.type === "blob" && item.path === filePath,
   );
   if (!fileEntry) {
     throw new Error("No se encontró la publicación solicitada.");
