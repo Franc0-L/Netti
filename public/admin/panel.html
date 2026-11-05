@@ -408,6 +408,48 @@
       .remove-image:hover {
         background: #f48a93;
       }
+      /* Navegador de medios */
+      .media-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        gap: 1rem;
+        max-height: 400px;
+        overflow-y: auto;
+        border: 1px solid var(--border-card);
+        border-radius: 0.8rem;
+        padding: 1rem;
+        background: color-mix(in srgb, var(--surface) 92%, transparent);
+      }
+      .media-item {
+        border: 1px solid var(--border-card);
+        border-radius: 0.6rem;
+        padding: 0.5rem;
+        background: var(--surface);
+        cursor: pointer;
+        transition: border-color 160ms ease;
+      }
+      .media-item:hover {
+        border-color: var(--accent);
+      }
+      .media-item.selected {
+        border-color: var(--accent);
+        background: color-mix(in srgb, var(--accent) 15%, transparent);
+      }
+      .media-item img {
+        width: 100%;
+        height: 100px;
+        object-fit: cover;
+        border-radius: 0.4rem;
+        display: block;
+        margin-bottom: 0.5rem;
+      }
+      .media-item-name {
+        font-size: 0.75rem;
+        color: var(--muted);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
     </style>
   </head>
   <body>
@@ -436,6 +478,11 @@
           </li>
           <li style="margin-top: 1rem">
             <a href="#" id="upload-link" class="nav-link">🖼️ Subir medios</a>
+          </li>
+          <li style="margin-top: 1rem">
+            <a href="#" id="media-browser-link" class="nav-link"
+              >🖼️ Navegador de medios</a
+            >
           </li>
           <li style="margin-top: 1rem">
             <a href="#" id="logout-link" class="nav-link logout"
@@ -521,6 +568,14 @@
               <button type="button" class="remove-image" id="remove-image">
                 Quitar imagen
               </button>
+              <button
+                type="button"
+                class="btn-secondary"
+                id="insert-image-btn"
+                disabled
+              >
+                Insertar en el cuerpo
+              </button>
             </div>
 
             <div class="form-group" id="game-ref-group" style="display: none">
@@ -556,6 +611,44 @@
         <div class="preview-panel">
           <h4>Vista previa</h4>
           <div class="preview-content" id="edit-preview"></div>
+        </div>
+      </div>
+
+      <!-- Modal: Navegador de medios -->
+      <div class="modal-overlay" id="media-modal-overlay" style="display: none">
+        <div
+          class="modal"
+          id="media-modal"
+          style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem"
+        >
+          <div class="modal-header" style="grid-column: 1 / -1">
+            <h3 id="media-modal-title">Navegador de medios</h3>
+            <button class="close-modal" id="close-media-modal">×</button>
+          </div>
+          <div style="grid-column: 1 / -1">
+            <div class="form-group" style="margin-bottom: 1rem">
+              <label for="media-search">Buscar imágenes</label>
+              <input
+                type="text"
+                id="media-search"
+                placeholder="Buscar por nombre de archivo..."
+              />
+            </div>
+          </div>
+          <div style="grid-column: 1">
+            <div id="media-list" class="media-grid"></div>
+          </div>
+          <div style="grid-column: 1 / -1">
+            <div class="actions">
+              <button
+                type="button"
+                class="btn-secondary"
+                id="close-media-modal-btn"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 

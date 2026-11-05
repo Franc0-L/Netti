@@ -55,9 +55,21 @@ const imagePreview = document.getElementById("image-preview");
 const imagePreviewImg = document.getElementById("image-preview-img");
 const imageAlt = document.getElementById("image-alt");
 const removeImageBtn = document.getElementById("remove-image");
+const insertImageBtn = document.getElementById("insert-image-btn");
+
+// Navegador de medios
+const mediaModalOverlay = document.getElementById("media-modal-overlay");
+const mediaModal = document.getElementById("media-modal");
+const closeMediaModal = document.getElementById("close-media-modal");
+const closeMediaModalBtn = document.getElementById("close-media-modal-btn");
+const mediaSearch = document.getElementById("media-search");
+const mediaList = document.getElementById("media-list");
+const mediaBrowserLink = document.getElementById("media-browser-link");
 
 let currentImageFile = null;
 let currentImageUrl = null;
+let selectedMediaItem = null;
+let mediaItems = [];
 
 async function checkAuth() {
   try {
@@ -396,6 +408,34 @@ document.getElementById("trash-link").addEventListener("click", (event) => {
   loadTrash();
 });
 
+// Navegador de medios
+mediaBrowserLink.addEventListener("click", (event) => {
+  event.preventDefault();
+  setActiveLink(null);
+  pageTitle.textContent = "Navegador de medios";
+  pageSubtitle.textContent = "Selecciona una imagen para insertar en el artículo.";
+  mediaModalOverlay.style.display = "flex";
+  loadMedia();
+});
+
+closeMediaModal.addEventListener("click", () => {
+  mediaModalOverlay.style.display = "none";
+});
+closeMediaModalBtn.addEventListener("click", () => {
+  mediaModalOverlay.style.display = "none";
+});
+mediaModalOverlay.addEventListener("click", (event) => {
+  if (event.target === mediaModalOverlay) mediaModalOverlay.style.display = "none";
+});
+
+mediaSearch.addEventListener("input", () => {
+  const filter = mediaSearch.value.toLowerCase();
+  const filtered = mediaItems.filter((item) =>
+    item.name.toLowerCase().includes(filter)
+  );
+  renderMediaList(filtered);
+});
+
 // Slug automático desde título
 editTitle.addEventListener("input", () => {
   if (!editSlug.value) {
@@ -489,6 +529,69 @@ async function recoverArticle(slug, collection) {
   }
 }
 
+// --- Navegador de medios ---
+async function loadMedia() {
+  try {
+    const res = await fetch(`${API_BASE}/content?collection=media&page=1`);
+    if (!res.ok) {
+      // Si la colección media no existe, mostrar lista vacía
+      mediaItems = [];
+      renderMediaList([]);
+      return;
+    }
+    const data = await res.json();
+    mediaItems = (data.entries || []).map((entry) => ({
+      name: entry.fields.title || entry.slug,
+      url: entry.fields.coverImage || "",
+      alt: entry.fields.coverAlt || "",
+      slug: entry.slug,
+    }));
+    renderMediaList(mediaItems);
+  } catch {
+    mediaItems = [];
+    renderMediaList([]);
+  }
+}
+
+function renderMediaList(items) {
+  if (!items || items.length === 0) {
+    mediaList.innerHTML = `<div class="empty">No hay imágenes subidas.</div>`;
+    return;
+  }
+
+  mediaList.innerHTML = items
+    .map(
+      (item) => `
+      <div class="media-item" onclick="selectMediaItem(this, '${item.url}', '${item.alt}')">
+        ${item.url ? `<img src="${item.url}" alt="${item.alt}" />` : `<div style="width:100%;height:100px;background:var(--field);border-radius:0.4rem;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:0.75rem">Sin imagen</div>`}
+        <div class="media-item-name">${escapeHtml(item.name)}</div>
+      </div>
+    `
+    )
+    .join("");
+}
+
+function selectMediaItem(element, url, alt) {
+  // Deselect all
+  document.querySelectorAll(".media-item").forEach((el) =>
+    el.classList.remove("selected")
+  );
+  element.classList.add("selected");
+  selectedMediaItem = { url, alt };
+  insertImageBtn.disabled = false;
+  insertImageBtn.textContent = `Insertar "${alt}" en el cuerpo`;
+}
+
+function insertSelectedMediaIntoBody() {
+  if (!selectedMediaItem) return;
+  const { url, alt } = selectedMediaItem;
+  const markdownImage = `![${alt}](${url})\n\n`;
+  editBody.value = editBody.value + markdownImage;
+  updatePreview();
+  mediaModalOverlay.style.display = "none";
+  showSuccess("Imagen insertada en el cuerpo");
+}
+
 // Exponer API global para onclick en HTML
 window.app = {
   loadCollection,
@@ -497,6 +600,8 @@ window.app = {
   deleteArticle,
   loadTrash,
   recoverArticle,
+  selectMediaItem,
+  insertSelectedMediaIntoBody,
 };
 
 // Inicializar
@@ -506,6 +611,7 @@ checkAuth().then(() => {
     const collection = firstLink.dataset.collection;
     loadCollection(collection);
   }
+  loadMedia();
 });
 
 // --- Manejo de imagen ---
@@ -542,6 +648,10 @@ removeImageBtn.addEventListener("click", () => {
   imageAlt.value = "";
 });
 
+insertImageBtn.addEventListener("click", () => {
+  insertSelectedMediaIntoBody();
+});
+
 async function uploadImage(collection, slug) {
   if (!currentImageFile) return null;
   const formData = new FormData();
@@ -565,6 +675,14 @@ async function uploadImage(collection, slug) {
     imagePreview.style.display = "none";
     imageAlt.value = "";
     showSuccess("Imagen subida correctamente");
+    // Agregar a la lista de medios y recargar
+    mediaItems.unshift({
+      name: data.path.split("/").pop() || data.url.split("/").pop(),
+      url: data.url,
+      alt: imageAlt.value || currentImageFile.name,
+      slug: data.slug || "",
+    });
+    renderMediaList(mediaItems);
     return data.url;
   } catch (err) {
     showError(err.message || "No se pudo subir la imagen");
