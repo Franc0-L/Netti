@@ -3,22 +3,23 @@ import { execSync } from "node:child_process";
 import { statSync } from "node:fs";
 import { join } from "node:path";
 
-const NODE_EXE =
-  "C:\\Users\\Franco\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\node\\bin\\node.exe";
-const ASTRO_CLI = join(
-  process.cwd(),
-  "node_modules",
-  "astro",
-  "dist",
-  "cli",
-  "index.js",
-);
+// npm no está disponible en todos los entornos (p. ej. Windows local sin npm en PATH).
+// En GitHub Actions sí está disponible tras `npm ci`.
+let npmAvailable = false;
+try {
+  execSync("npm --version", { stdio: "pipe", timeout: 5000 });
+  npmAvailable = true;
+} catch {
+  npmAvailable = false;
+}
 
-describe("Rendimiento (build)", () => {
+const describeOrSkip = npmAvailable ? describe : describe.skip;
+
+describeOrSkip("Rendimiento (build)", () => {
   it("astro build debe completarse en menos de 60 segundos", () => {
     const start = performance.now();
     try {
-      execSync(`"${NODE_EXE}" "${ASTRO_CLI}" build`, {
+      execSync("npm run build", {
         stdio: "pipe",
         timeout: 60000,
         cwd: process.cwd(),
