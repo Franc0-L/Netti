@@ -50,7 +50,7 @@ export default async function handler(req: AdminRequest, res: AdminResponse) {
       if (rawCollection !== undefined && typeof rawCollection !== "string") {
         return json(res, 400, { error: "Colección desconocida." });
       }
-      const collection = rawCollection;
+      const collection = rawCollection as string;
       if (collection && !collections.has(collection)) {
         return json(res, 400, { error: "Colección desconocida." });
       }
@@ -62,8 +62,9 @@ export default async function handler(req: AdminRequest, res: AdminResponse) {
             error: "La publicación solicitada no es válida.",
           });
         }
+        const slug = rawSlug as string;
         try {
-          const entry = await readEntryBySlug(collection, rawSlug);
+          const entry = await readEntryBySlug(collection, slug);
           return json(res, 200, { entry });
         } catch (error) {
           if (
@@ -85,7 +86,8 @@ export default async function handler(req: AdminRequest, res: AdminResponse) {
       ) {
         return json(res, 400, { error: "La página solicitada no es válida." });
       }
-      const page = rawPage === undefined ? 1 : Number(rawPage);
+      const pageStr = rawPage as string;
+      const page = pageStr === undefined ? 1 : Number(pageStr);
       const result = await listEntries(collection, page);
       return json(res, 200, result);
     }
