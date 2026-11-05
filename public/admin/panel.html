@@ -450,6 +450,40 @@
         overflow: hidden;
         text-overflow: ellipsis;
       }
+
+      /* Markdown toolbar */
+      .markdown-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+        margin-bottom: 0.5rem;
+        padding: 0.5rem;
+        border: 1px solid var(--border-card);
+        border-radius: 0.6rem;
+        background: color-mix(in srgb, var(--surface) 92%, transparent);
+      }
+      .markdown-toolbar button {
+        flex: none;
+        width: 32px;
+        height: 32px;
+        border: 1px solid var(--border-card);
+        border-radius: 0.4rem;
+        background: var(--surface);
+        color: var(--text);
+        font-size: 0.85rem;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: border-color 160ms ease, background-color 160ms ease;
+      }
+      .markdown-toolbar button:hover {
+        border-color: var(--accent);
+        background: color-mix(in srgb, var(--accent) 10%, transparent);
+      }
+      .markdown-toolbar button:active {
+        background: color-mix(in srgb, var(--accent) 20%, transparent);
+      }
     </style>
   </head>
   <body>
@@ -549,6 +583,21 @@
             <div class="form-group">
               <label for="edit-description">Descripción</label>
               <textarea id="edit-description" required></textarea>
+            </div>
+
+            <div class="form-group">
+              <label for="edit-body">Cuerpo (Markdown)</label>
+              <div class="markdown-toolbar">
+                <button type="button" onclick="insertMarkdown('**', '**')" title="Negrita">B</button>
+                <button type="button" onclick="insertMarkdown('*', '*')" title="Cursiva">I</button>
+                <button type="button" onclick="insertMarkdown('`', '`')" title="Código">Code</button>
+                <button type="button" onclick="insertMarkdown('[', '](URL)')" title="Enlace">Link</button>
+                <button type="button" onclick="insertMarkdown('![', '](URL)')" title="Imagen">Img</button>
+                <button type="button" onclick="insertMarkdown('# ', '')" title="Encabezado H1">H1</button>
+                <button type="button" onclick="insertMarkdown('## ', '')" title="Encabezado H2">H2</button>
+                <button type="button" onclick="insertMarkdown('- ', '\n- ')" title="Lista">List</button>
+              </div>
+              <textarea id="edit-body" required></textarea>
             </div>
 
             <div class="image-upload-group">

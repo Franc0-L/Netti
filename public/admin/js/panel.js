@@ -586,10 +586,30 @@ function insertSelectedMediaIntoBody() {
   if (!selectedMediaItem) return;
   const { url, alt } = selectedMediaItem;
   const markdownImage = `![${alt}](${url})\n\n`;
-  editBody.value = editBody.value + markdownImage;
+  insertTextAtCursor(markdownImage);
   updatePreview();
   mediaModalOverlay.style.display = "none";
   showSuccess("Imagen insertada en el cuerpo");
+}
+
+function insertMarkdown(openTag, closeTag) {
+  const text = `${openTag}${closeTag}`;
+  insertTextAtCursor(text);
+  editBody.focus();
+}
+
+function insertTextAtCursor(text) {
+  const textarea = editBody;
+  if (!textarea) return;
+  const start = textarea.selectionStart;
+  const end = textarea.selectionEnd;
+  const before = textarea.value.substring(0, start);
+  const after = textarea.value.substring(end);
+  textarea.value = before + text + after;
+  textarea.selectionStart = start + text.length;
+  textarea.selectionEnd = start + text.length;
+  textarea.focus();
+  updatePreview();
 }
 
 // Exponer API global para onclick en HTML
@@ -602,6 +622,7 @@ window.app = {
   recoverArticle,
   selectMediaItem,
   insertSelectedMediaIntoBody,
+  insertMarkdown,
 };
 
 // Inicializar
