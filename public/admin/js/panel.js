@@ -42,11 +42,22 @@ const editTitle = document.getElementById("edit-title");
 const editSlug = document.getElementById("edit-slug");
 const editDescription = document.getElementById("edit-description");
 const editBody = document.getElementById("edit-body");
+const editPreview = document.getElementById("edit-preview");
 const editGame = document.getElementById("edit-game");
 const editScore = document.getElementById("edit-score");
 const editTags = document.getElementById("edit-tags");
 const gameRefGroup = document.getElementById("game-ref-group");
 const scoreGroup = document.getElementById("score-group");
+
+// Subida de imagen
+const imageInput = document.getElementById("image-input");
+const imagePreview = document.getElementById("image-preview");
+const imagePreviewImg = document.getElementById("image-preview-img");
+const imageAlt = document.getElementById("image-alt");
+const removeImageBtn = document.getElementById("remove-image");
+
+let currentImageFile = null;
+let currentImageUrl = null;
 
 async function checkAuth() {
   try {
@@ -89,6 +100,37 @@ function escapeHtml(str) {
   const div = document.createElement("div");
   div.textContent = str;
   return div.innerHTML;
+}
+
+function renderMarkdownPreview(markdown) {
+  if (!markdown || !markdown.trim()) {
+    return "<p style='color: var(--muted); font-style: italic;'>Sin contenido...</p>";
+  }
+
+  let html = markdown
+    .replace(/^### (.*$)/gim, "<h3>$1</h3>")
+    .replace(/^## (.*$)/gim, "<h2>$1</h2>")
+    .replace(/^# (.*$)/gim, "<h1>$1</h1>")
+    .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+    .replace(/\*(.*?)\*/g, "<em>$1</em>")
+    .replace(/`(.*?)`/g, "<code>$1</code>")
+    .replace(
+      /!\[(.*?)\]\((.*?)\)/g,
+      '<img src="$2" alt="$1" style="max-width: 100%; border-radius: 0.5rem; margin: 1rem 0;" />',
+    )
+    .replace(
+      /\[(.*?)\]\((.*?)\)/g,
+      '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>',
+    )
+    .replace(/\n\n/g, "</p><p>")
+    .replace(/\n/g, "<br>");
+
+  return `<p>${html}</p>`;
+}
+
+function updatePreview() {
+  const markdown = editBody.value;
+  editPreview.innerHTML = renderMarkdownPreview(markdown);
 }
 
 async function loadCollection(collection, page = 1) {
@@ -180,9 +222,16 @@ async function createArticle() {
   editSlug.value = "";
   editDescription.value = "";
   editBody.value = "";
+  editPreview.innerHTML = "";
   editGame.value = "";
   editScore.value = "";
   editTags.value = "";
+
+  currentImageFile = null;
+  currentImageUrl = null;
+  imageInput.value = "";
+  imagePreview.style.display = "none";
+  imageAlt.value = "";
 
   gameRefGroup.style.display = "none";
   scoreGroup.style.display = "none";
@@ -214,9 +263,16 @@ async function editArticle(slug, collection, sha) {
     editSlug.value = entry.slug;
     editDescription.value = entry.fields.description || "";
     editBody.value = entry.body || "";
+    editPreview.innerHTML = renderMarkdownPreview(entry.body || "");
     editGame.value = entry.fields.game || "";
     editScore.value = entry.fields.score || "";
     editTags.value = (entry.fields.tags || []).join(", ");
+
+    currentImageFile = null;
+    currentImageUrl = null;
+    imageInput.value = "";
+    imagePreview.style.display = "none";
+    imageAlt.value = entry.fields.coverAlt || "";
 
     gameRefGroup.style.display =
       entry.collection === "reviews" || entry.collection === "guides"
@@ -266,6 +322,7 @@ editorForm.addEventListener("submit", async (event) => {
       .split(",")
       .map((t) => t.trim())
       .filter(Boolean),
+    coverAlt: imageAlt.value.trim(),
   };
 
   if (collection === "reviews" || collection === "guides") {
@@ -331,6 +388,14 @@ document
     }
   });
 
+document.getElementById("trash-link").addEventListener("click", (event) => {
+  event.preventDefault();
+  setActiveLink(null);
+  pageTitle.textContent = "Papelera";
+  pageSubtitle.textContent = "Artículos eliminados que se pueden recuperar.";
+  loadTrash();
+});
+
 // Slug automático desde título
 editTitle.addEventListener("input", () => {
   if (!editSlug.value) {
@@ -344,12 +409,94 @@ editTitle.addEventListener("input", () => {
   }
 });
 
+// Preview en tiempo real
+editBody.addEventListener("input", updatePreview);
+
+// --- Papelera ---
+async function loadTrash() {
+  try {
+    const res = await fetch(`${API_BASE}/content?collection=trash`);
+    if (!res.ok) throw new Error("No se pudo cargar la papelera");
+    const data = await res.json();
+
+    if (!data.entries || data.entries.length === 0) {
+      contentArea.innerHTML = `<div class="empty">La papelera está vacía.</div>`;
+      return;
+    }
+
+    const rows = data.entries
+      .map((entry) => {
+        const title = escapeHtml(entry.fields.title || entry.slug);
+        const slug = escapeHtml(entry.slug);
+        const deletedAt = entry.fields.deletedAt || "";
+        const deletedCollection = entry.collection || "games";
+        return `
+        <tr>
+          <td><span class="badge badge-games">${deletedCollection}</span></td>
+          <td>${title}</td>
+          <td><code style="color: var(--muted);">${slug}</code></td>
+          <td>${deletedAt}</td>
+          <td>
+            <button class="btn-secondary" onclick="app.recoverArticle('${escapeHtml(slug)}', '${escapeHtml(deletedCollection)}')">Recuperar</button>
+          </td>
+        </tr>
+      `;
+      })
+      .join("");
+
+    contentArea.innerHTML = `
+      <table>
+        <thead>
+          <tr>
+            <th>Colección</th>
+            <th>Título</th>
+            <th>Slug</th>
+            <th>Eliminado</th>
+            <th>Acción</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    `;
+  } catch (err) {
+    showError(err.message || "No se pudo cargar la papelera");
+    contentArea.innerHTML = `<div class="empty">Error al cargar la papelera.</div>`;
+  }
+}
+
+async function recoverArticle(slug, collection) {
+  if (!confirm(`¿Recuperar "${slug}"?`)) return;
+  try {
+    const res = await fetch(`${API_BASE}/content`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        collection,
+        slug,
+        fields: { title: slug },
+        body: "",
+        sha: "",
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || "No se pudo recuperar el artículo");
+    }
+    showSuccess("Artículo recuperado");
+    loadTrash();
+  } catch (err) {
+    showError(err.message || "No se pudo recuperar el artículo");
+  }
+}
+
 // Exponer API global para onclick en HTML
 window.app = {
   loadCollection,
   loadPage: (page) => loadCollection(currentCollection, page),
   editArticle,
   deleteArticle,
+  loadTrash,
+  recoverArticle,
 };
 
 // Inicializar
@@ -360,3 +507,67 @@ checkAuth().then(() => {
     loadCollection(collection);
   }
 });
+
+// --- Manejo de imagen ---
+imageInput.addEventListener("change", (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+  if (!file.type.startsWith("image/")) {
+    showError("Solo se permiten archivos de imagen.");
+    return;
+  }
+  if (file.size > 2 * 1024 * 1024) {
+    showError("La imagen no puede superar los 2 MB.");
+    return;
+  }
+  currentImageFile = file;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    imagePreviewImg.src = e.target.result;
+    imagePreview.style.display = "block";
+    if (!imageAlt.value) {
+      imageAlt.value = file.name
+        .replace(/\.[^/.]+$/, "")
+        .replace(/[-_]+/g, " ");
+    }
+  };
+  reader.readAsDataURL(file);
+});
+
+removeImageBtn.addEventListener("click", () => {
+  currentImageFile = null;
+  currentImageUrl = null;
+  imageInput.value = "";
+  imagePreview.style.display = "none";
+  imageAlt.value = "";
+});
+
+async function uploadImage(collection, slug) {
+  if (!currentImageFile) return null;
+  const formData = new FormData();
+  formData.append("file", currentImageFile);
+  formData.append("collection", collection);
+  formData.append("slug", slug);
+  formData.append("alt", imageAlt.value || currentImageFile.name);
+  try {
+    const res = await fetch(`${API_BASE}/upload`, {
+      method: "POST",
+      body: formData,
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || "No se pudo subir la imagen");
+    }
+    const data = await res.json();
+    currentImageFile = null;
+    currentImageUrl = data.url;
+    imageInput.value = "";
+    imagePreview.style.display = "none";
+    imageAlt.value = "";
+    showSuccess("Imagen subida correctamente");
+    return data.url;
+  } catch (err) {
+    showError(err.message || "No se pudo subir la imagen");
+    return null;
+  }
+}

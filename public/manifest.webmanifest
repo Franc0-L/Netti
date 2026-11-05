@@ -1,0 +1,12 @@
+{
+  "name": "Netti",
+  "short_name": "Netti",
+  "description": "Reseñas, fichas de videojuegos y noticias con identidad propia.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#141218",
+  "theme_color": "#141218",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
