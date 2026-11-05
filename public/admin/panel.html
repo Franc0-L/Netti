@@ -484,6 +484,29 @@
       .markdown-toolbar button:active {
         background: color-mix(in srgb, var(--accent) 20%, transparent);
       }
+
+      .search-box {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+      }
+      .search-box input[type="search"] {
+        padding: 0.5rem 0.8rem;
+        border: 1px solid var(--border-card);
+        border-radius: 0.6rem;
+        background: var(--surface);
+        color: var(--text);
+        font-size: 0.85rem;
+        min-width: 200px;
+      }
+      .search-box input[type="search"]:focus {
+        outline: none;
+        border-color: var(--accent);
+      }
+      .search-box .btn-secondary {
+        padding: 0.5rem 0.8rem;
+        font-size: 0.85rem;
+      }
     </style>
   </head>
   <body>
@@ -536,6 +559,10 @@
           </p>
         </div>
         <button class="btn" id="new-btn">Nuevo artículo</button>
+        <div class="search-box">
+          <input type="search" id="panel-search" placeholder="Buscar artículos..." />
+          <button type="button" id="clear-search" class="btn-secondary" style="display:none">×</button>
+        </div>
       </header>
 
       <div id="error-msg" class="error-msg" style="display: none"></div>

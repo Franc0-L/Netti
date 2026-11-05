@@ -27,6 +27,10 @@ const errorMsg = document.getElementById("error-msg");
 const successMsg = document.getElementById("success-msg");
 const newBtn = document.getElementById("new-btn");
 const previewBtn = document.getElementById("preview-btn");
+const panelSearch = document.getElementById("panel-search");
+const clearSearchBtn = document.getElementById("clear-search");
+
+let allEntries = []; // Todos los artículos de la colección actual
 
 // Modal
 const modalOverlay = document.getElementById("modal-overlay");
@@ -161,11 +165,22 @@ async function loadCollection(collection, page = 1) {
     if (!res.ok) throw new Error("No se pudo cargar la colección");
     const data = await res.json();
 
-    renderList(data.entries, data.page, data.pageCount, data.total);
+    allEntries = data.entries || [];
+    renderFilteredList(data.page, data.pageCount, data.total);
   } catch (err) {
     showError(err.message || "Error al cargar la colección");
     contentArea.innerHTML = `<div class="empty">Error al cargar los artículos.</div>`;
   }
+}
+
+function renderFilteredList(page, pageCount, total) {
+  const filter = panelSearch.value.toLowerCase();
+  const filtered = allEntries.filter(
+    (entry) =>
+      entry.fields.title?.toLowerCase().includes(filter) ||
+      entry.slug.toLowerCase().includes(filter)
+  );
+  renderList(filtered, page, pageCount, total);
 }
 
 function renderList(entries, page, pageCount, total) {
@@ -409,6 +424,15 @@ document.getElementById("trash-link").addEventListener("click", (event) => {
   pageTitle.textContent = "Papelera";
   pageSubtitle.textContent = "Artículos eliminados que se pueden recuperar.";
   loadTrash();
+});
+
+panelSearch.addEventListener("input", () => {
+  renderFilteredList(currentPage, 1, 1);
+});
+
+clearSearchBtn.addEventListener("click", () => {
+  panelSearch.value = "";
+  renderFilteredList(currentPage, 1, 1);
 });
 
 // Navegador de medios
