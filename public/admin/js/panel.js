@@ -659,14 +659,21 @@ function renderMediaList(items) {
 }
 
 function selectMediaItem(element, url, alt) {
-  // Deselect all
+  const safeUrl = safeMediaUrl(url);
+  if (!safeUrl) {
+    showError("La imagen seleccionada no tiene una ruta válida.");
+    return;
+  }
   document.querySelectorAll(".media-item").forEach((el) =>
     el.classList.remove("selected")
   );
   element.classList.add("selected");
-  selectedMediaItem = { url, alt };
+  selectedMediaItem = {
+    url: safeUrl,
+    alt: String(alt ?? "").replace(/[\\r\\n]/g, " ").slice(0, 240),
+  };
   insertImageBtn.disabled = false;
-  insertImageBtn.textContent = `Insertar "${alt}" en el cuerpo`;
+  insertImageBtn.textContent = `Insertar "${selectedMediaItem.alt}" en el cuerpo`;
 }
 
 function insertSelectedMediaIntoBody() {
