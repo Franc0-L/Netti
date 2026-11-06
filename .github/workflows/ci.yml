@@ -32,5 +32,8 @@ jobs:
       - name: Pruebas de vista previa del administrador
         run: npm run test:admin-preview
 
+      - name: Pruebas de integración de handlers del administrador
+        run: npm run test:admin-e2e
+
       - name: Build de producción
         run: npm run build
