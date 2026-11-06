@@ -21,7 +21,6 @@ test("valida formatos admitidos y el límite de 2 MB", () => {
   assert.equal(validateImageFile(makeFile([1, 2, 3])), "");
   assert.match(validateImageFile(makeFile([1], "image/svg+xml", "vector.svg")), /Formato no admitido/);
   assert.match(validateImageFile(makeFile([])), /vacío/);
-  assert.match(validateImageFile(makeFile([1], "image/png", "grande.png",)), "");
   assert.match(validateImageFile({ ...makeFile([1]), size: MAX_IMAGE_BYTES + 1 }), /2 MB/);
 });
 
@@ -57,7 +56,7 @@ test("sube el archivo mediante el cliente API y valida la ruta devuelta", async 
   assert.equal(result.url, "/media/games/juego-demo/portada.webp");
 });
 
-test("rechaza archivos inválidos antes de llamar a la API", async () => {
+test("rechaza metadatos demasiado largos antes de llamar a la API", async () => {\n  const api = { async post() { throw new Error("No debería llamar a la API"); } };\n  await assert.rejects(uploadImageFile({ api, file: makeFile([1]), collection: "games", slug: "juego-demo", alt: "x".repeat(241) }), /240 caracteres/);\n});\n\ntest("rechaza archivos inválidos antes de llamar a la API", async () => {
   let called = false;
   const api = { async post() { called = true; } };
   await assert.rejects(
