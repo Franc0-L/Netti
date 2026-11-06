@@ -7,6 +7,8 @@ let treeCache: {
   fetchedAt: number;
 } | null = null;
 const TREE_CACHE_TTL_MS = 60_000;
+const SEARCH_INDEX_TTL_MS = 60_000;
+let searchIndexCache: { entries: { collection: string; slug: string; sha: string; fields: Record<string, unknown> }[]; fetchedAt: number } | null = null;
 
 function treeCacheFresh(): boolean {
   return (
@@ -16,6 +18,7 @@ function treeCacheFresh(): boolean {
 
 function invalidateTreeCache(): void {
   treeCache = null;
+  searchIndexCache = null;
 }
 
 async function getTreeCached(): Promise<
@@ -51,10 +54,35 @@ export async function contentPaths(collection?: string): Promise<
     .sort((a, b) => a.path.localeCompare(b.path));
 }
 
-// Lista las entradas de una colección con paginación.
+// Construye un índice cacheado para que la búsqueda incluya toda la colección.
+async function getSearchIndex() {
+  if (searchIndexCache && Date.now() - searchIndexCache.fetchedAt < SEARCH_INDEX_TTL_MS) return searchIndexCache.entries;
+  const paths = await contentPaths();
+  const entries: { collection: string; slug: string; sha: string; fields: Record<string, unknown> }[] = [];
+  let cursor = 0;
+  const worker = async () => {
+    while (cursor < paths.length) {
+      const index = cursor++;
+      const item = paths[index];
+      const [, collection, filename] = item.path.split("/");
+      const slug = filename.slice(0, -3);
+      const markdown = await readMarkdownFile(collection, slug);
+      entries[index] = { collection, slug, sha: item.sha, fields: markdown.fields };
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(4, paths.length) }, worker));
+  searchIndexCache = { entries, fetchedAt: Date.now() };
+  return entries;
+}
+
+function normalizeSearch(value: unknown): string {
+  return String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+}
+
 export async function listEntries(
   collection?: string,
   page = 1,
+  query = "",
 ): Promise<{
   entries: { collection: string; slug: string; sha: string; fields: Record<string, unknown> }[];
   page: number;
@@ -63,31 +91,32 @@ export async function listEntries(
   total: number;
 }> {
   const paths = await contentPaths(collection);
-  const pageCount = Math.ceil(paths.length / LIST_PAGE_SIZE);
-  if (page > Math.max(pageCount, 1)) {
-    return {
-      entries: [],
-      page,
-      pageSize: LIST_PAGE_SIZE,
-      pageCount,
-      total: paths.length,
-    };
+  const normalizedQuery = normalizeSearch(query);
+  let selected: { collection: string; slug: string; sha: string; fields?: Record<string, unknown> }[];
+  if (normalizedQuery) {
+    selected = (await getSearchIndex()).filter((entry) =>
+      (!collection || entry.collection === collection) &&
+      [entry.slug, entry.fields.title, entry.fields.description].some((value) => normalizeSearch(value).includes(normalizedQuery)),
+    );
+  } else {
+    selected = paths.map((item) => {
+      const [, collectionName, filename] = item.path.split("/");
+      return { collection: collectionName, slug: filename.slice(0, -3), sha: item.sha };
+    });
   }
-  const paginated = paths.slice(
-    (page - 1) * LIST_PAGE_SIZE,
-    page * LIST_PAGE_SIZE,
-  );
+  const pageCount = Math.ceil(selected.length / LIST_PAGE_SIZE);
+  const total = selected.length;
+  const paginated = selected.slice((page - 1) * LIST_PAGE_SIZE, page * LIST_PAGE_SIZE);
+  if (page > Math.max(pageCount, 1)) return { entries: [], page, pageSize: LIST_PAGE_SIZE, pageCount, total };
   return {
     entries: await Promise.all(paginated.map(async (item) => {
-      const [, collectionName, filename] = item.path.split("/");
-      const slug = filename.slice(0, -3);
-      const markdown = await readMarkdownFile(collectionName, slug);
-      return { collection: collectionName, slug, sha: item.sha, fields: markdown.fields };
+      const fields = item.fields ?? (await readMarkdownFile(item.collection, item.slug)).fields;
+      return { collection: item.collection, slug: item.slug, sha: item.sha, fields };
     })),
     page,
     pageSize: LIST_PAGE_SIZE,
     pageCount,
-    total: paths.length,
+    total,
   };
 }
 
