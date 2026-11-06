@@ -89,7 +89,7 @@ export function createContentNavigation({
   return {
     loadCollection,
     loadTrash,
-    loadPage: (page) => currentCollection ? loadCollection(currentCollection, page) : Promise.resolve(),
+    loadPage: (page) => activeView === "collection" && currentCollection ? loadCollection(currentCollection, page) : Promise.resolve(),
     refresh: () => activeView === "trash" ? loadTrash() : currentCollection ? loadCollection(currentCollection, currentPage) : Promise.resolve(),
     getState: () => ({ collection: currentCollection, page: currentPage, view: activeView }),
     invalidate: () => { requestId += 1; },
