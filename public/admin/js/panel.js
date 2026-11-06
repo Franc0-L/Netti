@@ -5,6 +5,8 @@ import { createMediaBrowser } from "./media-browser.js";
 import { validateImageFile, uploadImageFile } from "./media-upload.js";
 import { createEditorForm, slugifyTitle } from "./editor-form.js";
 import { createEditorState } from "./editor-state.js";
+import { createPanelFeedback } from "./panel-feedback.js";
+import { createContentNavigation, createTrashController } from "./content-navigation.js";
 
 const collectionLabels = {
   games: "Juegos",
@@ -15,8 +17,6 @@ const collectionLabels = {
 
 
 
-let currentCollection = null;
-let currentPage = 1;
 let isAuthenticated = false;
 let editSha = "";
 
@@ -32,7 +32,6 @@ const previewBtn = document.getElementById("preview-btn");
 const panelSearch = document.getElementById("panel-search");
 const clearSearchBtn = document.getElementById("clear-search");
 
-let collectionRequestId = 0;
 let searchDebounce = null;
 
 // Modal
@@ -117,23 +116,19 @@ async function checkAuth() {
   }
 }
 
-function showError(msg) {
-  errorMsg.textContent = msg;
-  errorMsg.style.display = "block";
-  successMsg.style.display = "none";
-  setTimeout(() => {
-    errorMsg.style.display = "none";
-  }, 5000);
-}
-
-function showSuccess(msg) {
-  successMsg.textContent = msg;
-  successMsg.style.display = "block";
-  errorMsg.style.display = "none";
-  setTimeout(() => {
-    successMsg.style.display = "none";
-  }, 5000);
-}
+const feedback = createPanelFeedback({ errorElement: errorMsg, successElement: successMsg, contentElement: contentArea });
+const showError = feedback.showError;
+const showSuccess = feedback.showSuccess;
+const navigation = createContentNavigation({
+  api: adminApi, contentArea, pageTitle, pageSubtitle, sidebarLinks,
+  searchInput: panelSearch, renderCollectionList, renderTrashList, feedback, collectionLabels,
+});
+const loadCollection = navigation.loadCollection;
+const loadTrash = navigation.loadTrash;
+const trashController = createTrashController({
+  api: adminApi, confirmRestore: (message) => window.confirm(message), feedback, reloadTrash: loadTrash,
+});
+const recoverArticle = trashController.recoverArticle;
 
 const mediaBrowser = createMediaBrowser({
   api: adminApi,
@@ -147,59 +142,19 @@ const mediaBrowser = createMediaBrowser({
   onSuccess: showSuccess,
 });
 
-function setActiveLink(collection) {
-  sidebarLinks.forEach((link) => {
-    const col = link.dataset.collection;
-    link.classList.toggle("active", col === collection);
-  });
-}
-
 function updatePreview() {
   const markdown = editBody.value;
   editPreview.innerHTML = renderMarkdownPreview(markdown);
 }
 
-async function loadCollection(collection, page = 1) {
-  currentCollection = collection;
-  currentPage = page;
-
-  pageTitle.textContent = collectionLabels[collection];
-  pageSubtitle.textContent = `Gestioná los artículos de la colección "${collection}".`;
-  setActiveLink(collection);
-
-  const requestId = ++collectionRequestId;
-  const query = panelSearch.value.trim();
-  contentArea.setAttribute("aria-busy", "true");
-  try {
-    const params = new URLSearchParams({ collection, page: String(page) });
-    if (query) params.set("q", query);
-    const data = await adminApi.get(`/content?${params.toString()}`);
-    if (requestId !== collectionRequestId) return;
-    currentPage = data.page;
-    renderList(data.entries || [], data.page, data.pageCount, data.total, Boolean(query));
-  } catch (err) {
-    if (requestId !== collectionRequestId) return;
-    showError(err.message || "Error al cargar la colección");
-    contentArea.innerHTML = `<div class="empty">Error al cargar los artículos.</div>`;
-  } finally {
-    if (requestId === collectionRequestId) contentArea.removeAttribute("aria-busy");
-  }
-}
-
-function renderList(entries, page, pageCount, total, isSearching = false) {
-  contentArea.innerHTML = renderCollectionList({
-    entries,
-    page,
-    pageCount,
-    query: panelSearch.value.trim(),
-    isSearching,
-  });
-}
-
-
 async function createArticle() {
   editId.value = "";
   editSha = "";
+  const { collection: currentCollection, view } = navigation.getState();
+  if (view !== "collection" || !currentCollection) {
+    showError("Primero elegí una colección para crear una publicación.");
+    return;
+  }
   editCollection.value = currentCollection;
   editTitle.value = "";
   editSlug.value = "";
@@ -283,7 +238,7 @@ async function deleteArticle(slug, collection, sha) {
   try {
     await adminApi.delete("/content", { collection, slug, sha });
     showSuccess("Artículo borrado correctamente");
-    loadCollection(collection, currentPage);
+    loadCollection(collection, navigation.getState().page);
   } catch (err) {
     showError(err.message || "No se pudo borrar el artículo");
   }
@@ -294,14 +249,7 @@ editorForm.addEventListener("submit", async (event) => {
   if (isSaving) return;
 
   isSaving = true;
-  const controls = Array.from(editorForm.elements);
-  const previousDisabled = controls.map((control) => control.disabled);
-  const previousSaveLabel = saveButton.textContent;
-  controls.forEach((control) => {
-    control.disabled = true;
-  });
-  saveButton.textContent = "Guardando…";
-  editorForm.setAttribute("aria-busy", "true");
+  const restoreSaveState = feedback.beginSaving(editorForm, saveButton);
 
   try {
     const collection = editCollection.value;
@@ -341,15 +289,11 @@ editorForm.addEventListener("submit", async (event) => {
     showSuccess(isEdit ? "Artículo guardado" : "Artículo creado");
     modalOverlay.style.display = "none";
     editorState.markClean();
-    loadCollection(collection, currentPage);
+    loadCollection(collection, navigation.getState().page);
   } catch (err) {
     showError(err.message || "No se pudo guardar el artículo");
   } finally {
-    controls.forEach((control, index) => {
-      control.disabled = previousDisabled[index];
-    });
-    saveButton.textContent = previousSaveLabel;
-    editorForm.removeAttribute("aria-busy");
+    restoreSaveState();
     isSaving = false;
   }
 });
@@ -362,9 +306,12 @@ modalOverlay.addEventListener("click", (event) => {
 });
 
 document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape" && modalOverlay.style.display === "flex") {
-    closeEditorModal();
+  if (event.key !== "Escape") return;
+  if (mediaModalOverlay.style.display === "flex") {
+    mediaBrowser.close();
+    return;
   }
+  if (modalOverlay.style.display === "flex") closeEditorModal();
 });
 
 document
@@ -380,29 +327,32 @@ document
 
 document.getElementById("trash-link").addEventListener("click", (event) => {
   event.preventDefault();
-  setActiveLink(null);
-  pageTitle.textContent = "Papelera";
-  pageSubtitle.textContent = "Artículos eliminados que se pueden recuperar.";
   loadTrash();
+});
+sidebarLinks.forEach((link) => {
+  if (!link.dataset.collection) return;
+  link.addEventListener("click", (event) => {
+    event.preventDefault();
+    loadCollection(link.dataset.collection, 1);
+  });
 });
 
 panelSearch.addEventListener("input", () => {
   clearTimeout(searchDebounce);
   searchDebounce = setTimeout(() => {
-    if (currentCollection) loadCollection(currentCollection, 1);
+    if (navigation.getState().collection) loadCollection(navigation.getState().collection, 1);
   }, 300);
 });
 
 clearSearchBtn.addEventListener("click", () => {
   panelSearch.value = "";
   clearTimeout(searchDebounce);
-  if (currentCollection) loadCollection(currentCollection, 1);
+  if (navigation.getState().collection) loadCollection(navigation.getState().collection, 1);
 });
 
 // Navegador de medios
 mediaBrowserLink.addEventListener("click", (event) => {
   event.preventDefault();
-  setActiveLink(null);
   pageTitle.textContent = "Navegador de medios";
   pageSubtitle.textContent = "Selecciona una imagen para insertar en el artículo.";
   mediaBrowser.open();
@@ -421,29 +371,6 @@ editTitle.addEventListener("input", () => {
 
 // Preview en tiempo real
 editBody.addEventListener("input", updatePreview);
-
-// --- Papelera ---
-async function loadTrash() {
-  try {
-    const data = await adminApi.get("/content?collection=trash");
-
-    contentArea.innerHTML = renderTrashList(data.entries || []);
-  } catch (err) {
-    showError(err.message || "No se pudo cargar la papelera");
-    contentArea.innerHTML = `<div class="empty">Error al cargar la papelera.</div>`;
-  }
-}
-
-async function recoverArticle(slug, collection, sha) {
-  if (!confirm(`¿Recuperar "${slug}"?`)) return;
-  try {
-    await adminApi.post("/content", { action: "restore", collection, slug, sha });
-    showSuccess("Artículo recuperado");
-    loadTrash();
-  } catch (err) {
-    showError(err.message || "No se pudo recuperar el artículo");
-  }
-}
 
 function insertMarkdown(openTag, closeTag) {
   const text = `${openTag}${closeTag}`;
@@ -473,7 +400,7 @@ document.addEventListener("click", (event) => {
     return;
   }
   if (target.dataset.page) {
-    loadCollection(currentCollection, Number(target.dataset.page));
+    navigation.loadPage(Number(target.dataset.page));
     return;
   }
   const { action, slug, collection, sha } = target.dataset;
@@ -485,7 +412,7 @@ document.addEventListener("click", (event) => {
 // API pública del panel
 window.app = {
   loadCollection,
-  loadPage: (page) => loadCollection(currentCollection, page),
+  loadPage: (page) => navigation.loadPage(page),
   editArticle,
   deleteArticle,
   loadTrash,
@@ -498,10 +425,7 @@ window.app = {
 // Inicializar
 checkAuth().then(() => {
   const firstLink = sidebarLinks[0];
-  if (firstLink) {
-    const collection = firstLink.dataset.collection;
-    loadCollection(collection);
-  }
+  if (firstLink) loadCollection(firstLink.dataset.collection);
   mediaBrowser.load();
 });
 

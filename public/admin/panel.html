@@ -520,6 +520,88 @@
         padding: 0.5rem 0.8rem;
         font-size: 0.85rem;
       }
+    
+      /* Estados compartidos del panel */
+      .panel-state {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 180px;
+        padding: 2rem;
+        border: 1px solid #352d45;
+        border-radius: 1rem;
+        background: #1e1b24;
+        color: #b6adc9;
+        text-align: center;
+        font-weight: 600;
+      }
+      .panel-state-loading {
+        border-style: dashed;
+      }
+      .panel-state-error {
+        border-color: #f16c7966;
+        color: #f48a93;
+        background: #f16c7910;
+      }
+      #content-area[aria-busy="true"] {
+        opacity: 0.72;
+        pointer-events: none;
+      }
+      .error-msg[role="alert"],
+      .success-msg[role="status"] {
+        display: block;
+      }
+      @media (max-width: 768px) {
+        body {
+          min-height: 100vh;
+          height: auto;
+          overflow-x: hidden;
+          overflow-y: auto;
+        }
+        main {
+          min-width: 0;
+          padding: 1rem;
+        }
+        main > header {
+          align-items: flex-start;
+          flex-wrap: wrap;
+          gap: 1rem;
+        }
+        .search-box {
+          width: 100%;
+        }
+        .search-box input[type="search"] {
+          min-width: 0;
+          flex: 1;
+        }
+        #content-area table {
+          display: block;
+          max-width: 100%;
+          overflow-x: auto;
+          white-space: nowrap;
+        }
+        .modal {
+          width: 100%;
+          max-height: calc(100vh - 2rem);
+          padding: 1rem;
+        }
+        #modal {
+          grid-template-columns: minmax(0, 1fr) !important;
+        }
+        #media-modal {
+          grid-template-columns: minmax(0, 1fr) !important;
+        }
+        .preview-panel {
+          max-height: 35vh;
+        }
+        .row-2 {
+          grid-template-columns: minmax(0, 1fr);
+        }
+        .actions {
+          flex-wrap: wrap;
+        }
+      }
+
     </style>
   </head>
   <body>
