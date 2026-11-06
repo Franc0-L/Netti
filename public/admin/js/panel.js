@@ -1,5 +1,6 @@
 import { renderMarkdownPreview } from "./markdown-preview.js";
 import { adminApi } from "./api-client.js";
+import { renderCollectionList, renderTrashList, renderMediaList as renderMediaListHtml } from "./list-views.js";
 import { escapeHtml, escapeAttribute, safeMediaUrl } from "./html-safety.js";
 
 const collectionLabels = {
@@ -165,67 +166,13 @@ async function loadCollection(collection, page = 1) {
 }
 
 function renderList(entries, page, pageCount, total, isSearching = false) {
-  if (!entries || entries.length === 0) {
-    contentArea.innerHTML = isSearching
-      ? `<div class="empty">No encontramos publicaciones que coincidan con “${escapeHtml(panelSearch.value.trim())}”. Probá con otro título o nombre.</div>`
-      : `
-      <div class="empty">
-        Todavía no hay artículos en esta colección.<br>
-        Hacé clic en "Nuevo artículo" para crear uno.
-      </div>
-    `;
-    return;
-  }
-
-  const rows = entries
-    .map((entry) => {
-      const badgeClass = collectionBadges[entry.collection] || "";
-      const title = escapeHtml(entry.fields?.title || entry.slug);
-      const slug = entry.slug;
-      const slugText = escapeHtml(slug);
-      const slugAttr = escapeAttribute(slug);
-      const updated = escapeHtml(entry.fields?.updatedAt || entry.fields?.publishedAt || "");
-      return `
-      <tr>
-        <td><span class="badge ${badgeClass}">${escapeHtml(entry.collection)}</span></td>
-        <td>${title}</td>
-        <td><code style="color:#b6adc9;">${slugText}</code></td>
-        <td>${updated}</td>
-        <td>
-          <button class="btn-secondary" data-action="edit" data-slug="${slugAttr}" data-collection="${escapeAttribute(entry.collection)}" data-sha="${escapeAttribute(entry.sha || "")}">Editar</button>
-          <button class="btn-danger" data-action="delete" data-slug="${slugAttr}" data-collection="${escapeAttribute(entry.collection)}" data-sha="${escapeAttribute(entry.sha || "")}">Borrar</button>
-        </td>
-      </tr>
-    `;
-    })
-    .join("");
-
-  const pagination =
-    pageCount > 1
-      ? `
-      <div class="pagination">
-        ${page > 1 ? `<a data-page="${page - 1}">← Anterior</a>` : `<span class="disabled">← Anterior</span>`}
-        <span class="current">Página ${page} de ${pageCount}</span>
-        ${page < pageCount ? `<a data-page="${page + 1}">Siguiente →</a>` : `<span class="disabled">Siguiente →</span>`}
-      </div>
-    `
-      : "";
-
-  contentArea.innerHTML = `
-    <table>
-      <thead>
-        <tr>
-          <th>Colección</th>
-          <th>Título</th>
-          <th>Slug</th>
-          <th>Actualizado</th>
-          <th>Acciones</th>
-        </tr>
-      </thead>
-      <tbody>${rows}</tbody>
-    </table>
-    ${pagination}
-  `;
+  contentArea.innerHTML = renderCollectionList({
+    entries,
+    page,
+    pageCount,
+    query: panelSearch.value.trim(),
+    isSearching,
+  });
 }
 
 function resetMetadataFields() {
@@ -515,47 +462,7 @@ async function loadTrash() {
   try {
     const data = await adminApi.get("/content?collection=trash");
 
-    if (!data.entries || data.entries.length === 0) {
-      contentArea.innerHTML = `<div class="empty">La papelera está vacía.</div>`;
-      return;
-    }
-
-    const rows = data.entries
-      .map((entry) => {
-        const title = escapeHtml(entry.fields.title || entry.slug);
-        const slug = entry.slug;
-        const slugText = escapeHtml(slug);
-        const slugAttr = escapeAttribute(slug);
-        const deletedAt = escapeHtml(entry.fields.deletedAt || "");
-        const deletedCollection = entry.collection || "games";
-        return `
-        <tr>
-          <td><span class="badge badge-games">${escapeHtml(deletedCollection)}</span></td>
-          <td>${title}</td>
-          <td><code style="color: var(--muted);">${slugText}</code></td>
-          <td>${deletedAt}</td>
-          <td>
-            <button class="btn-secondary" data-action="recover" data-slug="${slugAttr}" data-collection="${escapeAttribute(deletedCollection)}">Recuperar</button>
-          </td>
-        </tr>
-      `;
-      })
-      .join("");
-
-    contentArea.innerHTML = `
-      <table>
-        <thead>
-          <tr>
-            <th>Colección</th>
-            <th>Título</th>
-            <th>Slug</th>
-            <th>Eliminado</th>
-            <th>Acción</th>
-          </tr>
-        </thead>
-        <tbody>${rows}</tbody>
-      </table>
-    `;
+    contentArea.innerHTML = renderTrashList(data.entries || []);
   } catch (err) {
     showError(err.message || "No se pudo cargar la papelera");
     contentArea.innerHTML = `<div class="empty">Error al cargar la papelera.</div>`;
@@ -591,23 +498,7 @@ async function loadMedia() {
 }
 
 function renderMediaList(items) {
-  if (!items || items.length === 0) {
-    mediaList.innerHTML = `<div class="empty">No hay imágenes subidas.</div>`;
-    return;
-  }
-
-  mediaList.innerHTML = items.map((item) => {
-    const url = safeMediaUrl(item.url);
-    const image = url
-      ? `<img src="${escapeAttribute(url)}" alt="${escapeAttribute(item.alt)}" />`
-      : `<div class="media-placeholder">Sin imagen</div>`;
-    return `
-      <div class="media-item" data-media-index="${mediaItems.indexOf(item)}">
-        ${image}
-        <div class="media-item-name">${escapeHtml(item.name)}</div>
-      </div>
-    `;
-  }).join("");
+  mediaList.innerHTML = renderMediaListHtml(items, mediaItems);
 }
 
 function selectMediaItem(element, url, alt) {
