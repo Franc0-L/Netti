@@ -13,7 +13,7 @@ test("escapa HTML arbitrario y evita ejecución de scripts", () => {
   const html = renderMarkdownPreview('<img src=x onerror="alert(1)"><script>alert(1)</script>');
   assert.match(html, /&lt;script&gt;/);
   assert.match(html, /&lt;img/);
-  assert.doesNotMatch(html, /<script|onerror=/i);
+  assert.doesNotMatch(html, /<script|<img[^>]*onerror=/i);
 });
 
 test("rechaza esquemas peligrosos en enlaces e imágenes", () => {
