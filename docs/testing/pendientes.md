@@ -13,6 +13,7 @@ Este documento distingue las comprobaciones automatizadas que ya existen de las 
 | `tests/build-smoke.test.ts` | Comprueba configuración SSR/Vercel, cabeceras y rutas 404 | Estática |
 | `tests/ssr-runtime.test.mjs` | Levanta Astro y verifica respuestas HTTP renderizadas de privacidad y términos, idioma, título, skip link y región principal | Integración local |
 | `tests/accessibility-runtime.test.mjs` | Ejecuta axe-core sobre privacidad, términos y login renderizados; comprueba que no haya tabindex positivo | Integración local |
+| `tests/ssr-built-runtime.test.mjs` | Importa el entrypoint real del adaptador Vercel y prueba detalle editorial, 404, índice de búsqueda y endpoint multimedia con GitHub simulado | Integración del build |
 | `tests/markdown-sanitize.test.ts` | Comprueba la configuración de sanitización y resolución de imágenes | Estática |
 | `tests/media-url.test.ts` | Comprueba validaciones de formato, traversal y caché del endpoint multimedia | Estática |
 | `tests/media-audit.test.ts` | Comprueba referencias de imágenes, papelera y detección de archivos huérfanos | Unitarias |
@@ -28,7 +29,7 @@ Este documento distingue las comprobaciones automatizadas que ya existen de las 
 | API Admin con mocks | Ejecutar handlers reales con solicitudes/respuestas simuladas y GitHub API mockeada; cubrir CRUD, conflictos SHA, papelera y restauración | Alta |
 | Admin E2E | Automatizar login, creación, edición, vista previa, subida, borrado y restauración desde un navegador real | Alta |
 | Accesibilidad axe ampliada | Extender la auditoría a las rutas públicas dinámicas y al panel autenticado; resolver hallazgos serios/críticos | Alta |
-| SSR/runtime ampliado | Probar rutas dinámicas con repositorio de contenido simulado y verificar códigos HTTP, errores y cabeceras | Media |
+| SSR/runtime ampliado | Extender los casos simulados a juegos, reseñas y guías, y verificar más combinaciones de error/caché | Media |
 | Multimedia HTTP | Probar respuestas reales, caché, tipos MIME, errores y rutas inválidas del endpoint | Media |
 | Recuperación multimedia | Diseñar un flujo explícito de limpieza con confirmación y protección de referencias compartidas; no borrar automáticamente | Media |
 
