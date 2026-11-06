@@ -4,6 +4,7 @@ import { renderCollectionList, renderTrashList, renderMediaList as renderMediaLi
 import { safeMediaUrl } from "./html-safety.js";
 import { validateImageFile, uploadImageFile } from "./media-upload.js";
 import { createEditorForm, slugifyTitle } from "./editor-form.js";
+import { createEditorState } from "./editor-state.js";
 
 const collectionLabels = {
   games: "Juegos",
@@ -77,6 +78,35 @@ const mediaBrowserLink = document.getElementById("media-browser-link");
 let currentImageFile = null;
 let currentImageUrl = null;
 let selectedMediaItem = null;
+let isSaving = false;
+
+const saveButton = editorForm.querySelector('button[type="submit"]');
+const editorState = createEditorState({
+  form: editorForm,
+  getExtraState: () => ({
+    isOpen: modalOverlay.style.display === "flex",
+    imageUrl: currentImageUrl,
+    imageFile: currentImageFile
+      ? {
+          name: currentImageFile.name,
+          size: currentImageFile.size,
+          type: currentImageFile.type,
+          lastModified: currentImageFile.lastModified,
+        }
+      : null,
+  }),
+  confirmDiscard: (message) => window.confirm(message),
+});
+
+window.addEventListener("beforeunload", editorState.handleBeforeUnload);
+
+function closeEditorModal({ force = false } = {}) {
+  if (isSaving && !force) return false;
+  if (!force && !editorState.confirmClose()) return false;
+  modalOverlay.style.display = "none";
+  editorState.markClean();
+  return true;
+}
 let mediaItems = [];
 
 async function checkAuth() {
@@ -191,6 +221,7 @@ async function createArticle() {
 
   modalTitle.textContent = `Nuevo ${collectionLabels[currentCollection]}`;
   modalOverlay.style.display = "flex";
+  editorState.markClean();
   editTitle.focus();
   previewBtn.disabled = true;
 }
@@ -230,6 +261,7 @@ async function editArticle(slug, collection, sha) {
 
     modalTitle.textContent = `Editar ${collectionLabels[collection]}`;
     modalOverlay.style.display = "flex";
+    editorState.markClean();
     editTitle.focus();
     previewBtn.disabled = false;
   } catch (err) {
@@ -251,58 +283,80 @@ async function deleteArticle(slug, collection, sha) {
 
 editorForm.addEventListener("submit", async (event) => {
   event.preventDefault();
+  if (isSaving) return;
 
-  const collection = editCollection.value;
-  const slug = editSlug.value.trim();
-  const articlePayload = editorFields.buildPayload({
-    collection,
-    slug,
-    title: editTitle.value,
-    description: editDescription.value,
-    body: editBody.value,
-    game: editGame.value,
-    score: editScore.value,
-    coverAlt: imageAlt.value,
+  isSaving = true;
+  const controls = Array.from(editorForm.elements);
+  const previousDisabled = controls.map((control) => control.disabled);
+  const previousSaveLabel = saveButton.textContent;
+  controls.forEach((control) => {
+    control.disabled = true;
   });
-  const fields = articlePayload.fields;
-
-  const isEdit = !!editId.value;
-  const method = isEdit ? "PUT" : "POST";
-  const body = {
-    collection,
-    slug,
-    fields,
-    body: editBody.value.trim(),
-  };
-  if (currentImageFile) {
-    const uploaded = await uploadImage(collection, slug);
-    if (!uploaded) return;
-    fields.coverImage = uploaded;
-  } else if (currentImageUrl) {
-    fields.coverImage = currentImageUrl;
-  }
-  if (isEdit) body.sha = editSha;
+  saveButton.textContent = "Guardando…";
+  editorForm.setAttribute("aria-busy", "true");
 
   try {
+    const collection = editCollection.value;
+    const slug = editSlug.value.trim();
+    const articlePayload = editorFields.buildPayload({
+      collection,
+      slug,
+      title: editTitle.value,
+      description: editDescription.value,
+      body: editBody.value,
+      game: editGame.value,
+      score: editScore.value,
+      coverAlt: imageAlt.value,
+    });
+    const fields = articlePayload.fields;
+
+    const isEdit = !!editId.value;
+    const method = isEdit ? "PUT" : "POST";
+    const body = {
+      collection,
+      slug,
+      fields,
+      body: editBody.value.trim(),
+    };
+
+    if (currentImageFile) {
+      const uploaded = await uploadImage(collection, slug);
+      if (!uploaded) return;
+      fields.coverImage = uploaded;
+    } else if (currentImageUrl) {
+      fields.coverImage = currentImageUrl;
+    }
+    if (isEdit) body.sha = editSha;
+
     await adminApi.request("/content", { method, body });
 
     showSuccess(isEdit ? "Artículo guardado" : "Artículo creado");
     modalOverlay.style.display = "none";
+    editorState.markClean();
     loadCollection(collection, currentPage);
   } catch (err) {
     showError(err.message || "No se pudo guardar el artículo");
+  } finally {
+    controls.forEach((control, index) => {
+      control.disabled = previousDisabled[index];
+    });
+    saveButton.textContent = previousSaveLabel;
+    editorForm.removeAttribute("aria-busy");
+    isSaving = false;
   }
 });
 
 newBtn.addEventListener("click", createArticle);
-closeModal.addEventListener("click", () => {
-  modalOverlay.style.display = "none";
-});
-cancelBtn.addEventListener("click", () => {
-  modalOverlay.style.display = "none";
-});
+closeModal.addEventListener("click", () => closeEditorModal());
+cancelBtn.addEventListener("click", () => closeEditorModal());
 modalOverlay.addEventListener("click", (event) => {
-  if (event.target === modalOverlay) modalOverlay.style.display = "none";
+  if (event.target === modalOverlay) closeEditorModal();
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && modalOverlay.style.display === "flex") {
+    closeEditorModal();
+  }
 });
 
 document
