@@ -47,8 +47,8 @@ describe("SSR runtime", () => {
     const port = await reservePort();
     baseUrl = `http://127.0.0.1:${port}`;
     serverProcess = spawn(
-      "npm",
-      ["run", "dev", "--", "--host", "127.0.0.1", "--port", String(port), "--no-open"],
+      process.execPath,
+      ["node_modules/astro/astro.js", "dev", "--host", "127.0.0.1", "--port", String(port), "--no-open"],
       {
         cwd: root,
         env: { ...process.env, HOST: "127.0.0.1", PORT: String(port) },
