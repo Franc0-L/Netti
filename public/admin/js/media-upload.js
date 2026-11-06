@@ -36,7 +36,7 @@ export async function encodeImageFile(file) {
 export async function uploadImageFile({ api, file, collection, slug, alt = "" }) {
   const validationError = validateImageFile(file);
   if (validationError) throw new Error(validationError);
-  if (!api || typeof api.post !== "function") {
+  if (typeof alt === "string" && alt.length > 240) {\n    throw new Error("El texto alternativo no puede superar los 240 caracteres.");\n  }\n  if (typeof file.name === "string" && file.name.length > 255) {\n    throw new Error("El nombre del archivo es demasiado largo.");\n  }\n  if (!api || typeof api.post !== "function") {
     throw new TypeError("Falta un cliente válido para subir la imagen.");
   }
 
