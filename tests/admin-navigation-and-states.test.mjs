@@ -4,7 +4,7 @@ import { JSDOM } from "jsdom";
 import { createPanelFeedback } from "../public/admin/js/panel-feedback.js";
 import { createContentNavigation, createTrashController } from "../public/admin/js/content-navigation.js";
 
-function createDom() {
+function createDom({ api: apiOverride } = {}) {
   const dom = new JSDOM(`
     <div id="error" style="display:none"></div>
     <div id="success" style="display:none"></div>
@@ -25,7 +25,7 @@ function createDom() {
     hideDelay: 1,
   });
   const calls = [];
-  const api = {
+  const api = apiOverride || {
     async get(path) { calls.push(["get", path]); return { entries: [], page: 1, pageCount: 1 }; },
     async post(path, body) { calls.push(["post", path, body]); return { ok: true }; },
   };
@@ -62,30 +62,35 @@ test("la navegación carga una colección, conserva búsqueda y actualiza el est
 
 test("muestra un estado de carga accesible mientras espera la respuesta", async () => {
   let resolveRequest;
-  const { document, navigation } = createDom();
+  const { document, navigation } = createDom({
+    api: { get: () => new Promise((resolve) => { resolveRequest = resolve; }) },
+  });
   const pending = navigation.loadCollection("reviews");
-  // La implementación inicia la petición antes de ceder el control al siguiente turno.
-  await Promise.resolve();
   assert.equal(document.getElementById("content").dataset.state, "loading");
   assert.equal(document.getElementById("content").getAttribute("aria-busy"), "true");
-  resolveRequest = true;
-  assert.equal(resolveRequest, true);
+  resolveRequest({ entries: [], page: 1, pageCount: 1 });
   await pending;
+  assert.equal(document.getElementById("content").dataset.state, "ready");
 });
 
 test("una navegación nueva invalida respuestas anteriores", async () => {
   let resolveOld;
-  const { document, navigation } = createDom();
+  const { document, navigation } = createDom({
+    api: {
+      get(path) {
+        if (path.includes("collection=trash")) {
+          return Promise.resolve({ entries: [] });
+        }
+        return new Promise((resolve) => { resolveOld = resolve; });
+      },
+    },
+  });
   const oldRequest = navigation.loadCollection("games");
-  const original = navigation;
-  // La segunda vista completa primero; la primera no debe reemplazarla al finalizar.
-  const pending = original.loadTrash();
-  await pending;
-  resolveOld = true;
+  await navigation.loadTrash();
+  resolveOld({ entries: [{ slug: "viejo", collection: "games", fields: { title: "Viejo" } }], page: 1, pageCount: 1 });
   await oldRequest;
   assert.match(document.getElementById("content").textContent, /Papelera vacía/);
   assert.equal(document.getElementById("title").textContent, "Papelera");
-  assert.equal(resolveOld, true);
 });
 
 test("los errores de carga muestran un estado de error y liberan aria-busy", async () => {
