@@ -1,7 +1,8 @@
 import { renderMarkdownPreview } from "./markdown-preview.js";
 import { adminApi } from "./api-client.js";
 import { renderCollectionList, renderTrashList, renderMediaList as renderMediaListHtml } from "./list-views.js";
-import { escapeHtml, escapeAttribute, safeMediaUrl } from "./html-safety.js";
+import { safeMediaUrl } from "./html-safety.js";
+import { createEditorForm, slugifyTitle } from "./editor-form.js";
 
 const collectionLabels = {
   games: "Juegos",
@@ -10,12 +11,7 @@ const collectionLabels = {
   guides: "Guías",
 };
 
-const collectionBadges = {
-  games: "badge-games",
-  reviews: "badge-reviews",
-  news: "badge-news",
-  guides: "badge-guides",
-};
+
 
 let currentCollection = null;
 let currentPage = 1;
@@ -55,24 +51,10 @@ const editBody = document.getElementById("edit-body");
 const editPreview = document.getElementById("edit-preview");
 const editGame = document.getElementById("edit-game");
 const editScore = document.getElementById("edit-score");
-const editTags = document.getElementById("edit-tags");
+const editorFields = createEditorForm();
 const gameRefGroup = document.getElementById("game-ref-group");
 const scoreGroup = document.getElementById("score-group");
-const metadataFields = {
-  releaseYear: document.getElementById("field-release-year"),
-  platforms: document.getElementById("field-platforms"),
-  genres: document.getElementById("field-genres"),
-  developer: document.getElementById("field-developer"),
-  publisher: document.getElementById("field-publisher"),
-  publishedAt: document.getElementById("field-published-at"),
-  author: document.getElementById("field-author"),
-  category: document.getElementById("field-category"),
-  sourceName: document.getElementById("field-source-name"),
-  sourceUrl: document.getElementById("field-source-url"),
-  scoreReason: document.getElementById("field-score-reason"),
-  verdict: document.getElementById("field-verdict"),
-  featured: document.getElementById("field-featured"),
-};
+
 
 // Subida de imagen
 const imageInput = document.getElementById("image-input");
@@ -175,62 +157,6 @@ function renderList(entries, page, pageCount, total, isSearching = false) {
   });
 }
 
-function resetMetadataFields() {
-  Object.entries(metadataFields).forEach(([key, input]) => {
-    if (!input) return;
-    if (key === "featured") input.checked = false;
-    else input.value = "";
-  });
-  Array.from(editTags.options).forEach((option) => { option.selected = false; });
-}
-
-function populateMetadataFields(fields = {}) {
-  Object.entries(metadataFields).forEach(([key, input]) => {
-    if (!input) return;
-    if (key === "featured") input.checked = Boolean(fields[key]);
-    else if (key === "platforms" || key === "genres") input.value = Array.isArray(fields[key]) ? fields[key].join(", ") : "";
-    else input.value = fields[key] ? String(fields[key]).slice(0, key === "publishedAt" ? 10 : undefined) : "";
-  });
-  const selected = new Set(Array.isArray(fields.tags) ? fields.tags : []);
-  Array.from(editTags.options).forEach((option) => { option.selected = selected.has(option.value); });
-}
-
-function setMetadataVisibility(collection) {
-  document.querySelectorAll("[data-collections]").forEach((group) => {
-    group.hidden = !group.dataset.collections.split(",").includes(collection);
-  });
-  if (metadataFields.author && !metadataFields.author.value) {
-    metadataFields.author.value = collection === "news" ? "Netti" : "Redacción";
-  }
-  if (metadataFields.category && !metadataFields.category.value) metadataFields.category.value = "Noticias";
-}
-
-function collectMetadataFields(collection) {
-  const value = (key) => metadataFields[key]?.value?.trim() || "";
-  const fields = {};
-  if (collection === "games") {
-    if (value("releaseYear")) fields.releaseYear = Number(value("releaseYear"));
-    fields.platforms = value("platforms").split(",").map((v) => v.trim()).filter(Boolean);
-    fields.genres = value("genres").split(",").map((v) => v.trim()).filter(Boolean);
-    fields.developer = value("developer");
-    if (value("publisher")) fields.publisher = value("publisher");
-  }
-  if (["reviews", "news", "guides"].includes(collection)) {
-    fields.publishedAt = value("publishedAt");
-    if (value("author")) fields.author = value("author");
-  }
-  if (collection === "news") {
-    fields.category = value("category") || "Noticias";
-    if (value("sourceName")) fields.sourceName = value("sourceName");
-    if (value("sourceUrl")) fields.sourceUrl = value("sourceUrl");
-  }
-  if (collection === "reviews") {
-    fields.scoreReason = value("scoreReason");
-    fields.verdict = value("verdict");
-  }
-  if (metadataFields.featured?.checked) fields.featured = true;
-  return fields;
-}
 
 async function createArticle() {
   editId.value = "";
@@ -243,8 +169,8 @@ async function createArticle() {
   editPreview.innerHTML = "";
   editGame.value = "";
   editScore.value = "";
-  resetMetadataFields();
-  setMetadataVisibility(currentCollection);
+  editorFields.resetMetadataFields();
+  editorFields.setMetadataVisibility(currentCollection);
 
   currentImageFile = null;
   currentImageUrl = null;
@@ -283,8 +209,8 @@ async function editArticle(slug, collection, sha) {
     editPreview.innerHTML = renderMarkdownPreview(entry.body || "");
     editGame.value = entry.fields.game || "";
     editScore.value = entry.fields.score || "";
-    populateMetadataFields(entry.fields);
-    setMetadataVisibility(collection);
+    editorFields.populateMetadataFields(entry.fields);
+    editorFields.setMetadataVisibility(collection);
 
     currentImageFile = null;
     currentImageUrl = null;
@@ -327,20 +253,17 @@ editorForm.addEventListener("submit", async (event) => {
 
   const collection = editCollection.value;
   const slug = editSlug.value.trim();
-  const fields = {
-    title: editTitle.value.trim(),
-    description: editDescription.value.trim(),
-    tags: Array.from(editTags.selectedOptions).map((option) => option.value),
-    coverAlt: imageAlt.value.trim(),
-    ...collectMetadataFields(collection),
-  };
-
-  if (collection === "reviews" || collection === "guides") {
-    if (editGame.value.trim()) fields.game = editGame.value.trim();
-  }
-  if (collection === "reviews") {
-    if (editScore.value) fields.score = parseInt(editScore.value, 10);
-  }
+  const articlePayload = editorFields.buildPayload({
+    collection,
+    slug,
+    title: editTitle.value,
+    description: editDescription.value,
+    body: editBody.value,
+    game: editGame.value,
+    score: editScore.value,
+    coverAlt: imageAlt.value,
+  });
+  const fields = articlePayload.fields;
 
   const isEdit = !!editId.value;
   const method = isEdit ? "PUT" : "POST";
@@ -443,15 +366,7 @@ mediaSearch.addEventListener("input", () => {
 
 // Slug automático desde título
 editTitle.addEventListener("input", () => {
-  if (!editSlug.value) {
-    editSlug.value = editTitle.value
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/-+/g, "-")
-      .replace(/^-|-$/g, "");
-  }
+  if (!editSlug.value) editSlug.value = slugifyTitle(editTitle.value);
 });
 
 // Preview en tiempo real
