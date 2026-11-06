@@ -8,7 +8,7 @@ import {
 import { extname, join, relative, resolve, sep } from "node:path";
 
 const IMAGE_EXTENSION = /\.(?:avif|gif|jpe?g|png|webp)$/i;
-const MEDIA_REFERENCE = /\/?media\/([A-Za-z0-9._/-]+\.(?:avif|gif|jpe?g|png|webp))/gi;
+const MEDIA_REFERENCE = /(?:^|[\s"'(=])\/?media\/([A-Za-z0-9._/-]+\.(?:avif|gif|jpe?g|png|webp))/gi;
 
 export interface MediaAuditResult {
   totalMedia: number;

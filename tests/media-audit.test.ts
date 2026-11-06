@@ -78,6 +78,22 @@ describe("auditoría de medios", () => {
     expect(result.referencedMedia).toBe(0);
   });
 
+  it("no confunde rutas de imágenes remotas con archivos locales", () => {
+    const root = createRepository();
+    write(
+      root,
+      "content/news/remote.md",
+      "[Imagen remota](https://cdn.example/media/news/external.webp)",
+    );
+    write(root, "media/news/external.webp", "image");
+
+    const result = auditMedia(root);
+
+    expect(result.orphaned.map((entry) => entry.path)).toEqual([
+      "media/news/external.webp",
+    ]);
+  });
+
   it("falla con un mensaje claro si falta content/", () => {
     const root = createRepository();
     expect(() => auditMedia(root)).toThrow(/No se encontró la carpeta content/);
