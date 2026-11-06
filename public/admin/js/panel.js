@@ -1,7 +1,7 @@
 import { renderMarkdownPreview } from "./markdown-preview.js";
 import { adminApi } from "./api-client.js";
 import { renderCollectionList, renderTrashList, renderMediaList as renderMediaListHtml } from "./list-views.js";
-import { safeMediaUrl } from "./html-safety.js";
+import { createMediaBrowser } from "./media-browser.js";
 import { validateImageFile, uploadImageFile } from "./media-upload.js";
 import { createEditorForm, slugifyTitle } from "./editor-form.js";
 import { createEditorState } from "./editor-state.js";
@@ -68,16 +68,13 @@ const insertImageBtn = document.getElementById("insert-image-btn");
 
 // Navegador de medios
 const mediaModalOverlay = document.getElementById("media-modal-overlay");
-const mediaModal = document.getElementById("media-modal");
 const closeMediaModal = document.getElementById("close-media-modal");
 const closeMediaModalBtn = document.getElementById("close-media-modal-btn");
 const mediaSearch = document.getElementById("media-search");
-const mediaList = document.getElementById("media-list");
 const mediaBrowserLink = document.getElementById("media-browser-link");
 
 let currentImageFile = null;
 let currentImageUrl = null;
-let selectedMediaItem = null;
 let isSaving = false;
 
 const saveButton = editorForm.querySelector('button[type="submit"]');
@@ -107,7 +104,6 @@ function closeEditorModal({ force = false } = {}) {
   editorState.markClean();
   return true;
 }
-let mediaItems = [];
 
 async function checkAuth() {
   try {
@@ -138,6 +134,18 @@ function showSuccess(msg) {
     successMsg.style.display = "none";
   }, 5000);
 }
+
+const mediaBrowser = createMediaBrowser({
+  api: adminApi,
+  mediaModalOverlay,
+  mediaSearch,
+  mediaList: document.getElementById("media-list"),
+  insertButton: insertImageBtn,
+  renderList: renderMediaListHtml,
+  onInsert: insertTextAtCursor,
+  onError: (error) => showError(error.message || "No se pudieron cargar los medios"),
+  onSuccess: showSuccess,
+});
 
 function setActiveLink(collection) {
   sidebarLinks.forEach((link) => {
@@ -397,26 +405,13 @@ mediaBrowserLink.addEventListener("click", (event) => {
   setActiveLink(null);
   pageTitle.textContent = "Navegador de medios";
   pageSubtitle.textContent = "Selecciona una imagen para insertar en el artículo.";
-  mediaModalOverlay.style.display = "flex";
-  loadMedia();
+  mediaBrowser.open();
 });
 
-closeMediaModal.addEventListener("click", () => {
-  mediaModalOverlay.style.display = "none";
-});
-closeMediaModalBtn.addEventListener("click", () => {
-  mediaModalOverlay.style.display = "none";
-});
+closeMediaModal.addEventListener("click", mediaBrowser.close);
+closeMediaModalBtn.addEventListener("click", mediaBrowser.close);
 mediaModalOverlay.addEventListener("click", (event) => {
-  if (event.target === mediaModalOverlay) mediaModalOverlay.style.display = "none";
-});
-
-mediaSearch.addEventListener("input", () => {
-  const filter = mediaSearch.value.toLowerCase();
-  const filtered = mediaItems.filter((item) =>
-    item.name.toLowerCase().includes(filter)
-  );
-  renderMediaList(filtered);
+  if (event.target === mediaModalOverlay) mediaBrowser.close();
 });
 
 // Slug automático desde título
@@ -450,55 +445,6 @@ async function recoverArticle(slug, collection, sha) {
   }
 }
 
-// --- Navegador de medios ---
-async function loadMedia() {
-  try {
-    const data = await adminApi.get("/content?collection=media&page=1");
-    mediaItems = (data.entries || []).map((entry) => ({
-      name: entry.fields.title || entry.slug,
-      url: entry.fields.coverImage || "",
-      alt: entry.fields.coverAlt || "",
-      slug: entry.slug,
-    }));
-    renderMediaList(mediaItems);
-  } catch {
-    mediaItems = [];
-    renderMediaList([]);
-  }
-}
-
-function renderMediaList(items) {
-  mediaList.innerHTML = renderMediaListHtml(items, mediaItems);
-}
-
-function selectMediaItem(element, url, alt) {
-  const safeUrl = safeMediaUrl(url);
-  if (!safeUrl) {
-    showError("La imagen seleccionada no tiene una ruta válida.");
-    return;
-  }
-  document.querySelectorAll(".media-item").forEach((el) =>
-    el.classList.remove("selected")
-  );
-  element.classList.add("selected");
-  selectedMediaItem = {
-    url: safeUrl,
-    alt: String(alt ?? "").replace(/[\\r\\n]/g, " ").slice(0, 240),
-  };
-  insertImageBtn.disabled = false;
-  insertImageBtn.textContent = `Insertar "${selectedMediaItem.alt}" en el cuerpo`;
-}
-
-function insertSelectedMediaIntoBody() {
-  if (!selectedMediaItem) return;
-  const { url, alt } = selectedMediaItem;
-  const markdownImage = `![${alt}](${url})\n\n`;
-  insertTextAtCursor(markdownImage);
-  updatePreview();
-  mediaModalOverlay.style.display = "none";
-  showSuccess("Imagen insertada en el cuerpo");
-}
-
 function insertMarkdown(openTag, closeTag) {
   const text = `${openTag}${closeTag}`;
   insertTextAtCursor(text);
@@ -520,7 +466,7 @@ function insertTextAtCursor(text) {
 }
 
 document.addEventListener("click", (event) => {
-  const target = event.target.closest("[data-action], [data-page], [data-media-index], [data-markdown-open]");
+  const target = event.target.closest("[data-action], [data-page], [data-markdown-open]");
   if (!target) return;
   if (target.dataset.markdownOpen !== undefined) {
     insertMarkdown(target.dataset.markdownOpen, target.dataset.markdownClose || "");
@@ -528,11 +474,6 @@ document.addEventListener("click", (event) => {
   }
   if (target.dataset.page) {
     loadCollection(currentCollection, Number(target.dataset.page));
-    return;
-  }
-  if (target.dataset.mediaIndex !== undefined) {
-    const item = mediaItems[Number(target.dataset.mediaIndex)];
-    if (item) selectMediaItem(target, item.url, item.alt);
     return;
   }
   const { action, slug, collection, sha } = target.dataset;
@@ -549,8 +490,8 @@ window.app = {
   deleteArticle,
   loadTrash,
   recoverArticle,
-  selectMediaItem,
-  insertSelectedMediaIntoBody,
+  selectMediaItem: (element, url, alt) => mediaBrowser.selectItem(element, { url, alt }),
+  insertSelectedMediaIntoBody: mediaBrowser.insertSelected,
   insertMarkdown,
 };
 
@@ -561,7 +502,7 @@ checkAuth().then(() => {
     const collection = firstLink.dataset.collection;
     loadCollection(collection);
   }
-  loadMedia();
+  mediaBrowser.load();
 });
 
 // --- Manejo de imagen ---
@@ -603,10 +544,6 @@ removeImageBtn.addEventListener("click", () => {
   imageAlt.value = "";
 });
 
-insertImageBtn.addEventListener("click", () => {
-  insertSelectedMediaIntoBody();
-});
-
 previewBtn.addEventListener("click", () => {
   const collection = editCollection.value;
   const slug = editSlug.value.trim();
@@ -637,13 +574,12 @@ async function uploadImage(collection, slug) {
     imageInput.value = "";
     imagePreviewImg.src = data.url;
     imagePreview.style.display = "block";
-    mediaItems.unshift({
+    mediaBrowser.addItem({
       name: file.name,
       url: data.url,
       alt: data.alt || imageAlt.value,
       slug,
     });
-    renderMediaList(mediaItems);
     showSuccess("Imagen subida correctamente");
     return data.url;
   } catch (err) {
