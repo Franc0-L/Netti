@@ -23,6 +23,7 @@ Este documento distingue las comprobaciones automatizadas que ya existen de las 
 | Prueba | Qué falta | Prioridad |
 | --- | --- | --- |
 | `tests/admin-content-handler.test.ts` | Ejecuta el handler real con GitHub y servicios mockeados; cubre sesión, origen, token, listado, creación, conflicto SHA, borrado y restauración | Unitarias de integración |
+| API Admin con mocks | Ejecutar handlers reales con solicitudes/respuestas simuladas y GitHub API mockeada; cubrir CRUD, conflictos SHA, papelera y restauración | Alta |
 | Admin E2E | Automatizar login, creación, edición, vista previa, subida, borrado y restauración desde un navegador real | Alta |
 | Accesibilidad axe | Ejecutar axe-core sobre HTML renderizado, no solo revisar archivos fuente | Alta |
 | SSR/runtime | Probar páginas y respuestas HTTP contra un servidor de preview | Media |
