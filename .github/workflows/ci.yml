@@ -29,5 +29,8 @@ jobs:
       - name: Ejecutar tests (vitest)
         run: npm run test
 
+      - name: Pruebas de vista previa del administrador
+        run: npm run test:admin-preview
+
       - name: Build de producción
         run: npm run build
