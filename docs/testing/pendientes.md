@@ -13,7 +13,7 @@ Este documento distingue las comprobaciones automatizadas que ya existen de las 
 | `tests/content-validation-edge-cases.test.ts` | Comprueba fechas reales, años bisiestos y fechas imposibles | Unitarias |
 | `tests/build-smoke.test.ts` | Comprueba configuración SSR/Vercel, cabeceras y rutas 404 | Estática |
 | `tests/ssr-runtime.test.mjs` | Levanta Astro y verifica respuestas HTTP renderizadas de privacidad y términos, idioma, título, skip link y región principal | Integración local |
-| `tests/accessibility-runtime.test.mjs` | Ejecuta axe-core sobre privacidad, términos y login renderizados; comprueba que no haya tabindex positivo | Integración local |
+| `tests/accessibility-runtime.test.mjs` | Ejecuta axe-core sobre privacidad, términos, login y documento del panel editorial renderizados; comprueba que no haya tabindex positivo | Integración local |
 | `tests/ssr-built-runtime.test.mjs` | Importa el entrypoint real del adaptador Vercel y prueba detalle editorial, 404, índice de búsqueda y endpoint multimedia con GitHub simulado | Integración del build |
 | `tests/markdown-sanitize.test.ts` | Comprueba la configuración de sanitización y resolución de imágenes | Estática |
 | `tests/media-url.test.ts` | Comprueba validaciones de formato, traversal y caché del endpoint multimedia | Estática |
@@ -29,7 +29,7 @@ Este documento distingue las comprobaciones automatizadas que ya existen de las 
 | `tests/admin-content-handler.test.ts` | Prueba el handler de contenido con dependencias internas mockeadas: sesión, origen, validación, conflicto SHA, borrado y restauración | Unitarias con mocks |
 | API Admin con mocks | Completar casos de error y conflictos de escritura en los handlers reales | Media |
 | Admin E2E | Automatizar login, creación, edición, vista previa, subida, borrado y restauración desde un navegador real | Alta |
-| Accesibilidad axe ampliada | Extender la auditoría a las rutas públicas dinámicas y al panel autenticado; resolver hallazgos serios/críticos | Alta |
+| Accesibilidad axe ampliada | Extender la auditoría a rutas públicas dinámicas y flujos interactivos autenticados; resolver hallazgos serios/críticos | Alta |
 | SSR/runtime ampliado | Extender los casos simulados a juegos, reseñas y guías, y verificar más combinaciones de error/caché | Media |
 | Multimedia HTTP | Probar respuestas reales, caché, tipos MIME, errores y rutas inválidas del endpoint | Media |
 | Recuperación multimedia | Diseñar un flujo explícito de limpieza con confirmación y protección de referencias compartidas; no borrar automáticamente | Media |
