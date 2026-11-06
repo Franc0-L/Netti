@@ -80,7 +80,7 @@ describe("Accesibilidad en HTML renderizado", () => {
   });
 
   it("no presenta violaciones axe críticas o serias en páginas públicas y login", async () => {
-    const routes = ["/privacidad/", "/terminos/", "/admin/"];
+    const routes = ["/privacidad/", "/terminos/", "/admin/index.html"];
     const dom = new JSDOM("", {
       url: baseUrl,
       runScripts: "outside-only",
@@ -128,7 +128,7 @@ describe("Accesibilidad en HTML renderizado", () => {
   });
 
   it("mantiene el orden natural de tabulación en páginas públicas y login", async () => {
-    const routes = ["/privacidad/", "/terminos/", "/admin/"];
+    const routes = ["/privacidad/", "/terminos/", "/admin/index.html"];
     const dom = new JSDOM("", { url: baseUrl });
 
     try {
