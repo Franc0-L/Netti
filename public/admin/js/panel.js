@@ -1,4 +1,5 @@
 import { renderMarkdownPreview } from "./markdown-preview.js";
+import { escapeHtml, escapeAttribute, safeMediaUrl } from "./html-safety.js";
 
 const API_BASE = "/api/admin";
 
@@ -132,12 +133,6 @@ function setActiveLink(collection) {
   });
 }
 
-function escapeHtml(str) {
-  const div = document.createElement("div");
-  div.textContent = str;
-  return div.innerHTML;
-}
-
 function updatePreview() {
   const markdown = editBody.value;
   editPreview.innerHTML = renderMarkdownPreview(markdown);
@@ -192,17 +187,19 @@ function renderList(entries, page, pageCount, total, isSearching = false) {
     .map((entry) => {
       const badgeClass = collectionBadges[entry.collection] || "";
       const title = escapeHtml(entry.fields?.title || entry.slug);
-      const slug = escapeHtml(entry.slug);
-      const updated = entry.fields?.updatedAt || entry.fields?.publishedAt || "";
+      const slug = entry.slug;
+      const slugText = escapeHtml(slug);
+      const slugAttr = escapeAttribute(slug);
+      const updated = escapeHtml(entry.fields?.updatedAt || entry.fields?.publishedAt || "");
       return `
       <tr>
-        <td><span class="badge ${badgeClass}">${entry.collection}</span></td>
+        <td><span class="badge ${badgeClass}">${escapeHtml(entry.collection)}</span></td>
         <td>${title}</td>
-        <td><code style="color:#b6adc9;">${slug}</code></td>
+        <td><code style="color:#b6adc9;">${slugText}</code></td>
         <td>${updated}</td>
         <td>
-          <button class="btn-secondary" data-action="edit" data-slug="${slug}" data-collection="${entry.collection}" data-sha="${entry.sha || ""}">Editar</button>
-          <button class="btn-danger" data-action="delete" data-slug="${slug}" data-collection="${entry.collection}" data-sha="${entry.sha || ""}">Borrar</button>
+          <button class="btn-secondary" data-action="edit" data-slug="${slugAttr}" data-collection="${escapeAttribute(entry.collection)}" data-sha="${escapeAttribute(entry.sha || "")}">Editar</button>
+          <button class="btn-danger" data-action="delete" data-slug="${slugAttr}" data-collection="${escapeAttribute(entry.collection)}" data-sha="${escapeAttribute(entry.sha || "")}">Borrar</button>
         </td>
       </tr>
     `;
@@ -559,17 +556,19 @@ async function loadTrash() {
     const rows = data.entries
       .map((entry) => {
         const title = escapeHtml(entry.fields.title || entry.slug);
-        const slug = escapeHtml(entry.slug);
-        const deletedAt = entry.fields.deletedAt || "";
+        const slug = entry.slug;
+        const slugText = escapeHtml(slug);
+        const slugAttr = escapeAttribute(slug);
+        const deletedAt = escapeHtml(entry.fields.deletedAt || "");
         const deletedCollection = entry.collection || "games";
         return `
         <tr>
-          <td><span class="badge badge-games">${deletedCollection}</span></td>
+          <td><span class="badge badge-games">${escapeHtml(deletedCollection)}</span></td>
           <td>${title}</td>
-          <td><code style="color: var(--muted);">${slug}</code></td>
+          <td><code style="color: var(--muted);">${slugText}</code></td>
           <td>${deletedAt}</td>
           <td>
-            <button class="btn-secondary" data-action="recover" data-slug="${slug}" data-collection="${deletedCollection}">Recuperar</button>
+            <button class="btn-secondary" data-action="recover" data-slug="${slugAttr}" data-collection="${escapeAttribute(deletedCollection)}">Recuperar</button>
           </td>
         </tr>
       `;
@@ -645,27 +644,36 @@ function renderMediaList(items) {
     return;
   }
 
-  mediaList.innerHTML = items
-    .map(
-      (item) => `
+  mediaList.innerHTML = items.map((item) => {
+    const url = safeMediaUrl(item.url);
+    const image = url
+      ? `<img src="${escapeAttribute(url)}" alt="${escapeAttribute(item.alt)}" />`
+      : `<div class="media-placeholder">Sin imagen</div>`;
+    return `
       <div class="media-item" data-media-index="${mediaItems.indexOf(item)}">
-        ${item.url ? `<img src="${item.url}" alt="${item.alt}" />` : `<div style="width:100%;height:100px;background:var(--field);border-radius:0.4rem;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:0.75rem">Sin imagen</div>`}
+        ${image}
         <div class="media-item-name">${escapeHtml(item.name)}</div>
       </div>
-    `
-    )
-    .join("");
+    `;
+  }).join("");
 }
 
 function selectMediaItem(element, url, alt) {
-  // Deselect all
+  const safeUrl = safeMediaUrl(url);
+  if (!safeUrl) {
+    showError("La imagen seleccionada no tiene una ruta válida.");
+    return;
+  }
   document.querySelectorAll(".media-item").forEach((el) =>
     el.classList.remove("selected")
   );
   element.classList.add("selected");
-  selectedMediaItem = { url, alt };
+  selectedMediaItem = {
+    url: safeUrl,
+    alt: String(alt ?? "").replace(/[\\r\\n]/g, " ").slice(0, 240),
+  };
   insertImageBtn.disabled = false;
-  insertImageBtn.textContent = `Insertar "${alt}" en el cuerpo`;
+  insertImageBtn.textContent = `Insertar "${selectedMediaItem.alt}" en el cuerpo`;
 }
 
 function insertSelectedMediaIntoBody() {
