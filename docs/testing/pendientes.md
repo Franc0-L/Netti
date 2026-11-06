@@ -11,6 +11,7 @@ Este documento distingue las comprobaciones automatizadas que ya existen de las 
 | `tests/admin-content-validation.test.ts` | Comprueba reglas básicas por colección | Unitarias |
 | `tests/content-validation-edge-cases.test.ts` | Comprueba fechas reales, años bisiestos y fechas imposibles | Unitarias |
 | `tests/build-smoke.test.ts` | Comprueba configuración SSR/Vercel, cabeceras y rutas 404 | Estática |
+| `tests/ssr-runtime.test.mjs` | Levanta Astro y verifica respuestas HTTP renderizadas de privacidad y términos, idioma, título, skip link y región principal | Integración local |
 | `tests/markdown-sanitize.test.ts` | Comprueba la configuración de sanitización y resolución de imágenes | Estática |
 | `tests/media-url.test.ts` | Comprueba validaciones de formato, traversal y caché del endpoint multimedia | Estática |
 | `tests/media-audit.test.ts` | Comprueba referencias de imágenes, papelera y detección de archivos huérfanos | Unitarias |
@@ -26,7 +27,7 @@ Este documento distingue las comprobaciones automatizadas que ya existen de las 
 | API Admin con mocks | Ejecutar handlers reales con solicitudes/respuestas simuladas y GitHub API mockeada; cubrir CRUD, conflictos SHA, papelera y restauración | Alta |
 | Admin E2E | Automatizar login, creación, edición, vista previa, subida, borrado y restauración desde un navegador real | Alta |
 | Accesibilidad axe | Ejecutar axe-core sobre HTML renderizado, no solo revisar archivos fuente | Alta |
-| SSR/runtime | Probar páginas y respuestas HTTP contra un servidor de preview | Media |
+| SSR/runtime ampliado | Probar rutas dinámicas con repositorio de contenido simulado y verificar códigos HTTP, errores y cabeceras | Media |
 | Multimedia HTTP | Probar respuestas reales, caché, tipos MIME, errores y rutas inválidas del endpoint | Media |
 | Recuperación multimedia | Diseñar un flujo explícito de limpieza con confirmación y protección de referencias compartidas; no borrar automáticamente | Media |
 
