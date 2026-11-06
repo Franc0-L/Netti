@@ -23,6 +23,8 @@ export function createPanelFeedback({
     if (messageTimer !== null) clearTimeout(messageTimer);
     errorElement.style.display = element === errorElement ? "block" : "none";
     successElement.style.display = element === successElement ? "block" : "none";
+    element.setAttribute("role", element === errorElement ? "alert" : "status");
+    element.setAttribute("aria-live", element === errorElement ? "assertive" : "polite");
     element.textContent = String(message || "");
     messageTimer = setTimeout(clearMessages, hideDelay);
   }
