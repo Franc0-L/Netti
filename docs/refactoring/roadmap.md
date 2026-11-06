@@ -19,7 +19,7 @@
 
 ### 2. Administrador
 - [x] Extraer un cliente HTTP compartido y centralizar respuestas y errores de la API del panel.
-- [ ] Separar listado/navegación, formulario/editor, medios y papelera.
+- [ ] Separar listado/navegación y controladores de la papelera.\n- [x] Extraer la lógica del formulario editorial (metadatos, etiquetas, nombre del enlace y armado del contenido) a un módulo probado.\n- [ ] Separar el flujo de medios y la subida de imágenes.
 - [x] Extraer el renderizado de listados, papelera y navegador de medios a vistas independientes con pruebas.
 - [x] Corregir búsqueda para que abarque toda la colección, no solo la página cargada.
 - [x] Cachear el índice de búsqueda y limitar la concurrencia de lecturas.
