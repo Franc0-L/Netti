@@ -150,8 +150,11 @@ function updatePreview() {
 async function createArticle() {
   editId.value = "";
   editSha = "";
-  const currentCollection = navigation.getState().collection;
-  if (!currentCollection) return;
+  const { collection: currentCollection, view } = navigation.getState();
+  if (view !== "collection" || !currentCollection) {
+    showError("Primero elegí una colección para crear una publicación.");
+    return;
+  }
   editCollection.value = currentCollection;
   editTitle.value = "";
   editSlug.value = "";
