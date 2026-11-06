@@ -1,4 +1,5 @@
 import {
+  editorialSchemas,
   editorialTagValues,
   imageAltRequired,
   requiredFields,
@@ -23,7 +24,7 @@ function safeImagePath(value: unknown): boolean {
     !value.includes("\\") &&
     !value.toLowerCase().includes("%2e") &&
     !value.split("/").includes("..") &&
-    /\.(?:svg|webp|avif|png|jpe?g|gif)$/i.test(value)
+    /\.(?:webp|avif|png|jpe?g|gif)$/i.test(value)
   );
 }
 
@@ -122,6 +123,15 @@ function validateReviewsFields(
     ) {
       return "Las subpuntuaciones deben ser enteros entre 1 y 10 para historia, jugabilidad o apartado visual.";
     }
+  }
+  return undefined;
+}
+
+function validateBooleanFields(
+  fields: Record<string, unknown>,
+): string | undefined {
+  if (fields.featured !== undefined && typeof fields.featured !== "boolean") {
+    return '"featured" debe ser verdadero o falso.';
   }
   return undefined;
 }
@@ -350,6 +360,7 @@ export function validate(
     validateGamesFields.bind(null, collection),
     (fields) =>
       collection === "reviews" ? validateReviewsFields(fields) : undefined,
+    validateBooleanFields,
     validateTags,
     validateProsCons,
     validateGameRef,
@@ -369,5 +380,22 @@ export function validate(
   if (inlineImageError) return inlineImageError;
   const inlineMediaError = validateInlineMedia(body);
   if (inlineMediaError) return inlineMediaError;
+
+  /*
+    Última barrera: el panel no debe poder escribir un artículo que el sitio
+    luego descarte al leerlo. Se valida contra el mismo schema Zod que usa
+    fetch-content; se omiten los campos vacíos porque la escritura ya los
+    filtra y los schemas los tratan como opcionales.
+  */
+  const schema = editorialSchemas[collection as EditorialCollection];
+  if (schema) {
+    const contractFields = Object.fromEntries(
+      Object.entries(fields).filter(([, value]) => value !== ""),
+    );
+    if (!schema.safeParse(contractFields).success) {
+      return "Los campos del artículo no cumplen el contrato editorial.";
+    }
+  }
+
   return undefined;
 }

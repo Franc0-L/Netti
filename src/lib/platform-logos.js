@@ -208,27 +208,10 @@ export function canonicalizePlatforms(platforms) {
   ];
 }
 
-/*
-  Serializa el catálogo para el cliente del panel administrativo. Los `tokens` permiten al cliente
-  resolver el símbolo de valores arbitrarios sin replicar la tabla de aliases.
-  @returns {{ presets: Array<{ id: string; label: string; symbol: SymbolKey; tokens: string[] }>; icons: Record<string, { viewBox: string; markup: string }> }}
-*/
-export function catalogForAdmin() {
-  const presets = PLATFORM_PRESETS.map((preset) => ({
-    id: preset.id,
-    label: preset.label,
-    symbol: preset.symbol,
-    tokens: preset.tokens,
-  }));
-  const icons = {};
-  return { presets, icons };
-}
-
 export default {
   PLATFORM_PRESETS,
   PLATFORM_IMAGES,
   platformSymbol,
   platformImage,
   canonicalizePlatforms,
-  catalogForAdmin,
 };

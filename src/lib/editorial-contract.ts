@@ -28,29 +28,43 @@ export const editorialTagValues = [
 
 const editorialTags = z.array(z.enum(editorialTagValues)).max(12).optional();
 
+// Solo se aceptan las extensiones que el endpoint /media/ puede servir.
+const IMAGE_EXTENSIONS = "avif|gif|jpe?g|png|webp";
 const imagePath = z
   .string()
   .regex(
-    /^\/(?:media|images)\/[^\s"'<>\\]+$/,
-    "Debe ser una ruta local de imagen",
+    new RegExp(
+      `^/(?:media|images)/[^\\s"'<>\\\\]+\\.(?:${IMAGE_EXTENSIONS})$`,
+      "i",
+    ),
+    "Debe ser una ruta local de imagen compatible con /media/",
+  )
+  .refine(
+    (value) =>
+      !value.split("/").includes("..") &&
+      !value.toLowerCase().includes("%2e"),
+    "La ruta de imagen no puede contener segmentos relativos",
   );
 
 const imageFields = {
   coverImage: imagePath.optional(),
-  coverAlt: z.string().optional(),
+  coverAlt: z.string().max(240).optional(),
   heroImage: imagePath.optional(),
-  heroAlt: z.string().optional(),
+  heroAlt: z.string().max(240).optional(),
 };
 
 const galleryItem = z.object({
   src: imagePath,
-  alt: z.string().optional(),
-  caption: z.string().optional(),
+  alt: z.string().max(240).optional(),
+  caption: z.string().max(240).optional(),
 });
 
+// Solo http/https: z.url() acepta javascript:, data:, etc.
+const optionalHttpUrl = z.httpUrl().or(z.literal("")).optional();
+
 const mediaFields = {
-  videoUrl: z.url().optional(),
-  videoTitle: z.string().optional(),
+  videoUrl: optionalHttpUrl,
+  videoTitle: z.string().max(200).optional(),
   gallery: z.array(galleryItem).max(20).optional(),
 };
 
@@ -107,7 +121,7 @@ const newsSchema = z.object({
   featured: z.boolean().default(false),
   tags: editorialTags,
   sourceName: z.string().min(1).max(120).optional(),
-  sourceUrl: z.url().optional(),
+  sourceUrl: optionalHttpUrl,
   ...imageFields,
   ...mediaFields,
 });

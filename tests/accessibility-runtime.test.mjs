@@ -55,13 +55,20 @@ describe("Accesibilidad en HTML renderizado", () => {
     const port = await reservePort();
     baseUrl = `http://127.0.0.1:${port}`;
     serverProcess = spawn(
-      process.platform === "win32" ? "node_modules/.bin/astro.cmd" : "node_modules/.bin/astro",
-      ["dev", "--host", "127.0.0.1", "--port", String(port), "--no-open"],
+      process.execPath,
+      [
+        "node_modules/astro/bin/astro.mjs",
+        "dev",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        String(port),
+        "--no-open",
+      ],
       {
         cwd: root,
         env: { ...process.env, HOST: "127.0.0.1", PORT: String(port) },
         stdio: ["ignore", "pipe", "pipe"],
-        shell: process.platform === "win32",
       },
     );
     serverProcess.stdout.on("data", (chunk) => {

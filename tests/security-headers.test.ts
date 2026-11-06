@@ -24,6 +24,9 @@ describe("Security headers", () => {
     );
     expect(csp.value).toContain("default-src 'self'");
     expect(csp.value).toContain("script-src 'self'");
+    expect(csp.value).toContain("frame-src");
+    expect(csp.value).toContain("https://www.youtube-nocookie.com");
+    expect(csp.value).toContain("https://player.vimeo.com");
     expect(csp.value).toContain("frame-ancestors 'none'");
   });
 });

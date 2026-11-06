@@ -358,47 +358,11 @@ const isCurrent = (href: string) => path === href || path.startsWith(href);
 </html>
 
 <style is:global>
-  :root {
-    color-scheme: dark;
-    --background: #141218;
-    --surface: #1e1b24;
-    --surface-raised: #272232;
-    --text: #f4effc;
-    --muted: #b6adc9;
-    --accent: #a78bfa;
-    --accent-strong: #c9bbff;
-    --accent-deep: #7c3aed;
-    --border: #352d45;
-    --border-strong: #7c6f99;
-    --hairline: rgb(255 255 255 / 8%);
-    --field: #17141d;
-    --media-bg: #0f0d13;
-    --prose: #d2d4dd;
-    --on-accent: #17111f;
-    --cover-from: #30263f;
-    --cover-to: #1b1725;
-    --overlay: rgb(10 8 14 / 94%);
-    --gold: #e6bd55;
-    --red: #f16c79;
-    --cyan: #5ac7e8;
-    --green: #53bd83;
-    --border-card: rgb(167 139 250 / 22%);
-    --shadow-hard: 3px 3px 0 rgb(0 0 0 / 24%), 0 0 0 1px rgb(255 255 255 / 4%);
-    --shadow-hard-sm:
-      2px 2px 0 rgb(0 0 0 / 22%), 0 0 0 1px rgb(255 255 255 / 4%);
-    --font-display: "Quicksand", ui-rounded, system-ui, sans-serif;
-    --pattern: url("/images/fondo-web.webp");
-    font-family:
-      "Quicksand",
-      ui-rounded,
-      system-ui,
-      -apple-system,
-      BlinkMacSystemFont,
-      "Segoe UI",
-      sans-serif;
-    font-synthesis: none;
-    text-rendering: optimizeLegibility;
-  }
+  /*
+    Los tokens de diseño viven únicamente en src/styles/main.css.
+    No duplicar `:root` acá: las dos copias se desincronizaban y la paleta
+    vieja pisaba a la nueva según el orden de inyección del CSS.
+  */
   * {
     box-sizing: border-box;
   }
@@ -481,15 +445,15 @@ const isCurrent = (href: string) => path === href || path.startsWith(href);
     font-weight: 700;
     line-height: 1;
     letter-spacing: -0.045em;
-    color: #dcddef;
-    text-shadow: 2px 2px 0 #462d8f;
+    color: var(--text);
+    text-shadow: 2px 2px 0 var(--accent-deep);
   }
   .brand:hover {
-    color: #dcddef;
+    color: var(--text);
   }
   .brand span {
-    color: #8b5cf6;
-    text-shadow: 2px 2px 0 #462d8f;
+    color: var(--accent);
+    text-shadow: 2px 2px 0 var(--accent-deep);
   }
   nav {
     display: flex;
@@ -538,7 +502,8 @@ const isCurrent = (href: string) => path === href || path.startsWith(href);
     width: 72px;
     height: 72px;
     border-radius: 50%;
-    box-shadow: 3px 4px 0 rgb(70 45 143 / 60%);
+    box-shadow: 3px 4px 0
+      color-mix(in srgb, var(--accent-deep) 60%, transparent);
   }
   .footer-name {
     margin: 0;
@@ -547,13 +512,13 @@ const isCurrent = (href: string) => path === href || path.startsWith(href);
     font-weight: 700;
     line-height: 1;
     letter-spacing: -0.04em;
-    color: #dcddef;
+    color: var(--text);
     text-shadow:
-      0.045em 0.055em 0 #7c4def,
-      0.09em 0.11em 0 #462d8f;
+      0.045em 0.055em 0 var(--accent-deep),
+      0.09em 0.11em 0 color-mix(in srgb, var(--accent-deep) 65%, black);
   }
   .footer-name span {
-    color: #8b5cf6;
+    color: var(--accent);
   }
   .footer-tag {
     display: inline-flex;

@@ -25,10 +25,11 @@ if (!review) {
 }
 const games = await getCollectionEntries("games");
 const game = games.find((g: { id: string }) => g.id === review.data.game);
-if (!game)
-  throw new Error(
-    `La reseña "${review.id}" referencia un juego inexistente: "${review.data.game}".`,
-  );
+// Una reseña huérfana es un problema de contenido, no un error del servidor:
+// se responde 404 igual que cuando falta la propia reseña.
+if (!game) {
+  return Astro.rewrite("/404");
+}
 
 const backdropImage =
   game?.data.gallery?.[0]?.src ?? game?.data.heroImage ?? game?.data.coverImage;

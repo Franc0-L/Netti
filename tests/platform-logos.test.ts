@@ -60,11 +60,6 @@ describe("Platform logos", () => {
     expect(source).toContain("canonicalizePlatforms");
   });
 
-  it("exporta catalogForAdmin", () => {
-    const source = readFileSync(logosPath, "utf8");
-    expect(source).toContain("catalogForAdmin");
-  });
-
   it("define rutas de imagen de plataformas", () => {
     const source = readFileSync(logosPath, "utf8");
     expect(source).toContain("/images/platforms/switch");

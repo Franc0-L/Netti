@@ -147,7 +147,7 @@ Netti/
 │   ├── _lib/
 │   │   ├── security.ts         # Sesiones, cookies, assertSameOrigin, json, logAdminError
 │   │   ├── github/
-│   │   │   ├── client.ts       # Cliente GitHub con retries y rate limiting
+│   │   │   ├── client.ts       # Reexporta el cliente GitHub compartido
 │   │   │   └── contents.ts     # Leer/escribir/borrar archivos en GitHub
 │   │   └── content/
 │   │       ├── validation.ts   # Validación de campos (schemas Zod)
@@ -164,7 +164,6 @@ Netti/
 │   │   ├── panel.html          # Panel principal (CRUD)
 │   │   ├── admin.js            # Redirección al panel si hay sesión
 │   │   └── js/
-│   │       ├── platform-picker.js  # Selector de plataformas
 │   │       └── panel.js        # Lógica del panel (listar, crear, editar, borrar)
 │   ├── images/
 │   │   ├── logo-netti.png
@@ -182,7 +181,8 @@ Netti/
 │   │   ├── github-fetch.ts     # Cliente GitHub compartido
 │   │   ├── fetch-content.ts    # Lectura de colecciones con caché
 │   │   ├── image-url.ts        # Normalización de rutas de imagen
-│   │   ├── markdown.ts         # Renderizado Markdown + reescritura de rutas
+│   │   ├── markdown.ts         # Renderizado Markdown saneado + reescritura de rutas
+│   │   ├── markdown-schema.ts  # Esquema de sanitización compartido
 │   │   ├── platform-logos.js   # Catálogo de logos de plataformas
 │   │   ├── similar-games.ts    # Juegos similares por géneros
 │   │   └── rawg.ts             # Datos complementarios de RAWG API
@@ -215,7 +215,7 @@ Netti/
 │   ├── media-url.test.ts       # Magic bytes, safeRepoPath, caché de medios
 │   ├── admin-api.test.ts       # Rate limiting, timingSafeEqual, assertSameOrigin, schemas
 │   ├── markdown-sanitize.test.ts # rehype-sanitize, rehypeRaw, reescritura de imágenes
-│   └── platform-logos.test.ts  # PLATFORM_PRESETS, platformSymbol, platformImage, catalogForAdmin
+│   └── platform-logos.test.ts  # PLATFORM_PRESETS, platformSymbol, platformImage
 ├── docs/
 │   ├── architecture/           # Visión general, flujo SSR, caché
 │   ├── domain/                 # Colecciones, contratos editoriales
@@ -276,7 +276,7 @@ npx vitest run
 | `media-url.test.ts` | Magic bytes (PNG, JPEG, WebP), `safeRepoPath` contra path traversal, caché en memoria |
 | `admin-api.test.ts` | Rate limiting, `timingSafeEqual`, `assertSameOrigin`, `hasSession`, validación con schemas, tipos de imagen, `COOKIE_NAME`, `SESSION_SECONDS` |
 | `markdown-sanitize.test.ts` | `rehype-sanitize`, `rehypeRaw`, reescritura de rutas de imagen en `markdown.ts` |
-| `platform-logos.test.ts` | `PLATFORM_PRESETS`, `PLATFORM_IMAGES`, `platformSymbol`, `platformImage`, `canonicalizePlatforms`, `catalogForAdmin` |
+| `platform-logos.test.ts` | `PLATFORM_PRESETS`, `PLATFORM_IMAGES`, `platformSymbol`, `platformImage`, `canonicalizePlatforms` |
 
 ---
 
