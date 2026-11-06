@@ -534,7 +534,7 @@ imageInput.addEventListener("change", (event) => {
     imagePreview.style.display = "block";
     if (!imageAlt.value) {
       imageAlt.value = file.name
-        .replace(/\\.[^/.]+$/, "")
+        .replace(/\.[^/.]+$/, "")
         .replace(/[-_]+/g, " ");
     }
   };
