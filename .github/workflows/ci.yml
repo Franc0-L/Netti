@@ -35,5 +35,8 @@ jobs:
       - name: Pruebas de runtime SSR
         run: npm run test:ssr-runtime
 
+      - name: Auditoría de accesibilidad en runtime
+        run: npm run test:a11y-runtime
+
       - name: Build de producción
         run: npm run build
