@@ -1,7 +1,7 @@
 import { renderMarkdownPreview } from "./markdown-preview.js";
 import { adminApi } from "./api-client.js";
 import { renderCollectionList, renderTrashList, renderMediaList as renderMediaListHtml } from "./list-views.js";
-import { escapeHtml, escapeAttribute, safeMediaUrl } from "./html-safety.js";
+import { safeMediaUrl } from "./html-safety.js";
 import { createEditorForm, slugifyTitle } from "./editor-form.js";
 
 const collectionLabels = {
@@ -11,12 +11,7 @@ const collectionLabels = {
   guides: "Guías",
 };
 
-const collectionBadges = {
-  games: "badge-games",
-  reviews: "badge-reviews",
-  news: "badge-news",
-  guides: "badge-guides",
-};
+
 
 let currentCollection = null;
 let currentPage = 1;
