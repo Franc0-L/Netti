@@ -18,7 +18,8 @@
 - [ ] Revisar y adaptar las pruebas E2E/SSR heredadas de Netti-Legacy.
 
 ### 2. Administrador
-- [ ] Separar cliente HTTP, listado/navegación, formulario/editor, medios y papelera.
+- [x] Extraer un cliente HTTP compartido y centralizar respuestas y errores de la API del panel.
+- [ ] Separar listado/navegación, formulario/editor, medios y papelera.
 - [x] Corregir búsqueda para que abarque toda la colección, no solo la página cargada.
 - [x] Cachear el índice de búsqueda y limitar la concurrencia de lecturas.
 - [ ] Unificar estados de carga, error, vacío y guardado.
