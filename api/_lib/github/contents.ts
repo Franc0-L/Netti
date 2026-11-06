@@ -43,14 +43,17 @@ export async function readMarkdownFile(
     );
   }
 
-  const content = await readBlob(item.sha);
+  return readMarkdownBlob(item.sha);
+}
+
+// Lee e interpreta un blob cuyo SHA ya fue obtenido del árbol.
+export async function readMarkdownBlob(sha: string): Promise<{ fields: Record<string, unknown>; body: string; sha: string }> {
+  const content = await readBlob(sha);
   const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n/);
-  if (!match) {
-    throw new GitHubHttpError("El artículo no tiene frontmatter válido.", 400);
-  }
+  if (!match) throw new GitHubHttpError("El artículo no tiene frontmatter válido.", 400);
   const fields = parseYaml(match[1]) || {};
   const body = content.slice(match[0].length).trimStart();
-  return { fields, body, sha: item.sha };
+  return { fields, body, sha };
 }
 
 // Escribe o actualiza un archivo Markdown en el repositorio. Ruta: content/{coleccion}/{slug}.md

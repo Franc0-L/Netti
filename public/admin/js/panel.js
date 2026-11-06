@@ -33,7 +33,8 @@ const previewBtn = document.getElementById("preview-btn");
 const panelSearch = document.getElementById("panel-search");
 const clearSearchBtn = document.getElementById("clear-search");
 
-let allEntries = []; // Todos los artículos de la colección actual
+let collectionRequestId = 0;
+let searchDebounce = null;
 
 // Modal
 const modalOverlay = document.getElementById("modal-overlay");
@@ -150,34 +151,35 @@ async function loadCollection(collection, page = 1) {
   pageSubtitle.textContent = `Gestioná los artículos de la colección "${collection}".`;
   setActiveLink(collection);
 
+  const requestId = ++collectionRequestId;
+  const query = panelSearch.value.trim();
+  contentArea.setAttribute("aria-busy", "true");
   try {
-    const res = await fetch(
-      `${API_BASE}/content?collection=${collection}&page=${page}`,
-    );
-    if (!res.ok) throw new Error("No se pudo cargar la colección");
+    const params = new URLSearchParams({ collection, page: String(page) });
+    if (query) params.set("q", query);
+    const res = await fetch(`${API_BASE}/content?${params.toString()}`);
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      throw new Error(error.error || "No se pudo cargar la colección");
+    }
     const data = await res.json();
-
-    allEntries = data.entries || [];
-    renderFilteredList(data.page, data.pageCount, data.total);
+    if (requestId !== collectionRequestId) return;
+    currentPage = data.page;
+    renderList(data.entries || [], data.page, data.pageCount, data.total, Boolean(query));
   } catch (err) {
+    if (requestId !== collectionRequestId) return;
     showError(err.message || "Error al cargar la colección");
     contentArea.innerHTML = `<div class="empty">Error al cargar los artículos.</div>`;
+  } finally {
+    if (requestId === collectionRequestId) contentArea.removeAttribute("aria-busy");
   }
 }
 
-function renderFilteredList(page, pageCount, total) {
-  const filter = panelSearch.value.toLowerCase();
-  const filtered = allEntries.filter(
-    (entry) =>
-      (entry.fields?.title || "").toLowerCase().includes(filter) ||
-      entry.slug.toLowerCase().includes(filter)
-  );
-  renderList(filtered, page, pageCount, total);
-}
-
-function renderList(entries, page, pageCount, total) {
+function renderList(entries, page, pageCount, total, isSearching = false) {
   if (!entries || entries.length === 0) {
-    contentArea.innerHTML = `
+    contentArea.innerHTML = isSearching
+      ? `<div class="empty">No encontramos publicaciones que coincidan con “${escapeHtml(panelSearch.value.trim())}”. Probá con otro título o nombre.</div>`
+      : `
       <div class="empty">
         Todavía no hay artículos en esta colección.<br>
         Hacé clic en "Nuevo artículo" para crear uno.
@@ -486,12 +488,16 @@ document.getElementById("trash-link").addEventListener("click", (event) => {
 });
 
 panelSearch.addEventListener("input", () => {
-  renderFilteredList(currentPage, 1, 1);
+  clearTimeout(searchDebounce);
+  searchDebounce = setTimeout(() => {
+    if (currentCollection) loadCollection(currentCollection, 1);
+  }, 300);
 });
 
 clearSearchBtn.addEventListener("click", () => {
   panelSearch.value = "";
-  renderFilteredList(currentPage, 1, 1);
+  clearTimeout(searchDebounce);
+  if (currentCollection) loadCollection(currentCollection, 1);
 });
 
 // Navegador de medios

@@ -88,9 +88,14 @@ export default async function handler(req: AdminRequest, res: AdminResponse) {
       }
       const pageStr = rawPage as string;
       const page = pageStr === undefined ? 1 : Number(pageStr);
+      const rawQuery = req.query?.q;
+      if (rawQuery !== undefined && (typeof rawQuery !== "string" || rawQuery.length > 100)) {
+        return json(res, 400, { error: "El texto de búsqueda no es válido." });
+      }
+      const query = typeof rawQuery === "string" ? rawQuery.trim() : "";
       if (collection === "trash") return json(res, 200, await listTrashEntries(page));
       if (collection === "media") return json(res, 200, await listMediaEntries(page));
-      const result = await listEntries(collection, page);
+      const result = await listEntries(collection, page, query);
       return json(res, 200, result);
     }
 
@@ -298,6 +303,7 @@ export default async function handler(req: AdminRequest, res: AdminResponse) {
         data.body,
         existingEntry?.sha,
       );
+      invalidateTreeCache();
       return json(res, 200, {
         ok: true,
         commit: saved.commit,

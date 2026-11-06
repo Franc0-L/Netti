@@ -19,7 +19,8 @@
 
 ### 2. Administrador
 - [ ] Separar cliente HTTP, listado/navegación, formulario/editor, medios y papelera.
-- [ ] Corregir búsqueda para que abarque toda la colección, no solo la página cargada.
+- [x] Corregir búsqueda para que abarque toda la colección, no solo la página cargada.
+- [x] Cachear el índice de búsqueda y limitar la concurrencia de lecturas.
 - [ ] Unificar estados de carga, error, vacío y guardado.
 - [ ] Revisar accesibilidad, teclado, responsive y prevención de pérdida de cambios.
 - [ ] Cubrir crear, editar, publicar, borrar, restaurar y subir medios.
@@ -46,3 +47,4 @@
 ## Criterio de finalización
 
 Una etapa se considera completa cuando sus flujos tienen pruebas automatizadas, CI pasa, no se degradan las funcionalidades existentes y la documentación coincide con el comportamiento real.
+
