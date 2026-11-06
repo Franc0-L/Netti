@@ -1,3 +1,5 @@
+import { renderMarkdownPreview } from "./markdown-preview.js";
+
 const API_BASE = "/api/admin";
 
 const collectionLabels = {
@@ -133,32 +135,6 @@ function escapeHtml(str) {
   const div = document.createElement("div");
   div.textContent = str;
   return div.innerHTML;
-}
-
-function renderMarkdownPreview(markdown) {
-  if (!markdown || !markdown.trim()) {
-    return "<p style='color: var(--muted); font-style: italic;'>Sin contenido...</p>";
-  }
-
-  let html = markdown
-    .replace(/^### (.*$)/gim, "<h3>$1</h3>")
-    .replace(/^## (.*$)/gim, "<h2>$1</h2>")
-    .replace(/^# (.*$)/gim, "<h1>$1</h1>")
-    .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
-    .replace(/\*(.*?)\*/g, "<em>$1</em>")
-    .replace(/`(.*?)`/g, "<code>$1</code>")
-    .replace(
-      /!\[(.*?)\]\((.*?)\)/g,
-      '<img src="$2" alt="$1" style="max-width: 100%; border-radius: 0.5rem; margin: 1rem 0;" />',
-    )
-    .replace(
-      /\[(.*?)\]\((.*?)\)/g,
-      '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>',
-    )
-    .replace(/\n\n/g, "</p><p>")
-    .replace(/\n/g, "<br>");
-
-  return `<p>${html}</p>`;
 }
 
 function updatePreview() {
