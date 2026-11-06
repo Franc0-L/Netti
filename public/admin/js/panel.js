@@ -199,7 +199,7 @@ function renderList(entries, page, pageCount, total, isSearching = false) {
         <td>${updated}</td>
         <td>
           <button class="btn-secondary" data-action="edit" data-slug="${slugAttr}" data-collection="${escapeAttribute(entry.collection)}" data-sha="${escapeAttribute(entry.sha || "")}">Editar</button>
-          <button class="btn-danger" data-action="delete" data-slug="${slug}" data-collection="${entry.collection}" data-sha="${entry.sha || ""}">Borrar</button>
+          <button class="btn-danger" data-action="delete" data-slug="${slugAttr}" data-collection="${escapeAttribute(entry.collection)}" data-sha="${escapeAttribute(entry.sha || "")}">Borrar</button>
         </td>
       </tr>
     `;
@@ -560,7 +560,7 @@ async function loadTrash() {
         const slugText = escapeHtml(slug);
         const slugAttr = escapeAttribute(slug);
         const deletedAt = escapeHtml(entry.fields.deletedAt || "");
-        const deletedCollection = escapeAttribute(entry.collection || "games");
+        const deletedCollection = entry.collection || "games";
         return `
         <tr>
           <td><span class="badge badge-games">${escapeHtml(deletedCollection)}</span></td>
@@ -568,7 +568,7 @@ async function loadTrash() {
           <td><code style="color: var(--muted);">${slugText}</code></td>
           <td>${deletedAt}</td>
           <td>
-            <button class="btn-secondary" data-action="recover" data-slug="${slugAttr}" data-collection="${deletedCollection}">Recuperar</button>
+            <button class="btn-secondary" data-action="recover" data-slug="${slugAttr}" data-collection="${escapeAttribute(deletedCollection)}">Recuperar</button>
           </td>
         </tr>
       `;
