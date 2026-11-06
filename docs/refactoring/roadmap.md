@@ -14,7 +14,7 @@
 - [x] Separar la vista previa Markdown del controlador del panel.
 - [x] Escapar HTML arbitrario y rechazar esquemas URL peligrosos en la vista previa.
 - [x] Añadir pruebas de regresión para la vista previa.
-- [ ] Auditar los puntos restantes donde se usa `innerHTML` con contenido dinámico.
+- [x] Auditar los puntos restantes donde se usa `innerHTML` con contenido dinámico: escapar texto/atributos y validar rutas locales de imágenes del navegador de medios.
 - [ ] Revisar y adaptar las pruebas E2E/SSR heredadas de Netti-Legacy.
 
 ### 2. Administrador
