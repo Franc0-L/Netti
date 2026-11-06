@@ -1,4 +1,4 @@
-import { getTree, readMarkdownBlob } from "../github/contents.js";
+import { getTree, readMarkdownBlob, readMarkdownFile } from "../github/contents.js";
 
 const LIST_PAGE_SIZE = 50;
 
@@ -132,7 +132,7 @@ export async function listTrashEntries(page = 1) {
   const entries = await Promise.all(paginated.map(async (item) => {
     const [, collection, , filename] = item.path.split("/");
     const slug = filename.slice(0, -3);
-    const markdown = await readMarkdownFile(collection, `.deleted/${slug}`);
+    const markdown = await readMarkdownBlob(item.sha);
     return { collection, slug, sha: item.sha, fields: markdown.fields };
   }));
   return { entries, page, pageSize: LIST_PAGE_SIZE, pageCount, total: paths.length };
