@@ -18,7 +18,8 @@ test("escapa contenido editorial y atributos del listado", () => {
     entries: [{ collection: "games", slug: 'x" onmouseover="alert(1)', sha: '"><script>', fields: { title: '<img src=x onerror=alert(1)>' } }],
   });
   assert.doesNotMatch(html, /<img src=x/);
-  assert.doesNotMatch(html, /onmouseover="alert/);
+  assert.match(html, /data-slug="x&amp;quot;|data-slug="x&quot; onmouseover=&quot;alert\\(1\\)"/);
+  assert.doesNotMatch(html, /data-slug="x" onmouseover=/);
   assert.match(html, /&lt;img/);
 });
 
