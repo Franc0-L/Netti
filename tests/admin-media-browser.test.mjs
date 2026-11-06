@@ -32,19 +32,19 @@ function setup({ api, onInsert = () => {}, onError = () => {}, onSuccess = () =>
 test("carga y normaliza medios desde la API", async () => {
   const { browser } = setup({
     api: { async get() { return { entries: [
-      { slug: "portada", fields: { title: "Portada", coverImage: "/media/cover.webp", coverAlt: "Arte" } },
+      { slug: "portada", fields: { title: "Portada", coverImage: "/media/games/portada/cover.webp", coverAlt: "Arte" } },
     ] }; } },
   });
 
   const items = await browser.load();
-  assert.deepEqual(items, [{ name: "Portada", url: "/media/cover.webp", alt: "Arte", slug: "portada" }]);
+  assert.deepEqual(items, [{ name: "Portada", url: "/media/games/portada/cover.webp", alt: "Arte", slug: "portada" }]);
 });
 
 test("filtra sin perder los índices originales y selecciona una imagen", async () => {
   const { browser, document, mediaList } = setup({
     api: { async get() { return { entries: [
-      { slug: "uno", fields: { title: "Primera", coverImage: "/media/one.webp", coverAlt: "Uno" } },
-      { slug: "dos", fields: { title: "Segunda", coverImage: "/media/two.webp", coverAlt: "Dos" } },
+      { slug: "uno", fields: { title: "Primera", coverImage: "/media/games/uno/cover.webp", coverAlt: "Uno" } },
+      { slug: "dos", fields: { title: "Segunda", coverImage: "/media/games/dos/cover.webp", coverAlt: "Dos" } },
     ] }; } },
   });
   await browser.load();
@@ -56,7 +56,7 @@ test("filtra sin perder los índices originales y selecciona una imagen", async 
   const selected = mediaList.querySelector('[data-media-index="1"]');
   selected.click();
 
-  assert.deepEqual(browser.getSelected(), { url: "/media/two.webp", alt: "Dos" });
+  assert.deepEqual(browser.getSelected(), { url: "/media/games/dos/cover.webp", alt: "Dos" });
   assert.equal(selected.classList.contains("selected"), true);
   assert.equal(document.getElementById("insert").disabled, false);
 });
@@ -66,7 +66,7 @@ test("inserta Markdown mediante callback, cierra el modal y notifica éxito", as
   const successes = [];
   const { browser, document } = setup({
     api: { async get() { return { entries: [
-      { slug: "demo", fields: { title: "Demo", coverImage: "/media/demo.webp", coverAlt: "Arte demo" } },
+      { slug: "demo", fields: { title: "Demo", coverImage: "/media/games/demo/cover.webp", coverAlt: "Arte demo" } },
     ] }; } },
     onInsert: (markdown) => inserted.push(markdown),
     onSuccess: (message) => successes.push(message),
@@ -116,7 +116,7 @@ test("ignora respuestas antiguas cuando se solapan dos cargas", async () => {
       calls += 1;
       if (calls === 1) return new Promise((resolve) => { resolveFirst = resolve; });
       return Promise.resolve({ entries: [
-        { slug: "nuevo", fields: { title: "Nuevo", coverImage: "/media/new.webp" } },
+        { slug: "nuevo", fields: { title: "Nuevo", coverImage: "/media/games/nuevo/cover.webp" } },
       ] });
     },
   };
@@ -124,7 +124,7 @@ test("ignora respuestas antiguas cuando se solapan dos cargas", async () => {
   const first = browser.load();
   await browser.load();
   resolveFirst({ entries: [
-    { slug: "viejo", fields: { title: "Viejo", coverImage: "/media/old.webp" } },
+    { slug: "viejo", fields: { title: "Viejo", coverImage: "/media/games/viejo/cover.webp" } },
   ] });
   await first;
 
@@ -133,8 +133,8 @@ test("ignora respuestas antiguas cuando se solapan dos cargas", async () => {
 
 test("agrega al principio un medio recién subido y evita duplicar su URL", () => {
   const { browser } = setup();
-  assert.equal(browser.addItem({ name: "Primero", url: "/media/one.webp", alt: "Uno" }), true);
-  assert.equal(browser.addItem({ name: "Renombrado", url: "/media/one.webp", alt: "Uno" }), true);
+  assert.equal(browser.addItem({ name: "Primero", url: "/media/games/uno/cover.webp", alt: "Uno" }), true);
+  assert.equal(browser.addItem({ name: "Renombrado", url: "/media/games/uno/cover.webp", alt: "Uno" }), true);
   assert.equal(browser.getItems().length, 1);
   assert.equal(browser.getItems()[0].name, "Renombrado");
   assert.equal(browser.addItem({ name: "Inseguro", url: "javascript:alert(1)" }), false);
