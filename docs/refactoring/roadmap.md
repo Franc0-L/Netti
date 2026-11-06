@@ -25,14 +25,14 @@
 ### 2. Administrador
 
 - [x] Extraer un cliente HTTP compartido y centralizar respuestas y errores de la API del panel.
-- [ ] Separar listado/navegación y controladores de la papelera.
+- [x] Separar listado/navegación, paginación y controlador de restauración de la papelera.
 - [x] Extraer la lógica del formulario editorial (metadatos, etiquetas, nombre del enlace y armado del contenido) a un módulo probado.
 - [x] Extraer validación, codificación y llamada API de subida de imágenes a un módulo probado.
 - [x] Separar el navegador de medios, filtrado, selección segura e inserción Markdown del controlador principal; cubrir estados y concurrencia con jsdom.
 - [x] Extraer el renderizado de listados, papelera y navegador de medios a vistas independientes con pruebas.
 - [x] Corregir búsqueda para que abarque toda la colección, no solo la página cargada.
 - [x] Cachear el índice de búsqueda y limitar la concurrencia de lecturas.
-- [ ] Unificar estados de carga, error, vacío y guardado.
+- [x] Unificar estados accesibles de carga, error, vacío, mensajes de éxito y guardado; preservar el estado original de controles al terminar.
 - [x] Proteger el editor ante cierre, cancelación, clic fuera, Escape y salida del navegador cuando hay cambios sin guardar; bloquear envíos duplicados durante el guardado.
 - [ ] Completar pruebas E2E de accesibilidad, teclado, responsive y flujos interactivos del panel.
 - [x] Cubrir creación, edición, publicación, borrado recuperable, restauración y subida de medios en handlers reales.
