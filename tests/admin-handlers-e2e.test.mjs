@@ -227,3 +227,277 @@ test("el handler real rechaza una imagen con MIME no admitido antes de llamar a 
   assert.match(res.json().error, /Formato no admitido/);
   assert.equal(calls.length, 0);
 });
+
+
+const EXISTING_NEWS = `---
+title: Noticia existente
+description: Una noticia que ya está publicada.
+publishedAt: 2026-11-05
+category: Noticias
+author: Netti
+---
+
+Contenido original de la noticia.`;
+
+function contentTree(path, sha) {
+  return { type: "blob", path, sha };
+}
+
+test("el handler real edita una noticia usando el SHA actual de GitHub", async () => {
+  baseEnv();
+  const calls = mockGitHub((call) => {
+    if (call.url.pathname.endsWith("/git/trees/main")) {
+      return {
+        status: 200,
+        body: {
+          tree: [contentTree("content/news/noticia-e2e.md", "current-sha")],
+        },
+      };
+    }
+    if (call.url.pathname.endsWith("/git/blobs/current-sha")) {
+      return {
+        status: 200,
+        body: {
+          encoding: "base64",
+          content: Buffer.from(EXISTING_NEWS, "utf8").toString("base64"),
+        },
+      };
+    }
+    if (
+      call.method === "PUT" &&
+      call.url.pathname.endsWith("/contents/content/news/noticia-e2e.md")
+    ) {
+      return {
+        status: 200,
+        body: { commit: { sha: "commit-edit" } },
+      };
+    }
+    return { status: 200, body: {} };
+  });
+
+  const { default: handler } = await load("api/admin/content.ts");
+  const res = makeResponse();
+  await handler(
+    makeRequest({
+      method: "PUT",
+      body: {
+        collection: "news",
+        slug: "noticia-e2e",
+        sha: "current-sha",
+        fields: {
+          title: "Noticia editada",
+          description: "Una descripción actualizada para la prueba.",
+          publishedAt: "2026-11-06",
+          category: "Actualidad",
+          author: "Netti",
+        },
+        body: "Contenido actualizado.",
+      },
+    }),
+    res,
+  );
+
+  assert.equal(res.statusCode, 200, JSON.stringify(res.json()));
+  assert.deepEqual(res.json(), {
+    ok: true,
+    commit: "commit-edit",
+    slug: "noticia-e2e",
+    page: 1,
+  });
+  const write = calls.find(
+    (call) =>
+      call.method === "PUT" &&
+      call.url.pathname.endsWith("/contents/content/news/noticia-e2e.md"),
+  );
+  assert.ok(write, "debe escribir el archivo original");
+  assert.equal(write.body.sha, "current-sha");
+  assert.match(
+    Buffer.from(write.body.content, "base64").toString("utf8"),
+    /Noticia editada/,
+  );
+});
+
+test("el handler real mueve una noticia a la papelera y elimina el original", async () => {
+  baseEnv();
+  const calls = mockGitHub((call) => {
+    if (call.url.pathname.endsWith("/git/trees/main")) {
+      return {
+        status: 200,
+        body: {
+          tree: [contentTree("content/news/noticia-e2e.md", "delete-sha")],
+        },
+      };
+    }
+    if (call.url.pathname.endsWith("/git/blobs/delete-sha")) {
+      return {
+        status: 200,
+        body: {
+          encoding: "base64",
+          content: Buffer.from(EXISTING_NEWS, "utf8").toString("base64"),
+        },
+      };
+    }
+    if (
+      call.method === "PUT" &&
+      call.url.pathname.includes("/contents/content/news/.deleted/")
+    ) {
+      return {
+        status: 201,
+        body: { commit: { sha: "commit-trash" } },
+      };
+    }
+    if (
+      call.method === "DELETE" &&
+      call.url.pathname.endsWith("/contents/content/news/noticia-e2e.md")
+    ) {
+      return {
+        status: 200,
+        body: { commit: { sha: "commit-delete" } },
+      };
+    }
+    return { status: 200, body: {} };
+  });
+
+  const { default: handler } = await load("api/admin/content.ts");
+  const res = makeResponse();
+  await handler(
+    makeRequest({
+      method: "DELETE",
+      body: {
+        collection: "news",
+        slug: "noticia-e2e",
+        sha: "delete-sha",
+      },
+    }),
+    res,
+  );
+
+  assert.equal(res.statusCode, 200, JSON.stringify(res.json()));
+  assert.equal(res.json().ok, true);
+  assert.equal(res.json().recoverable, true);
+  assert.equal(
+    res.json().trashed.startsWith("content/news/.deleted/noticia-e2e-deleted-"),
+    true,
+  );
+  assert.ok(
+    calls.some(
+      (call) =>
+        call.method === "PUT" &&
+        call.url.pathname.includes("/contents/content/news/.deleted/"),
+    ),
+    "primero debe guardar una copia recuperable",
+  );
+  assert.ok(
+    calls.some(
+      (call) =>
+        call.method === "DELETE" &&
+        call.url.pathname.endsWith("/contents/content/news/noticia-e2e.md"),
+    ),
+    "después debe eliminar el archivo original",
+  );
+});
+
+test("el handler real restaura una noticia y elimina su copia de la papelera", async () => {
+  baseEnv();
+  const trashedNews = `---
+title: Noticia recuperable
+description: Una noticia que se va a restaurar.
+publishedAt: 2026-11-05
+category: Noticias
+author: Netti
+deleted: true
+deletedSlug: noticia-original
+deletedCollection: news
+deletedReason: Eliminado desde el panel editorial
+---
+
+Contenido que debe recuperarse.`;
+  const calls = mockGitHub((call) => {
+    if (call.url.pathname.endsWith("/git/trees/main")) {
+      return {
+        status: 200,
+        body: {
+          tree: [
+            contentTree(
+              "content/news/.deleted/noticia-original-deleted.md",
+              "trash-sha",
+            ),
+          ],
+        },
+      };
+    }
+    if (call.url.pathname.endsWith("/git/blobs/trash-sha")) {
+      return {
+        status: 200,
+        body: {
+          encoding: "base64",
+          content: Buffer.from(trashedNews, "utf8").toString("base64"),
+        },
+      };
+    }
+    if (
+      call.method === "PUT" &&
+      call.url.pathname.endsWith("/contents/content/news/noticia-original.md")
+    ) {
+      return {
+        status: 201,
+        body: { commit: { sha: "commit-restore" } },
+      };
+    }
+    if (
+      call.method === "DELETE" &&
+      call.url.pathname.endsWith(
+        "/contents/content/news/.deleted/noticia-original-deleted.md",
+      )
+    ) {
+      return {
+        status: 200,
+        body: { commit: { sha: "commit-cleanup" } },
+      };
+    }
+    return { status: 200, body: {} };
+  });
+
+  const { default: handler } = await load("api/admin/content.ts");
+  const res = makeResponse();
+  await handler(
+    makeRequest({
+      body: {
+        action: "restore",
+        collection: "news",
+        slug: "noticia-original-deleted",
+        sha: "trash-sha",
+      },
+    }),
+    res,
+  );
+
+  assert.equal(res.statusCode, 200, JSON.stringify(res.json()));
+  assert.deepEqual(res.json(), {
+    ok: true,
+    slug: "noticia-original",
+    commit: "commit-restore",
+  });
+  const restoredWrite = calls.find(
+    (call) =>
+      call.method === "PUT" &&
+      call.url.pathname.endsWith("/contents/content/news/noticia-original.md"),
+  );
+  assert.ok(restoredWrite, "debe volver a crear la publicación original");
+  const restoredMarkdown = Buffer.from(
+    restoredWrite.body.content,
+    "base64",
+  ).toString("utf8");
+  assert.match(restoredMarkdown, /Noticia recuperable/);
+  assert.doesNotMatch(restoredMarkdown, /deletedSlug|deletedCollection|deletedReason/);
+  assert.ok(
+    calls.some(
+      (call) =>
+        call.method === "DELETE" &&
+        call.url.pathname.endsWith(
+          "/contents/content/news/.deleted/noticia-original-deleted.md",
+        ),
+    ),
+    "debe limpiar la copia de la papelera",
+  );
+});

@@ -17,7 +17,7 @@
 - [x] Añadir pruebas de regresión para la vista previa.
 - [x] Auditar los puntos restantes donde se usa `innerHTML` con contenido dinámico: escapar texto/atributos y validar rutas locales de imágenes del navegador de medios.
 - [x] Recuperar integración de handlers reales del administrador: login, alta, duplicados y subida de imágenes.
-- [ ] Adaptar cobertura de edición, borrado y restauración.
+- [x] Adaptar cobertura de edición, borrado recuperable y restauración mediante handlers reales.
 - [x] Añadir un smoke test de runtime SSR para páginas públicas independientes del repositorio de contenido.
 - [x] Probar el entrypoint real del build Vercel con contenido y medios simulados: detalle, 404, índice de búsqueda, validación y caché.
 - [x] Recuperar una primera auditoría Axe sobre HTML renderizado y control del orden natural de tabulación en páginas públicas y login.
@@ -34,7 +34,7 @@
 - [x] Cachear el índice de búsqueda y limitar la concurrencia de lecturas.
 - [ ] Unificar estados de carga, error, vacío y guardado.
 - [ ] Revisar accesibilidad, teclado, responsive y prevención de pérdida de cambios.
-- [ ] Completar cobertura de crear, editar, publicar, borrar, restaurar y subir medios.
+- [x] Cubrir creación, edición, publicación, borrado recuperable, restauración y subida de medios en handlers reales.
 
 ### 3. Backend y dominio
 

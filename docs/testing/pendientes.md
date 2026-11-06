@@ -8,6 +8,7 @@ Este documento distingue las comprobaciones automatizadas que ya existen de las 
 | --- | --- | --- |
 | `tests/accessibility.test.ts` | Comprueba el uso de BaseLayout, atributos alt e inputs etiquetados en fuentes Astro | Estática |
 | `tests/admin-api.test.ts` | Comprueba contratos básicos de autenticación, sesión, origen y subida | Estática; no ejecuta peticiones HTTP |
+| `tests/admin-handlers-e2e.test.mjs` | Compila y ejecuta handlers reales; cubre login, alta, duplicados, edición con SHA, borrado recuperable, restauración y subida | Integración con GitHub mockeado en red |
 | `tests/admin-content-validation.test.ts` | Comprueba reglas básicas por colección | Unitarias |
 | `tests/content-validation-edge-cases.test.ts` | Comprueba fechas reales, años bisiestos y fechas imposibles | Unitarias |
 | `tests/build-smoke.test.ts` | Comprueba configuración SSR/Vercel, cabeceras y rutas 404 | Estática |
@@ -25,8 +26,8 @@ Este documento distingue las comprobaciones automatizadas que ya existen de las 
 
 | Prueba | Qué falta | Prioridad |
 | --- | --- | --- |
-| `tests/admin-content-handler.test.ts` | Ejecuta el handler real con GitHub y servicios mockeados; cubre sesión, origen, token, listado, creación, conflicto SHA, borrado y restauración | Unitarias de integración |
-| API Admin con mocks | Ejecutar handlers reales con solicitudes/respuestas simuladas y GitHub API mockeada; cubrir CRUD, conflictos SHA, papelera y restauración | Alta |
+| `tests/admin-content-handler.test.ts` | Prueba el handler de contenido con dependencias internas mockeadas: sesión, origen, validación, conflicto SHA, borrado y restauración | Unitarias con mocks |
+| API Admin con mocks | Completar casos de error y conflictos de escritura en los handlers reales | Media |
 | Admin E2E | Automatizar login, creación, edición, vista previa, subida, borrado y restauración desde un navegador real | Alta |
 | Accesibilidad axe ampliada | Extender la auditoría a las rutas públicas dinámicas y al panel autenticado; resolver hallazgos serios/críticos | Alta |
 | SSR/runtime ampliado | Extender los casos simulados a juegos, reseñas y guías, y verificar más combinaciones de error/caché | Media |
