@@ -10,9 +10,8 @@ export function createMediaBrowser({
   onInsert,
   onError = () => {},
   onSuccess = () => {},
-  documentRef = globalThis.document,
 } = {}) {
-  if (!api || !mediaModalOverlay || !mediaSearch || !mediaList || !insertButton || typeof renderList !== "function") {
+  if (!api || !mediaModalOverlay || !mediaSearch || !mediaList || !insertButton || typeof renderList !== "function" || typeof onInsert !== "function") {
     throw new TypeError("Faltan dependencias para inicializar el navegador de medios.");
   }
 
@@ -71,7 +70,7 @@ export function createMediaBrowser({
     element?.classList.add("selected");
     selectedItem = {
       url,
-      alt: String(item.alt ?? "").replace(/[\\r\\n]/g, " ").slice(0, 240),
+      alt: String(item.alt ?? "").replace(/[\r\n]/g, " ").slice(0, 240),
     };
     insertButton.disabled = false;
     insertButton.textContent = selectedItem.alt
@@ -82,7 +81,7 @@ export function createMediaBrowser({
 
   function insertSelected() {
     if (!selectedItem) return false;
-    const markdown = `![${selectedItem.alt}](${selectedItem.url})\\n\\n`;
+    const markdown = `![${selectedItem.alt}](${selectedItem.url})\n\n`;
     onInsert(markdown);
     close();
     onSuccess("Imagen insertada en el cuerpo");
