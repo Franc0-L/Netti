@@ -14,7 +14,8 @@
     "validate:content": "npx --yes tsx scripts/content-validator.ts",
     "audit:media": "npx --yes tsx scripts/media-audit.ts",
     "test:admin-preview": "node --test tests/admin-markdown-preview.test.mjs tests/admin-html-safety.test.mjs tests/admin-api-client.test.mjs tests/admin-list-views.test.mjs tests/admin-editor-form.test.mjs tests/admin-media-upload.test.mjs tests/admin-handlers-e2e.test.mjs",
-    "test:ssr-runtime": "node --test tests/ssr-runtime.test.mjs"
+    "test:ssr-runtime": "node --test tests/ssr-runtime.test.mjs",
+    "test:a11y-runtime": "node --test tests/accessibility-runtime.test.mjs"
   },
   "engines": {
     "node": ">=22.23.4"
