@@ -1,41 +1,41 @@
-# Pruebas pendientes
+# Estado de las pruebas
 
-El siguiente estado resume qué pruebas están implementadas y qué falta.
+Este documento distingue las comprobaciones automatizadas que ya existen de las pruebas que todavía faltan. Las pruebas actuales no deben confundirse con una prueba completa del navegador o de los endpoints desplegados.
 
-## Implementadas (vitest)
+## Implementadas
 
-| Archivo | Qué prueba | Estado |
-|---------|------------|--------|
-| `tests/accessibility.test.ts` | Páginas usan BaseLayout, imágenes con alt, inputs con label/aria-label | ✅ Pasando |
-| `tests/performance.test.ts` | `astro build` completa en <60s, `dist/` existe | ✅ Pasando |
+| Archivo | Cobertura actual | Alcance |
+| --- | --- | --- |
+| `tests/accessibility.test.ts` | Comprueba el uso de BaseLayout, atributos alt e inputs etiquetados en fuentes Astro | Estática |
+| `tests/admin-api.test.ts` | Comprueba contratos básicos de autenticación, sesión, origen y subida | Estática; no ejecuta peticiones HTTP |
+| `tests/admin-content-validation.test.ts` | Comprueba reglas básicas por colección | Unitarias |
+| `tests/content-validation-edge-cases.test.ts` | Comprueba fechas reales, años bisiestos y fechas imposibles | Unitarias |
+| `tests/build-smoke.test.ts` | Comprueba configuración SSR/Vercel, cabeceras y rutas 404 | Estática |
+| `tests/markdown-sanitize.test.ts` | Comprueba la configuración de sanitización y resolución de imágenes | Estática |
+| `tests/media-url.test.ts` | Comprueba validaciones de formato, traversal y caché del endpoint multimedia | Estática |
+| `tests/media-audit.test.ts` | Comprueba referencias de imágenes, papelera y detección de archivos huérfanos | Unitarias |
+| `tests/performance.test.ts` | Ejecuta el build y comprueba el tiempo y la existencia de dist/ | Integración local |
+| `tests/platform-logos.test.ts` | Comprueba el catálogo de logos | Unitarias |
+| `tests/security-headers.test.ts` | Comprueba las cabeceras configuradas | Estáticas |
 
-## Pendientes (a portar del legacy o crear nuevas)
+## Pendientes
 
-El legacy tenía tests con `node:test` que no se han migrado aún:
+| Prueba | Qué falta | Prioridad |
+| --- | --- | --- |
+| API Admin con mocks | Ejecutar handlers reales con solicitudes/respuestas simuladas y GitHub API mockeada; cubrir CRUD, conflictos SHA, papelera y restauración | Alta |
+| Admin E2E | Automatizar login, creación, edición, vista previa, subida, borrado y restauración desde un navegador | Alta |
+| Accesibilidad axe | Ejecutar axe-core sobre HTML renderizado, no solo revisar archivos fuente | Alta |
+| SSR/runtime | Probar páginas y respuestas HTTP contra un servidor de preview | Media |
+| Multimedia HTTP | Probar respuestas reales, caché, tipos MIME, errores y rutas inválidas del endpoint | Media |
+| Recuperación multimedia | Diseñar un flujo explícito de limpieza con confirmación y protección de referencias compartidas; no borrar automáticamente | Media |
 
-| Test del legacy | Qué probaba | Prioridad |
-|-----------------|-------------|-----------|
-| `a11y-axe.test.mjs` | Violaciones axe-core (WCAG 2.1/2.2 AA) en HTML construido | Alta |
-| `performance.test.mjs` | Tamaño bundle JS (<500 KB), CSS (<200 KB), imágenes (<2 MB) | Alta |
-| `build-smoke.test.mjs` | Build exitoso, output: server, archivos estáticos, vercel.json, páginas [slug] usan /404 | Alta |
-| `security-headers.test.mjs` | Cabeceras de seguridad en vercel.json | Media |
-| `media-url.test.mjs` | Endpoint `/media/[...path]` responde en <200ms, caché funciona | Media |
-| `markdown-sanitize.test.mjs` | Sanitizado de HTML en Markdown | Media |
-| `admin-api.test.mjs` | API de contenido (login, crear, editar, borrar) | Alta |
-| `admin-contract.test.mjs` | Contrato editorial coherente entre lectura y escritura | Alta |
-| `admin-e2e.test.mjs` | Flujo completo del panel editorial | Media |
-| `platform-logos.test.mjs` | Catálogo de logos de plataformas | Baja |
-| `ssr-runtime.test.mjs` | Renderizado en runtime (SSR) | Media |
-
-## Cómo ejecutar
+## Ejecución
 
 ```bash
-# Tests actuales (vitest)
-npx vitest run
-
-# Type check
 npm run check
-
-# Build
+npm run test
 npm run build
+npm run audit:media -- ../Contenido-Netti
 ```
+
+La auditoría multimedia es informativa: incluye las publicaciones de la papelera para proteger imágenes recuperables y nunca modifica ni elimina archivos.

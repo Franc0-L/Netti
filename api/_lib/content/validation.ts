@@ -176,15 +176,38 @@ function validateGameRef(fields: Record<string, unknown>): string | undefined {
   return undefined;
 }
 
+function isCalendarDate(value: string): boolean {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return false;
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (month < 1 || month > 12 || day < 1) return false;
+
+  const leapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const daysPerMonth = [
+    31,
+    leapYear ? 29 : 28,
+    31,
+    30,
+    31,
+    30,
+    31,
+    31,
+    30,
+    31,
+    30,
+    31,
+  ];
+  return day <= daysPerMonth[month - 1];
+}
+
 function validateDates(fields: Record<string, unknown>): string | undefined {
   for (const key of ["publishedAt", "updatedAt"]) {
     if (fields[key] !== undefined && fields[key] !== "") {
-      if (
-        typeof fields[key] !== "string" ||
-        !/^\d{4}-\d{2}-\d{2}$/.test(fields[key]) ||
-        Number.isNaN(Date.parse(fields[key]))
-      ) {
-        return `"${key}" debe tener formato AAAA-MM-DD.`;
+      if (typeof fields[key] !== "string" || !isCalendarDate(fields[key])) {
+        return `"${key}" debe tener una fecha real con formato AAAA-MM-DD.`;
       }
     }
   }
@@ -314,7 +337,6 @@ function validateInlineMedia(body: string): string | undefined {
   return undefined;
 }
 
-// Ejecuta todas las validaciones de contenido en orden. Retorna el primer mensaje de error encontrado, o undefined si todo es válido.
 export function validate(
   collection: string,
   fields: Record<string, unknown>,
@@ -326,7 +348,8 @@ export function validate(
     validateRequiredFields.bind(null, collection),
     validateTextLimits,
     validateGamesFields.bind(null, collection),
-    (fields) => collection === "reviews" ? validateReviewsFields(fields) : undefined,
+    (fields) =>
+      collection === "reviews" ? validateReviewsFields(fields) : undefined,
     validateTags,
     validateProsCons,
     validateGameRef,
