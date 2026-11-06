@@ -18,9 +18,10 @@ function safePreviewUrl(value) {
   if (!candidate || candidate.startsWith("//")) return null;
 
   try {
-    const url = new URL(candidate, window.location.origin);
+    const origin = typeof window !== "undefined" ? window.location.origin : "https://netti.test";
+    const url = new URL(candidate, origin);
     if (url.protocol !== "http:" && url.protocol !== "https:") return null;
-    if (url.origin !== window.location.origin && !/^https:\/\//i.test(candidate)) {
+    if (url.origin !== origin && !/^https:\/\//i.test(candidate)) {
       return null;
     }
     return candidate;
