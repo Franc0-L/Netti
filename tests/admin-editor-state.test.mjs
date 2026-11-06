@@ -52,19 +52,17 @@ test("detecta cambios en texto, checks y etiquetas múltiples", () => {
 
 test("confirmar descarte permite cerrar y cancelar descarte mantiene el editor abierto", () => {
   const form = createForm();
+  let allowDiscard = false;
+  const state = createEditorState({
+    form,
+    confirmDiscard: () => allowDiscard,
+  });
+
   form.querySelector("#body").value = "Cambios pendientes";
+  assert.equal(state.confirmClose(), false);
 
-  const rejected = createEditorState({
-    form,
-    confirmDiscard: () => false,
-  });
-  assert.equal(rejected.confirmClose(), false);
-
-  const accepted = createEditorState({
-    form,
-    confirmDiscard: () => true,
-  });
-  assert.equal(accepted.confirmClose(), true);
+  allowDiscard = true;
+  assert.equal(state.confirmClose(), true);
 });
 
 test("markClean establece una nueva referencia después de guardar o abrir otro artículo", () => {
