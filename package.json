@@ -8,8 +8,11 @@
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
-    "validate:content": "tsx scripts/content-validator.ts",
-    "check": "astro check"
+    "check": "astro check",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "validate:content": "npx --yes tsx scripts/content-validator.ts",
+    "audit:media": "npx --yes tsx scripts/media-audit.ts"
   },
   "engines": {
     "node": ">=22.23.4"

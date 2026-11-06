@@ -27,7 +27,7 @@ jobs:
         run: npm run check
 
       - name: Ejecutar tests (vitest)
-        run: npx vitest run
+        run: npm run test
 
       - name: Build de producción
         run: npm run build
