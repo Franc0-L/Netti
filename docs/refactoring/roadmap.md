@@ -20,7 +20,7 @@
 - [x] Adaptar cobertura de edición, borrado recuperable y restauración mediante handlers reales.
 - [x] Añadir un smoke test de runtime SSR para páginas públicas independientes del repositorio de contenido.
 - [x] Probar el entrypoint real del build Vercel con contenido y medios simulados: detalle, 404, índice de búsqueda, validación y caché.
-- [x] Recuperar una primera auditoría Axe sobre HTML renderizado y control del orden natural de tabulación en páginas públicas y login.
+- [x] Recuperar una primera auditoría Axe sobre HTML renderizado y control del orden natural de tabulación en páginas públicas, login y documento del panel editorial.
 
 ### 2. Administrador
 
