@@ -33,7 +33,8 @@
 - [x] Corregir búsqueda para que abarque toda la colección, no solo la página cargada.
 - [x] Cachear el índice de búsqueda y limitar la concurrencia de lecturas.
 - [ ] Unificar estados de carga, error, vacío y guardado.
-- [ ] Revisar accesibilidad, teclado, responsive y prevención de pérdida de cambios.
+- [x] Proteger el editor ante cierre, cancelación, clic fuera, Escape y salida del navegador cuando hay cambios sin guardar; bloquear envíos duplicados durante el guardado.
+- [ ] Completar pruebas E2E de accesibilidad, teclado, responsive y flujos interactivos del panel.
 - [x] Cubrir creación, edición, publicación, borrado recuperable, restauración y subida de medios en handlers reales.
 
 ### 3. Backend y dominio
