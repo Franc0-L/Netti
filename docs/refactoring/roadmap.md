@@ -15,7 +15,7 @@
 - [x] Escapar HTML arbitrario y rechazar esquemas URL peligrosos en la vista previa.
 - [x] Añadir pruebas de regresión para la vista previa.
 - [x] Auditar los puntos restantes donde se usa `innerHTML` con contenido dinámico: escapar texto/atributos y validar rutas locales de imágenes del navegador de medios.
-- [ ] Revisar y adaptar las pruebas E2E/SSR heredadas de Netti-Legacy.
+- [ ] Revisar y adaptar las pruebas E2E/SSR heredadas de Netti-Legacy.\n  - [x] Añadir integración de handlers reales del administrador (login, alta, duplicados y subida de imágenes).\n  - [ ] Adaptar cobertura de edición, borrado/restauración y runtime SSR.\n  - [ ] Recuperar auditorías Axe y navegación por teclado con selectores actuales.
 
 ### 2. Administrador
 - [x] Extraer un cliente HTTP compartido y centralizar respuestas y errores de la API del panel.
