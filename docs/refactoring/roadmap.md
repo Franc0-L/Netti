@@ -28,7 +28,7 @@
 - [ ] Separar listado/navegación y controladores de la papelera.
 - [x] Extraer la lógica del formulario editorial (metadatos, etiquetas, nombre del enlace y armado del contenido) a un módulo probado.
 - [x] Extraer validación, codificación y llamada API de subida de imágenes a un módulo probado.
-- [ ] Separar el navegador de medios y su selección de la lógica principal del panel.
+- [x] Separar el navegador de medios, filtrado, selección segura e inserción Markdown del controlador principal; cubrir estados y concurrencia con jsdom.
 - [x] Extraer el renderizado de listados, papelera y navegador de medios a vistas independientes con pruebas.
 - [x] Corregir búsqueda para que abarque toda la colección, no solo la página cargada.
 - [x] Cachear el índice de búsqueda y limitar la concurrencia de lecturas.
