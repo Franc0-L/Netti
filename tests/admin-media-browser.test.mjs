@@ -75,7 +75,7 @@ test("inserta Markdown mediante callback, cierra el modal y notifica éxito", as
   document.querySelector(".media-item").click();
   assert.equal(browser.insertSelected(), true);
 
-  assert.deepEqual(inserted, ["![Arte demo](/media/demo.webp)\n\n"]);
+  assert.deepEqual(inserted, ["![Arte demo](/media/games/demo/cover.webp)\n\n"]);
   assert.equal(document.getElementById("overlay").style.display, "none");
   assert.deepEqual(successes, ["Imagen insertada en el cuerpo"]);
 });
