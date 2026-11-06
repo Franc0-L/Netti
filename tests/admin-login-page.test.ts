@@ -29,6 +29,6 @@ describe("Página de inicio de sesión del panel", () => {
 
   it("redirige al panel real después de autenticar, no al formulario de login", () => {
     expect(script).toContain('window.location.assign("/admin/panel.html")');
-    expect(panel).toContain('<script src="/admin/js/panel.js"></script>');
+    expect(panel).toContain('<script type="module" src="/admin/js/panel.js"></script>');
   });
 });
