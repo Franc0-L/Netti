@@ -46,3 +46,4 @@
 ## Criterio de finalización
 
 Una etapa se considera completa cuando sus flujos tienen pruebas automatizadas, CI pasa, no se degradan las funcionalidades existentes y la documentación coincide con el comportamiento real.
+
