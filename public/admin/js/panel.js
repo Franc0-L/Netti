@@ -1,7 +1,6 @@
 import { renderMarkdownPreview } from "./markdown-preview.js";
+import { adminApi } from "./api-client.js";
 import { escapeHtml, escapeAttribute, safeMediaUrl } from "./html-safety.js";
-
-const API_BASE = "/api/admin";
 
 const collectionLabels = {
   games: "Juegos",
@@ -98,8 +97,8 @@ let mediaItems = [];
 
 async function checkAuth() {
   try {
-    const res = await fetch(`${API_BASE}/content?collection=games&page=1`);
-    isAuthenticated = res.ok;
+    await adminApi.get("/content?collection=games&page=1");
+    isAuthenticated = true;
     if (!isAuthenticated) {
       window.location.href = "/admin/";
     }
@@ -152,12 +151,7 @@ async function loadCollection(collection, page = 1) {
   try {
     const params = new URLSearchParams({ collection, page: String(page) });
     if (query) params.set("q", query);
-    const res = await fetch(`${API_BASE}/content?${params.toString()}`);
-    if (!res.ok) {
-      const error = await res.json().catch(() => ({}));
-      throw new Error(error.error || "No se pudo cargar la colección");
-    }
-    const data = await res.json();
+    const data = await adminApi.get(`/content?${params.toString()}`);
     if (requestId !== collectionRequestId) return;
     currentPage = data.page;
     renderList(data.entries || [], data.page, data.pageCount, data.total, Boolean(query));
@@ -329,11 +323,7 @@ async function createArticle() {
 
 async function editArticle(slug, collection, sha) {
   try {
-    const res = await fetch(
-      `${API_BASE}/content?collection=${collection}&slug=${slug}`,
-    );
-    if (!res.ok) throw new Error("No se pudo cargar el artículo");
-    const data = await res.json();
+    const data = await adminApi.get(`/content?collection=${encodeURIComponent(collection)}&slug=${encodeURIComponent(slug)}`);
     const entry = data.entry;
 
     editId.value = entry.slug;
@@ -377,15 +367,7 @@ async function deleteArticle(slug, collection, sha) {
   if (!confirm(`¿Estás seguro de que querés borrar "${slug}"?`)) return;
 
   try {
-    const res = await fetch(`${API_BASE}/content`, {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ collection, slug, sha }),
-    });
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error || "No se pudo borrar el artículo");
-    }
+    await adminApi.delete("/content", { collection, slug, sha });
     showSuccess("Artículo borrado correctamente");
     loadCollection(collection, currentPage);
   } catch (err) {
@@ -431,16 +413,7 @@ editorForm.addEventListener("submit", async (event) => {
   if (isEdit) body.sha = editSha;
 
   try {
-    const res = await fetch(`${API_BASE}/content`, {
-      method,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error || "No se pudo guardar el artículo");
-    }
+    await adminApi.request("/content", { method, body });
 
     showSuccess(isEdit ? "Artículo guardado" : "Artículo creado");
     modalOverlay.style.display = "none";
@@ -466,11 +439,7 @@ document
   .addEventListener("click", async (event) => {
     event.preventDefault();
     try {
-      await fetch(`${API_BASE}/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "logout" }),
-      });
+      await adminApi.post("/login", { action: "logout" });
     } finally {
       window.location.href = "/admin/";
     }
@@ -544,9 +513,7 @@ editBody.addEventListener("input", updatePreview);
 // --- Papelera ---
 async function loadTrash() {
   try {
-    const res = await fetch(`${API_BASE}/content?collection=trash`);
-    if (!res.ok) throw new Error("No se pudo cargar la papelera");
-    const data = await res.json();
+    const data = await adminApi.get("/content?collection=trash");
 
     if (!data.entries || data.entries.length === 0) {
       contentArea.innerHTML = `<div class="empty">La papelera está vacía.</div>`;
@@ -598,15 +565,7 @@ async function loadTrash() {
 async function recoverArticle(slug, collection, sha) {
   if (!confirm(`¿Recuperar "${slug}"?`)) return;
   try {
-    const res = await fetch(`${API_BASE}/content`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "restore", collection, slug, sha }),
-    });
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error || "No se pudo recuperar el artículo");
-    }
+    await adminApi.post("/content", { action: "restore", collection, slug, sha });
     showSuccess("Artículo recuperado");
     loadTrash();
   } catch (err) {
@@ -617,14 +576,7 @@ async function recoverArticle(slug, collection, sha) {
 // --- Navegador de medios ---
 async function loadMedia() {
   try {
-    const res = await fetch(`${API_BASE}/content?collection=media&page=1`);
-    if (!res.ok) {
-      // Si la colección media no existe, mostrar lista vacía
-      mediaItems = [];
-      renderMediaList([]);
-      return;
-    }
-    const data = await res.json();
+    const data = await adminApi.get("/content?collection=media&page=1");
     mediaItems = (data.entries || []).map((entry) => ({
       name: entry.fields.title || entry.slug,
       url: entry.fields.coverImage || "",
@@ -812,19 +764,10 @@ async function uploadImage(collection, slug) {
     for (let i = 0; i < bytes.length; i += 0x8000) {
       binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
     }
-    const res = await fetch(`${API_BASE}/upload`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        collection, slug, mimeType: file.type, filename: file.name,
-        alt: imageAlt.value || file.name, data: btoa(binary),
-      }),
+    const data = await adminApi.post("/upload", {
+      collection, slug, mimeType: file.type, filename: file.name,
+      alt: imageAlt.value || file.name, data: btoa(binary),
     });
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error || "No se pudo subir la imagen");
-    }
-    const data = await res.json();
     currentImageFile = null;
     currentImageUrl = data.url;
     imageInput.value = "";
