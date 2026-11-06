@@ -258,7 +258,7 @@ editorForm.addEventListener("submit", async (event) => {
 
   const collection = editCollection.value;
   const slug = editSlug.value.trim();
-  const body = editorFields.buildPayload({
+  const articlePayload = editorFields.buildPayload({
     collection,
     slug,
     title: editTitle.value,
@@ -268,7 +268,7 @@ editorForm.addEventListener("submit", async (event) => {
     score: editScore.value,
     coverAlt: imageAlt.value,
   });
-  const fields = body.fields;
+  const fields = articlePayload.fields;
 
   const isEdit = !!editId.value;
   const method = isEdit ? "PUT" : "POST";
@@ -371,15 +371,7 @@ mediaSearch.addEventListener("input", () => {
 
 // Slug automático desde título
 editTitle.addEventListener("input", () => {
-  if (!editSlug.value) {
-    editSlug.value = editTitle.value
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/-+/g, "-")
-      .replace(/^-|-$/g, "");
-  }
+  if (!editSlug.value) editSlug.value = slugifyTitle(editTitle.value);
 });
 
 // Preview en tiempo real
