@@ -13,6 +13,7 @@ if (form && error && passwordInput && submitButton) {
       const response = await fetch(form.action, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
         body: JSON.stringify({
           action: "login",
           password: passwordInput.value,
@@ -22,7 +23,7 @@ if (form && error && passwordInput && submitButton) {
       const data = await response.json().catch(() => ({}));
 
       if (response.ok && data.ok) {
-        window.location.assign("/admin/");
+        window.location.assign("/admin/panel.html");
         return;
       }
 
