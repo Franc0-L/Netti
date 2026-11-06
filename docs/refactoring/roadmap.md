@@ -18,8 +18,9 @@
 - [x] Auditar los puntos restantes donde se usa `innerHTML` con contenido dinámico: escapar texto/atributos y validar rutas locales de imágenes del navegador de medios.
 - [x] Recuperar integración de handlers reales del administrador: login, alta, duplicados y subida de imágenes.
 - [ ] Adaptar cobertura de edición, borrado y restauración.
-- [x] Añadir un primer smoke test de runtime SSR para páginas públicas independientes del repositorio de contenido.
-- [ ] Recuperar auditorías Axe y navegación por teclado con selectores actuales.
+- [x] Añadir un smoke test de runtime SSR para páginas públicas independientes del repositorio de contenido.
+- [x] Probar el entrypoint real del build Vercel con contenido y medios simulados: detalle, 404, índice de búsqueda, validación y caché.
+- [x] Recuperar una primera auditoría Axe sobre HTML renderizado y control del orden natural de tabulación en páginas públicas y login.
 
 ### 2. Administrador
 
@@ -51,8 +52,8 @@
 
 ### 5. Calidad y mantenimiento
 
-- [ ] Ampliar pruebas SSR para páginas dinámicas y respuestas HTTP con contenido simulado.
-- [ ] Recuperar pruebas E2E de navegador, Axe y navegación por teclado, adaptadas al código actual.
+- [ ] Ampliar pruebas SSR para juegos, reseñas y guías con contenido simulado.
+- [ ] Recuperar pruebas E2E de navegador y ampliar Axe/teclado al panel autenticado y rutas editoriales dinámicas.
 - [ ] Añadir pruebas de build y enlaces locales.
 - [ ] Normalizar formato, lint y convenciones.
 - [ ] Revisar dependencias y eliminar únicamente las que estén demostrablemente sin uso.

@@ -40,3 +40,6 @@ jobs:
 
       - name: Build de producción
         run: npm run build
+
+      - name: Pruebas del runtime SSR construido
+        run: npm run test:ssr-built-runtime
