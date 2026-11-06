@@ -1,4 +1,4 @@
-import { getTree, readMarkdownFile } from "../github/contents.js";
+import { getTree, readMarkdownBlob } from "../github/contents.js";
 
 const LIST_PAGE_SIZE = 50;
 
@@ -66,7 +66,7 @@ async function getSearchIndex() {
       const item = paths[index];
       const [, collection, filename] = item.path.split("/");
       const slug = filename.slice(0, -3);
-      const markdown = await readMarkdownFile(collection, slug);
+      const markdown = await readMarkdownBlob(item.sha);
       entries[index] = { collection, slug, sha: item.sha, fields: markdown.fields };
     }
   };
@@ -110,7 +110,7 @@ export async function listEntries(
   if (page > Math.max(pageCount, 1)) return { entries: [], page, pageSize: LIST_PAGE_SIZE, pageCount, total };
   return {
     entries: await Promise.all(paginated.map(async (item) => {
-      const fields = item.fields ?? (await readMarkdownFile(item.collection, item.slug)).fields;
+      const fields = item.fields ?? (await readMarkdownBlob(item.sha)).fields;
       return { collection: item.collection, slug: item.slug, sha: item.sha, fields };
     })),
     page,
