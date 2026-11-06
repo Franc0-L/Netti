@@ -2,6 +2,7 @@ import { renderMarkdownPreview } from "./markdown-preview.js";
 import { adminApi } from "./api-client.js";
 import { renderCollectionList, renderTrashList, renderMediaList as renderMediaListHtml } from "./list-views.js";
 import { safeMediaUrl } from "./html-safety.js";
+import { validateImageFile, uploadImageFile } from "./media-upload.js";
 import { createEditorForm, slugifyTitle } from "./editor-form.js";
 
 const collectionLabels = {
@@ -513,12 +514,17 @@ checkAuth().then(() => {
 imageInput.addEventListener("change", (event) => {
   const file = event.target.files[0];
   if (!file) return;
-  if (!file.type.startsWith("image/")) {
-    showError("Solo se permiten archivos de imagen.");
-    return;
-  }
-  if (file.size > 2 * 1024 * 1024) {
-    showError("La imagen no puede superar los 2 MB.");
+  const validationError = validateImageFile(file);
+  if (validationError) {
+    currentImageFile = null;
+    imageInput.value = "";
+    if (currentImageUrl) {
+      imagePreviewImg.src = currentImageUrl;
+      imagePreview.style.display = "block";
+    } else {
+      imagePreview.style.display = "none";
+    }
+    showError(validationError);
     return;
   }
   currentImageFile = file;
@@ -528,7 +534,7 @@ imageInput.addEventListener("change", (event) => {
     imagePreview.style.display = "block";
     if (!imageAlt.value) {
       imageAlt.value = file.name
-        .replace(/\.[^/.]+$/, "")
+        .replace(/\\.[^/.]+$/, "")
         .replace(/[-_]+/g, " ");
     }
   };
@@ -565,21 +571,24 @@ async function uploadImage(collection, slug) {
   if (!currentImageFile) return currentImageUrl;
   try {
     const file = currentImageFile;
-    const bytes = new Uint8Array(await file.arrayBuffer());
-    let binary = "";
-    for (let i = 0; i < bytes.length; i += 0x8000) {
-      binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-    }
-    const data = await adminApi.post("/upload", {
-      collection, slug, mimeType: file.type, filename: file.name,
-      alt: imageAlt.value || file.name, data: btoa(binary),
+    const data = await uploadImageFile({
+      api: adminApi,
+      file,
+      collection,
+      slug,
+      alt: imageAlt.value || file.name,
     });
     currentImageFile = null;
     currentImageUrl = data.url;
     imageInput.value = "";
     imagePreviewImg.src = data.url;
     imagePreview.style.display = "block";
-    mediaItems.unshift({ name: file.name, url: data.url, alt: data.alt || imageAlt.value, slug });
+    mediaItems.unshift({
+      name: file.name,
+      url: data.url,
+      alt: data.alt || imageAlt.value,
+      slug,
+    });
     renderMediaList(mediaItems);
     showSuccess("Imagen subida correctamente");
     return data.url;
