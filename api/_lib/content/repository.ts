@@ -8,7 +8,7 @@ let treeCache: {
 } | null = null;
 const TREE_CACHE_TTL_MS = 60_000;
 const SEARCH_INDEX_TTL_MS = 60_000;
-let searchIndexCache: { entries: { collection: string; slug: string; sha: string; fields: Record<string, unknown> }[]; fetchedAt: number } | null = null;
+const searchIndexCache = new Map<string, { entries: { collection: string; slug: string; sha: string; fields: Record<string, unknown> }[]; fetchedAt: number }>();
 
 function treeCacheFresh(): boolean {
   return (
@@ -18,7 +18,7 @@ function treeCacheFresh(): boolean {
 
 function invalidateTreeCache(): void {
   treeCache = null;
-  searchIndexCache = null;
+  searchIndexCache.clear();
 }
 
 async function getTreeCached(): Promise<
@@ -55,9 +55,11 @@ export async function contentPaths(collection?: string): Promise<
 }
 
 // Construye un índice cacheado para que la búsqueda incluya toda la colección.
-async function getSearchIndex() {
-  if (searchIndexCache && Date.now() - searchIndexCache.fetchedAt < SEARCH_INDEX_TTL_MS) return searchIndexCache.entries;
-  const paths = await contentPaths();
+async function getSearchIndex(collection?: string) {
+  const cacheKey = collection || "*";
+  const cached = searchIndexCache.get(cacheKey);
+  if (cached && Date.now() - cached.fetchedAt < SEARCH_INDEX_TTL_MS) return cached.entries;
+  const paths = await contentPaths(collection);
   const entries: { collection: string; slug: string; sha: string; fields: Record<string, unknown> }[] = [];
   let cursor = 0;
   const worker = async () => {
@@ -71,7 +73,7 @@ async function getSearchIndex() {
     }
   };
   await Promise.all(Array.from({ length: Math.min(4, paths.length) }, worker));
-  searchIndexCache = { entries, fetchedAt: Date.now() };
+  searchIndexCache.set(cacheKey, { entries, fetchedAt: Date.now() });
   return entries;
 }
 
@@ -94,7 +96,7 @@ export async function listEntries(
   const normalizedQuery = normalizeSearch(query);
   let selected: { collection: string; slug: string; sha: string; fields?: Record<string, unknown> }[];
   if (normalizedQuery) {
-    selected = (await getSearchIndex()).filter((entry) =>
+    selected = (await getSearchIndex(collection)).filter((entry) =>
       (!collection || entry.collection === collection) &&
       [entry.slug, entry.fields.title, entry.fields.description].some((value) => normalizeSearch(value).includes(normalizedQuery)),
     );
