@@ -9,7 +9,11 @@ export function createAdminApi({
   }
 
   async function request(path, { method = "GET", body, headers = {} } = {}) {
-    const options = { method, headers: { ...headers } };
+    const options = {
+      method,
+      headers: { ...headers },
+      credentials: "include",
+    };
     if (body !== undefined) {
       options.headers["Content-Type"] = "application/json";
       options.body = JSON.stringify(body);
