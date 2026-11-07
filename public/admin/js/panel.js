@@ -20,74 +20,89 @@ let currentImageFile = null;
 let currentImageUrl = null;
 let isSaving = false;
 
-// Elementos DOM — barra superior
-const topCollections = document.getElementById("top-collections");
-const logoutBtn = document.getElementById("logout-btn");
+// Elementos DOM (se resuelven tras DOMContentLoaded)
+let topCollections, logoutBtn;
+let collectionList, trashLink;
+let pageTitle, pageSubtitle, previewBtn, saveBtn, newBtn;
+let errorMsg, successMsg, editorForm;
+let editId, editCollection, editTitle, editSlug, editDescription, editBody;
+let editGame, editScore, editorFields;
+let imageInput, imagePreview, imageAlt;
+let previewModal, previewBody, closePreviewBtn;
 
-// Elementos DOM — sidebar
-const collectionList = document.getElementById("collection-list");
-const trashLink = document.getElementById("trash-link");
+function $id(id) {
+  const el = document.getElementById(id);
+  if (!el) {
+    console.error(`Elemento #${id} no encontrado en el DOM`);
+  }
+  return el;
+}
 
-// Elementos DOM — header del editor
-const pageTitle = document.getElementById("page-title");
-const pageSubtitle = document.getElementById("page-subtitle");
-const previewBtn = document.getElementById("preview-btn");
-const saveBtn = document.getElementById("save-btn");
-const newBtn = document.getElementById("new-btn");
-
-// Elementos DOM — formulario
-const errorMsg = document.getElementById("error-msg");
-const successMsg = document.getElementById("success-msg");
-const editorForm = document.getElementById("editor-form");
-const editId = document.getElementById("edit-id");
-const editCollection = document.getElementById("edit-collection");
-const editTitle = document.getElementById("edit-title");
-const editSlug = document.getElementById("edit-slug");
-const editDescription = document.getElementById("edit-description");
-const editBody = document.getElementById("edit-body");
-const editGame = document.getElementById("edit-game");
-const editScore = document.getElementById("edit-score");
-const editorFields = createEditorForm();
-
-// Imagen
-const imageInput = document.getElementById("image-input");
-const imagePreview = document.getElementById("image-preview");
-const imageAlt = document.getElementById("edit-cover-alt");
-
-// Modal de vista previa
-const previewModal = document.getElementById("preview-modal");
-const previewBody = document.getElementById("preview-body");
-const closePreviewBtn = document.getElementById("close-preview");
-
-const editorState = createEditorState({
-  form: editorForm,
-  confirmDiscard: (message) => window.confirm(message),
-});
-
-window.addEventListener("beforeunload", editorState.handleBeforeUnload);
+function initDOM() {
+  topCollections = $id("top-collections");
+  logoutBtn = $id("logout-btn");
+  collectionList = $id("collection-list");
+  trashLink = $id("trash-link");
+  pageTitle = $id("page-title");
+  pageSubtitle = $id("page-subtitle");
+  previewBtn = $id("preview-btn");
+  saveBtn = $id("save-btn");
+  newBtn = $id("new-btn");
+  errorMsg = $id("error-msg");
+  successMsg = $id("success-msg");
+  editorForm = $id("editor-form");
+  editId = $id("edit-id");
+  editCollection = $id("edit-collection");
+  editTitle = $id("edit-title");
+  editSlug = $id("edit-slug");
+  editDescription = $id("edit-description");
+  editBody = $id("edit-body");
+  editGame = $id("edit-game");
+  editScore = $id("edit-score");
+  editorFields = createEditorForm();
+  imageInput = $id("image-input");
+  imagePreview = $id("image-preview");
+  imageAlt = $id("edit-cover-alt");
+  previewModal = $id("preview-modal");
+  previewBody = $id("preview-body");
+  closePreviewBtn = $id("close-preview");
+}
 
 function showError(msg) {
-  errorMsg.textContent = msg;
-  errorMsg.style.display = "block";
-  successMsg.style.display = "none";
-  setTimeout(() => { errorMsg.style.display = "none"; }, 6000);
+  if (errorMsg) {
+    errorMsg.textContent = msg;
+    errorMsg.style.display = "block";
+  }
+  if (successMsg) successMsg.style.display = "none";
+  console.error(msg);
+  setTimeout(() => { if (errorMsg) errorMsg.style.display = "none"; }, 6000);
 }
 
 function showSuccess(msg) {
-  successMsg.textContent = msg;
-  successMsg.style.display = "block";
-  errorMsg.style.display = "none";
-  setTimeout(() => { successMsg.style.display = "none"; }, 4000);
+  if (successMsg) {
+    successMsg.textContent = msg;
+    successMsg.style.display = "block";
+  }
+  if (errorMsg) errorMsg.style.display = "none";
+  setTimeout(() => { if (successMsg) successMsg.style.display = "none"; }, 4000);
 }
 
 function clearMessages() {
-  errorMsg.style.display = "none";
-  successMsg.style.display = "none";
+  if (errorMsg) errorMsg.style.display = "none";
+  if (successMsg) successMsg.style.display = "none";
+}
+
+function requireAuth() {
+  if (!isAuthenticated) {
+    showError("Sesión no iniciada. Volvé a entrar al panel.");
+    return false;
+  }
+  return true;
 }
 
 async function checkAuth() {
   try {
-    await adminApi.get("/content?collection=games&page=1");
+    const data = await adminApi.get("/content?collection=games&page=1");
     isAuthenticated = true;
     renderTopNav();
     loadCollection("games");
@@ -98,6 +113,7 @@ async function checkAuth() {
 }
 
 function renderTopNav() {
+  if (!topCollections) return;
   topCollections.innerHTML = "";
   for (const [key, label] of Object.entries(collectionLabels)) {
     const a = document.createElement("a");
@@ -114,56 +130,68 @@ function renderTopNav() {
 }
 
 function setActiveLink(collection) {
+  if (!topCollections) return;
   topCollections.querySelectorAll("a").forEach((link) => {
     link.classList.toggle("active", link.dataset.collection === collection);
   });
 }
 
 async function loadCollection(collection, page = 1) {
+  if (!requireAuth()) return;
   if (!Object.hasOwn(collectionLabels, collection)) return;
   currentCollection = collection;
   currentPage = page;
-  pageTitle.textContent = collectionLabels[collection];
-  pageSubtitle.textContent = `Gestioná las publicaciones de ${collectionLabels[collection].toLocaleLowerCase()}.`;
+  if (pageTitle) pageTitle.textContent = collectionLabels[collection];
+  if (pageSubtitle) pageSubtitle.textContent = `Gestioná las publicaciones de ${collectionLabels[collection].toLocaleLowerCase()}.`;
   setActiveLink(collection);
 
-  collectionList.innerHTML = '<div class="empty-state"><p>Cargando publicaciones…</p></div>';
+  if (collectionList) {
+    collectionList.innerHTML = '<div class="empty-state"><p>Cargando publicaciones…</p></div>';
+  }
 
   try {
     const params = new URLSearchParams({ collection, page: String(page) });
     const data = await adminApi.get(`/content?${params.toString()}`);
     currentPage = data.page || page;
-    collectionList.innerHTML = renderCollectionList({
-      entries: data.entries || [],
-      page: data.page || page,
-      pageCount: data.pageCount || 0,
-      query: "",
-      isSearching: false,
-    });
-    bindListActions();
+    if (collectionList) {
+      collectionList.innerHTML = renderCollectionList({
+        entries: data.entries || [],
+        page: data.page || page,
+        pageCount: data.pageCount || 0,
+        query: "",
+        isSearching: false,
+      });
+      bindListActions();
+    }
   } catch (error) {
     showError(error.message || "No se pudieron cargar las publicaciones.");
   }
 }
 
 async function loadTrash() {
+  if (!requireAuth()) return;
   currentCollection = null;
-  pageTitle.textContent = "Papelera";
-  pageSubtitle.textContent = "Publicaciones eliminadas que podés recuperar.";
+  if (pageTitle) pageTitle.textContent = "Papelera";
+  if (pageSubtitle) pageSubtitle.textContent = "Publicaciones eliminadas que podés recuperar.";
   setActiveLink(null);
 
-  collectionList.innerHTML = '<div class="empty-state"><p>Cargando papelera…</p></div>';
+  if (collectionList) {
+    collectionList.innerHTML = '<div class="empty-state"><p>Cargando papelera…</p></div>';
+  }
 
   try {
     const data = await adminApi.get("/content?collection=trash");
-    collectionList.innerHTML = renderTrashList(data.entries || []);
-    bindListActions();
+    if (collectionList) {
+      collectionList.innerHTML = renderTrashList(data.entries || []);
+      bindListActions();
+    }
   } catch (error) {
     showError(error.message || "No se pudo cargar la papelera.");
   }
 }
 
 function bindListActions() {
+  if (!collectionList) return;
   collectionList.querySelectorAll("[data-action]").forEach((btn) => {
     btn.addEventListener("click", (event) => {
       event.preventDefault();
@@ -208,6 +236,7 @@ async function deleteArticle(slug, collection, sha) {
 }
 
 async function editArticle(slug, collection, sha) {
+  if (!requireAuth()) return;
   try {
     const data = await adminApi.get(`/content?collection=${encodeURIComponent(collection)}&slug=${encodeURIComponent(slug)}`);
     const entry = data.entry;
@@ -226,11 +255,11 @@ async function editArticle(slug, collection, sha) {
 
     currentImageFile = null;
     currentImageUrl = null;
-    imageInput.value = "";
-    imagePreview.innerHTML = "";
-    imageAlt.value = entry.fields.coverAlt || "";
+    if (imageInput) imageInput.value = "";
+    if (imagePreview) imagePreview.innerHTML = "";
+    if (imageAlt) imageAlt.value = entry.fields.coverAlt || "";
     currentImageUrl = entry.fields.coverImage || null;
-    if (currentImageUrl) {
+    if (currentImageUrl && imagePreview) {
       const img = document.createElement("img");
       img.src = currentImageUrl;
       img.alt = "Vista previa";
@@ -239,7 +268,7 @@ async function editArticle(slug, collection, sha) {
     }
 
     editorState.markClean();
-    editTitle.focus();
+    if (editTitle) editTitle.focus();
     showSuccess(`Editando: ${entry.fields.title || entry.slug}`);
   } catch (err) {
     showError(err.message || "No se pudo cargar el artículo");
@@ -247,9 +276,15 @@ async function editArticle(slug, collection, sha) {
 }
 
 function createArticle() {
+  if (!requireAuth()) return;
+  if (!currentCollection) {
+    showError("Primero seleccioná una colección.");
+    return;
+  }
+
   editId.value = "";
   editSha = "";
-  editCollection.value = currentCollection || "games";
+  editCollection.value = currentCollection;
   editTitle.value = "";
   editSlug.value = "";
   editDescription.value = "";
@@ -257,27 +292,30 @@ function createArticle() {
   editGame.value = "";
   editScore.value = "";
   editorFields.resetMetadataFields();
-  editorFields.setMetadataVisibility(currentCollection || "games");
+  editorFields.setMetadataVisibility(currentCollection);
 
   currentImageFile = null;
   currentImageUrl = null;
-  imageInput.value = "";
-  imagePreview.innerHTML = "";
-  imageAlt.value = "";
+  if (imageInput) imageInput.value = "";
+  if (imagePreview) imagePreview.innerHTML = "";
+  if (imageAlt) imageAlt.value = "";
 
   editorState.markClean();
-  editTitle.focus();
+  if (editTitle) editTitle.focus();
   clearMessages();
   showSuccess("Nuevo artículo — completá los campos y guardá.");
 }
 
 async function saveArticle() {
   if (isSaving) return;
+  if (!requireAuth()) return;
   clearMessages();
 
   isSaving = true;
-  saveBtn.disabled = true;
-  saveBtn.textContent = "Guardando…";
+  if (saveBtn) {
+    saveBtn.disabled = true;
+    saveBtn.textContent = "Guardando…";
+  }
 
   try {
     const collection = editCollection.value;
@@ -321,8 +359,10 @@ async function saveArticle() {
     showError(err.message || "No se pudo guardar el artículo");
   } finally {
     isSaving = false;
-    saveBtn.disabled = false;
-    saveBtn.textContent = "Guardar";
+    if (saveBtn) {
+      saveBtn.disabled = false;
+      saveBtn.textContent = "Guardar";
+    }
   }
 }
 
@@ -377,19 +417,21 @@ imageInput.addEventListener("change", (event) => {
   const validationError = validateImageFile(file);
   if (validationError) {
     currentImageFile = null;
-    imageInput.value = "";
-    imagePreview.innerHTML = "";
+    if (imageInput) imageInput.value = "";
+    if (imagePreview) imagePreview.innerHTML = "";
     showError(validationError);
     return;
   }
   currentImageFile = file;
   const reader = new FileReader();
   reader.onload = (e) => {
-    imagePreview.innerHTML = "";
-    const img = document.createElement("img");
-    img.src = e.target.result;
-    img.alt = "Vista previa";
-    imagePreview.appendChild(img);
+    if (imagePreview) {
+      imagePreview.innerHTML = "";
+      const img = document.createElement("img");
+      img.src = e.target.result;
+      img.alt = "Vista previa";
+      imagePreview.appendChild(img);
+    }
   };
   reader.readAsDataURL(file);
 });
@@ -407,12 +449,14 @@ async function uploadImage(collection, slug) {
     });
     currentImageFile = null;
     currentImageUrl = data.url;
-    imageInput.value = "";
-    imagePreview.innerHTML = "";
-    const img = document.createElement("img");
-    img.src = data.url;
-    img.alt = "Vista previa";
-    imagePreview.appendChild(img);
+    if (imageInput) imageInput.value = "";
+    if (imagePreview) {
+      imagePreview.innerHTML = "";
+      const img = document.createElement("img");
+      img.src = data.url;
+      img.alt = "Vista previa";
+      imagePreview.appendChild(img);
+    }
     showSuccess("Imagen subida correctamente");
     return data.url;
   } catch (err) {
@@ -421,8 +465,16 @@ async function uploadImage(collection, slug) {
   }
 }
 
-// Inicializar
-checkAuth();
+// Inicializar tras que el DOM esté listo
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", () => {
+    initDOM();
+    checkAuth();
+  });
+} else {
+  initDOM();
+  checkAuth();
+}
 
 window.app = {
   loadCollection,

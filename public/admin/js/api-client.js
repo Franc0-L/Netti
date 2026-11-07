@@ -22,7 +22,8 @@ export function createAdminApi({
     const response = await fetchImpl(`${baseUrl}${path}`, options);
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
-      throw new Error(payload?.error || `La solicitud falló (HTTP ${response.status}).`);
+      const detail = payload?.error || payload?.message || "";
+      throw new Error(`HTTP ${response.status}${detail ? ": " + detail : ""}`);
     }
     return payload;
   }
