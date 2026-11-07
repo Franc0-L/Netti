@@ -8,7 +8,7 @@ export interface RawgGame {
 }
 
 // Obtiene datos complementarios de un juego desde la API de RAWG. Si no hay API key configurada o falla la petición, devuelve null silenciosamente.
-export async function getRawdGame(title: string): Promise<RawgGame | null> {
+export async function getRawgGame(title: string): Promise<RawgGame | null> {
   const apiKey =
     typeof process !== "undefined" ? process.env.RAWG_API_KEY : undefined;
   if (!apiKey) return null;

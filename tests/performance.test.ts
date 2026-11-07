@@ -16,20 +16,24 @@ try {
 const describeOrSkip = npmAvailable ? describe : describe.skip;
 
 describeOrSkip("Rendimiento (build)", () => {
-  it("astro build debe completarse en menos de 60 segundos", () => {
-    const start = performance.now();
-    try {
-      execSync("npm run build", {
-        stdio: "pipe",
-        timeout: 60000,
-        cwd: process.cwd(),
-      });
-    } catch (error) {
-      throw new Error(`astro build falló: ${error}`);
-    }
-    const duration = performance.now() - start;
-    expect(duration).toBeLessThan(60000);
-  });
+  it(
+    "astro build debe completarse en menos de 60 segundos",
+    () => {
+      const start = performance.now();
+      try {
+        execSync("npm run build", {
+          stdio: "pipe",
+          timeout: 60000,
+          cwd: process.cwd(),
+        });
+      } catch (error) {
+        throw new Error(`astro build falló: ${error}`);
+      }
+      const duration = performance.now() - start;
+      expect(duration).toBeLessThan(60000);
+    },
+    90000,
+  );
 
   it("el directorio dist debe existir después del build", () => {
     const distDir = join(process.cwd(), "dist");

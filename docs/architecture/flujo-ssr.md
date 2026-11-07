@@ -12,7 +12,7 @@ Netti usa `output: "server"` con el adaptador de Vercel. Cada visita a una pági
 5. GitHub devuelve el archivo .md (frontmatter YAML + cuerpo Markdown)
 6. fetch-content valida el frontmatter contra el schema Zod de games
 7. Se normalizan las rutas de imagen (/images/editorial/ → /media/)
-8. Se renderiza el Markdown a HTML (marked + rehype-sanitize)
+8. Se renderiza el Markdown a HTML (`marked` + `hast-util-sanitize`)
 9. BaseLayout envuelve el artículo con head, nav, footer, etc.
 10. Se devuelve HTML al navegador con cabeceras de caché
 ```

@@ -31,7 +31,7 @@ Netti es un blog editorial de videojuegos construido con **Astro SSR** y adaptad
 - **Framework**: Astro v7 con adaptador de Vercel (`output: "server"`)
 - **Lenguaje**: TypeScript (estricto) + Astro (`.astro`)
 - **Validación de contenido**: Zod schemas compartidos entre sitio y panel
-- **Markdown**: `marked` con `rehype-sanitize` y `rehype-raw`
+- **Markdown**: `marked` + `hast-util-sanitize` en runtime; `rehype-raw` + `rehype-sanitize` en el pipeline de Astro
 - **Estilos**: CSS custom properties, tema oscuro, fuente Quicksand
 - **Despliegue**: Vercel (serverless functions para las APIs del panel)
 - **Contenido**: Repositorio privado de GitHub con archivos `.md` (frontmatter YAML + cuerpo Markdown)

@@ -99,7 +99,7 @@ function notFound() {
 }
 
 // Convierte el parámetro de ruta en una ruta de repositorio segura. Solo se permiten medios bajo `media/{games,reviews,news,guides}/...`.
-function safeRepoPath(raw: string): string | null {
+export function safeRepoPath(raw: string): string | null {
   let value = raw;
 
   try {

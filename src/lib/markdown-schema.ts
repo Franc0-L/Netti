@@ -1,4 +1,4 @@
-import { defaultSchema } from "rehype-sanitize";
+import { defaultSchema } from "hast-util-sanitize";
 
 /*
   Esquema único de sanitización del HTML editorial.

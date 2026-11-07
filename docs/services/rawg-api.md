@@ -4,7 +4,7 @@ RAWG se usa para enriquecer las fichas de juegos con datos complementarios (punt
 
 ## Cliente RAWG (`src/lib/rawg.ts`)
 
-La función `getRawdGame(title)` consulta la API de RAWG y devuelve datos complementarios de un juego. Si no hay API key configurada o la petición falla, devuelve `null` silenciosamente — el sitio funciona normalmente sin RAWG.
+La función `getRawgGame(title)` consulta la API de RAWG y devuelve datos complementarios de un juego. Si no hay API key configurada o la petición falla, devuelve `null` silenciosamente — el sitio funciona normalmente sin RAWG.
 
 ## Datos obtenidos
 

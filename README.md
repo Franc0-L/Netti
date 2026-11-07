@@ -170,9 +170,11 @@ Netti/
 │   │   ├── fondo-web.webp
 │   │   └── platforms/
 │   │       ├── switch.png, xbox.png, playstation.png, pc.png
+│   ├── fonts/
+│   │   ├── quicksand-latin.woff2
+│   │   └── quicksand-latin-ext.woff2
 │   ├── manifest.webmanifest
-│   ├── robots.txt
-│   └── favicon.svg
+│   └── robots.txt
 ├── src/
 │   ├── lib/
 │   │   ├── env-config.ts       # Lectura y validación de variables de entorno
@@ -214,7 +216,7 @@ Netti/
 │   ├── security-headers.test.ts # Cabeceras de seguridad en vercel.json
 │   ├── media-url.test.ts       # Magic bytes, safeRepoPath, caché de medios
 │   ├── admin-api.test.ts       # Rate limiting, timingSafeEqual, assertSameOrigin, schemas
-│   ├── markdown-sanitize.test.ts # rehype-sanitize, rehypeRaw, reescritura de imágenes
+│   ├── markdown-sanitize.test.ts # Esquema compartido, sanitización y reescritura de imágenes
 │   └── platform-logos.test.ts  # PLATFORM_PRESETS, platformSymbol, platformImage
 ├── docs/
 │   ├── architecture/           # Visión general, flujo SSR, caché
@@ -275,7 +277,7 @@ npx vitest run
 | `security-headers.test.ts` | Cabeceras CSP, HSTS, Referrer-Policy, Permissions-Policy en `vercel.json` |
 | `media-url.test.ts` | Magic bytes (PNG, JPEG, WebP), `safeRepoPath` contra path traversal, caché en memoria |
 | `admin-api.test.ts` | Rate limiting, `timingSafeEqual`, `assertSameOrigin`, `hasSession`, validación con schemas, tipos de imagen, `COOKIE_NAME`, `SESSION_SECONDS` |
-| `markdown-sanitize.test.ts` | `rehype-sanitize`, `rehypeRaw`, reescritura de rutas de imagen en `markdown.ts` |
+| `markdown-sanitize.test.ts` | Esquema compartido, `hast-util-sanitize`, reescritura de rutas de imagen en `markdown.ts` |
 | `platform-logos.test.ts` | `PLATFORM_PRESETS`, `PLATFORM_IMAGES`, `platformSymbol`, `platformImage`, `canonicalizePlatforms` |
 
 ---

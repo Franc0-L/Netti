@@ -21,7 +21,8 @@ describe("Markdown sanitización", () => {
     expect(config).toContain("rehype-sanitize");
     expect(config).toContain("rehype-raw");
     expect(markdown).toContain("markdownSanitizeSchema");
-    expect(markdown).toContain("rehypeSanitize");
+    expect(markdown).toContain("hast-util-sanitize");
+    expect(markdown).toContain("sanitize(tree");
     expect(schema).toContain("defaultSchema");
     expect(schema).toContain("markdownSanitizeSchema");
   });

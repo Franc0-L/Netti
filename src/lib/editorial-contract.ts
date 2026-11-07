@@ -59,8 +59,16 @@ const galleryItem = z.object({
   caption: z.string().max(240).optional(),
 });
 
-// Solo http/https: z.url() acepta javascript:, data:, etc.
-const optionalHttpUrl = z.httpUrl().or(z.literal("")).optional();
+/*
+  Solo http/https: z.url() acepta javascript:, data:, etc.
+  Los valores vacíos o nulos (por ejemplo un `sourceUrl:` en blanco en YAML,
+  que se parsea como null) se normalizan a undefined para que el campo opcional
+  no invalide toda la publicación.
+*/
+const optionalHttpUrl = z.preprocess(
+  (value) => (value === "" || value === null ? undefined : value),
+  z.httpUrl().optional(),
+);
 
 const mediaFields = {
   videoUrl: optionalHttpUrl,

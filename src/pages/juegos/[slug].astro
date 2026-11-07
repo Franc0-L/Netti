@@ -2,7 +2,7 @@
 import BaseLayout from "../../layouts/BaseLayout.astro";
 import CoverArtwork from "../../components/CoverArtwork.astro";
 import ScoreBadge from "../../components/ScoreBadge.astro";
-import { getRawdGame } from "../../lib/rawg";
+import { getRawgGame } from "../../lib/rawg";
 import MediaGallery from "../../components/MediaGallery.astro";
 import MediaVideo from "../../components/MediaVideo.astro";
 import EditorialTags from "../../components/EditorialTags.astro";
@@ -22,7 +22,7 @@ const game = await getCollectionEntry("games", params.slug);
 if (!game) {
   return Astro.rewrite("/404");
 }
-const rawgGame = await getRawdGame(game.data.title);
+const rawgGame = await getRawgGame(game.data.title);
 
 const relatedReviews = (await getCollectionEntries("reviews"))
   .filter(
