@@ -4,7 +4,9 @@ let isAuthenticated = false;
 
 async function checkSession() {
   try {
-    const response = await fetch(`${API_BASE}/content?collection=games&page=1`);
+    const response = await fetch(`${API_BASE}/content?collection=games&page=1`, {
+      credentials: "include",
+    });
     if (response.ok) {
       isAuthenticated = true;
       initPanel();
