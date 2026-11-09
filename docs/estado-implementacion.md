@@ -16,9 +16,9 @@ Este documento separa el diseño objetivo de las capacidades que existen en el r
 | Validación | Esquema Zod discriminado; pruebas de publicación, etiquetas y URL | Tests añadidos; falta ejecución CI |
 | Utilidades SEO | JSON-LD y CDATA seguros con pruebas unitarias | Tests añadidos; falta ejecución CI |
 | Rutas editoriales | Mapeo de colecciones y rutas canónicas con pruebas | Tests añadidos; falta ejecución CI |
-| Blob | Adaptador de almacenamiento con put/del/list | Sin subida real, cuotas ni compensación probadas |
-| Sesiones | Emisión de token, hash persistido, expiración y revocación | Sin caller de login ni pruebas de integración |
-| Administración | No hay rutas ni Server Actions editoriales conectadas | Pendiente |
+| Blob e imágenes | Upload autenticado de 2 MB, magic bytes, MIME, Sharp, WebP y variantes 480/960/1600; compensación de objetos | Implementado en rama; Blob/Neon reales y límites de runtime pendientes |
+| Sesiones | login/logout/logoutAll con scrypt asíncrono, token opaco, digest en BD, expiración y rate limit por IP | Implementado en rama; falta probar contra Neon y revisar parámetros en Vercel |
+| Server Actions editoriales | createArticle, updateArticle y publishArticle con Zod, control de sesión/origen, revisión transaccional y cache tags | Implementado en rama; typecheck, CI y DB real pendientes |
 | Cron y reconciliación | No hay endpoint operativo de publicación/reconciliación | Pendiente |
 | Backups | No hay workflow operativo de backup/restauración | Pendiente |
 
@@ -52,3 +52,4 @@ No usar “funciona”, “seguro”, “rápido” o “listo para producción�
 - Las URLs de portada proceden de registros de medios; la carga y la validación de esos registros aún deben implementarse.
 - El workflow actual usa npm install porque el lockfile está desactualizado. Esto no ofrece reproducibilidad equivalente a npm ci.
 - El cache de contenido tiene una vida acotada de minutos como medida transitoria; la invalidación inmediata depende de que se implementen las acciones editoriales.
+\n\n## Cambios en `feat/editorial-auth-media-actions`\n\n- Las Server Actions de contenido exigen sesión y origen permitido, validan con Zod y registran snapshots dentro de la transacción.\n- `publishArticle` vuelve a validar el contenido antes de cambiar el estado; `updateArticle` usa control optimista por `version`.\n- El login usa `scrypt` asíncrono (N=131072, r=8, p=1), límite de concurrencia local, HMAC de IP y backoff progresivo.\n- El upload acepta JPEG, PNG, WebP y AVIF hasta 2 MiB, valida firma y dimensiones, elimina metadatos mediante re-encodeo WebP y crea variantes.\n- No se afirma que el esquema desplegado contenga los índices parciales, triggers de versión, FK o constraints descritos en `docs/02.1-modelo-tablas.md`: las migraciones reproducibles siguen pendientes.\n

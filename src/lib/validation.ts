@@ -137,5 +137,5 @@ export const makeArticleSchema = () =>
       }
     });
 
-export type ArticleInput = z.infer<ReturnType<typeof makeArticleSchema>>;
+export type ArticleInput = z.input<ReturnType<typeof makeArticleSchema>>;
 export type ParsedArticle = z.output<ReturnType<typeof makeArticleSchema>>;
