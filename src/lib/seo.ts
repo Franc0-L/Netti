@@ -1,6 +1,10 @@
 export function safeJsonLd(value: unknown): string {
   try {
     const json = JSON.stringify(value);
+    if (typeof json !== "string") {
+      throw new Error("El valor no produce JSON");
+    }
+
     return json
       .replace(/</g, "\\u003c")
       .replace(/>/g, "\\u003e")
