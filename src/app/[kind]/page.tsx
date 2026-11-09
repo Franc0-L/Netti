@@ -1,7 +1,8 @@
 import Link from "next/link";
+import { connection } from "next/server";
 import { notFound } from "next/navigation";
 import { getVisibleArticles } from "@/lib/content.js";
-import { articleCollectionPath, articleKindFromSegment, articlePath } from "@/lib/routes.js";
+import { articleKindFromSegment, articlePath } from "@/lib/routes.js";
 
 const COLLECTIONS = {
   resenas: { title: "Reseñas", description: "Análisis y opiniones sobre videojuegos." },
@@ -14,6 +15,7 @@ export default async function CollectionPage({
 }: {
   params: Promise<{ kind: string }>;
 }) {
+  await connection();
   const { kind: segment } = await params;
   const kind = articleKindFromSegment(segment);
   if (!kind) notFound();
