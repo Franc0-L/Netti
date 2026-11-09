@@ -9,12 +9,23 @@ if (!connectionString) {
   throw new Error("DATABASE_URL no está definida");
 }
 
-// Keep the pool deliberately small: each serverless instance owns its own pool.
+const configuredPoolMax = Number(process.env.DATABASE_POOL_MAX ?? 2);
+
+if (
+  !Number.isInteger(configuredPoolMax) ||
+  configuredPoolMax < 1 ||
+  configuredPoolMax > 10
+) {
+  throw new Error("DATABASE_POOL_MAX debe ser un entero entre 1 y 10");
+}
+
+// Each serverless instance owns its own pool. Keep the default deliberately small.
 export const pool = new Pool({
   connectionString,
-  max: Number(process.env.DATABASE_POOL_MAX ?? 2),
+  max: configuredPoolMax,
   idleTimeoutMillis: 5_000,
   connectionTimeoutMillis: 5_000,
+  allowExitOnIdle: true,
 });
 
 // Vercel Fluid compute can release idle connections between invocations.
