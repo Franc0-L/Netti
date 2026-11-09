@@ -43,10 +43,13 @@ export async function requireSession() {
     session.expiresAt <= now ||
     session.absoluteExpiresAt <= now
   ) {
-    if (session) {
-      await db.delete(sessions).where(eq(sessions.id, sessionId));
+    try {
+      if (session) {
+        await db.delete(sessions).where(eq(sessions.id, sessionId));
+      }
+    } finally {
+      cookieStore.delete("session");
     }
-    cookieStore.delete("session");
     throw new Error("Sesión inválida o expirada");
   }
 
@@ -120,6 +123,7 @@ export async function logout() {
 }
 
 export async function logoutAll() {
+  await requireSession();
   const cookieStore = await cookies();
   try {
     await db.delete(sessions);
