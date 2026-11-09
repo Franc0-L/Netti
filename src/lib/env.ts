@@ -14,7 +14,7 @@ const envSchema = z
       .min(1, "BLOB_READ_WRITE_TOKEN es requerida"),
     VERCEL_OIDC_TOKEN: z.string().optional(),
     BLOB_STORE_ID: z.string().optional(),
-    CRON_SECRET: z.string().min(1, "CRON_SECRET es requerida"),
+    CRON_SECRET: z.string().min(32, "CRON_SECRET debe tener al menos 32 caracteres"),
     EDGE_CONFIG_ID: z.string().optional(),
     IMAGES_PUBLIC_BASE_URL: z.string().url().optional(),
     PUBLIC_SITE_URL: z.string().url().optional(),

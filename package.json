@@ -7,7 +7,8 @@
     "typecheck": "tsc --noEmit",
     "test": "tsx --test src/lib/*.test.ts src/components/*.test.tsx",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "hash:admin": "tsx scripts/hash-admin-password.ts"
   },
   "dependencies": {
     "@vercel/blob": "^2.8.2",
