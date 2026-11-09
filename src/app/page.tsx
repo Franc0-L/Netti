@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { connection } from "next/server";
 import { getVisibleArticles, type ArticleKind } from "@/lib/content.js";
@@ -33,9 +34,8 @@ const sections: Array<{
   },
 ];
 
-export default async function Home() {
+async function LatestContent() {
   await connection();
-
   const [reviews, news, guides] = await Promise.all([
     getVisibleArticles("review", 3),
     getVisibleArticles("news", 3),
@@ -47,6 +47,49 @@ export default async function Home() {
     guide: guides,
   };
 
+  return (
+    <div className="latest-grid">
+      {sections.map((section) => {
+        const latest = content[section.kind][0];
+        return (
+          <article className="latest-card" key={section.kind}>
+            <span className="eyebrow">{section.title}</span>
+            {latest ? (
+              <>
+                <h3><Link href={articlePath(section.kind, latest.slug)}>{latest.title}</Link></h3>
+                {latest.description ? <p>{latest.description}</p> : null}
+                <Link className="read-more" href={articlePath(section.kind, latest.slug)}>
+                  Leer publicación <span aria-hidden="true">↗</span>
+                </Link>
+              </>
+            ) : (
+              <>
+                <h3>En preparación</h3>
+                <p>Esta colección todavía no tiene publicaciones disponibles.</p>
+              </>
+            )}
+          </article>
+        );
+      })}
+    </div>
+  );
+}
+
+function LatestFallback() {
+  return (
+    <div className="latest-grid" aria-label="Cargando publicaciones" aria-busy="true">
+      {sections.map((section) => (
+        <div className="latest-card latest-card-skeleton" key={section.kind}>
+          <span className="eyebrow">{section.title}</span>
+          <div className="loading-line loading-title" />
+          <div className="loading-line loading-copy" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export default function Home() {
   return (
     <main id="top" className="site-shell">
       <header className="site-header">
@@ -104,30 +147,9 @@ export default async function Home() {
           </div>
           <Link href="/resenas" className="text-link">Ver archivo completo ↗</Link>
         </div>
-        <div className="latest-grid">
-          {sections.map((section) => {
-            const latest = content[section.kind][0];
-            return (
-              <article className="latest-card" key={section.kind}>
-                <span className="eyebrow">{section.title}</span>
-                {latest ? (
-                  <>
-                    <h3><Link href={articlePath(section.kind, latest.slug)}>{latest.title}</Link></h3>
-                    {latest.description ? <p>{latest.description}</p> : null}
-                    <Link className="read-more" href={articlePath(section.kind, latest.slug)}>
-                      Leer publicación <span aria-hidden="true">↗</span>
-                    </Link>
-                  </>
-                ) : (
-                  <>
-                    <h3>En preparación</h3>
-                    <p>Esta colección todavía no tiene publicaciones disponibles.</p>
-                  </>
-                )}
-              </article>
-            );
-          })}
-        </div>
+        <Suspense fallback={<LatestFallback />}>
+          <LatestContent />
+        </Suspense>
       </section>
 
       <footer className="site-footer">
