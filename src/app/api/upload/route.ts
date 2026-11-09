@@ -1,12 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
-import { db } from "@/db/index.js";
-import { media, mediaVariants, storageOrphans } from "@/db/schema.js";
-import { assertSameOrigin, requireSession } from "@/lib/auth.js";
-import { processImage, UPLOAD_MAX_BYTES } from "@/lib/images.js";
-import { storage } from "@/lib/storage.js";
+import { db } from "@/db/index";
+import { media, mediaVariants, storageOrphans } from "@/db/schema";
+import { assertSameOrigin, requireSession } from "@/lib/auth";
+import { processImage, UPLOAD_MAX_BYTES } from "@/lib/images";
+import { storage } from "@/lib/storage";
 
-export const runtime = "nodejs";
 export const maxDuration = 10;
 function toArrayBuffer(value: Buffer): ArrayBuffer { return value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength) as ArrayBuffer; }
 function errorResponse(status: number, error: string) { return NextResponse.json({ ok: false, error }, { status, headers: { "Cache-Control": "no-store" } }); }
