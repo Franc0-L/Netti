@@ -11,7 +11,19 @@ const baseArticle = z.object({
   description: z.string().trim().max(240).default(""),
   body: z.string().default(""),
   author: z.string().trim().max(60).nullable().optional(),
-  tags: z.array(z.string().trim().min(1).max(30)).max(5).default([]),
+  tags: z
+    .array(z.string().trim().min(1).max(30))
+    .max(5)
+    .default([])
+    .superRefine((tags, ctx) => {
+      const normalized = tags.map((tag) => tag.toLocaleLowerCase("es"));
+      if (new Set(normalized).size !== normalized.length) {
+        ctx.addIssue({
+          code: "custom",
+          message: "No se pueden repetir etiquetas.",
+        });
+      }
+    }),
   coverMediaId: z.number().int().positive().nullable().optional(),
   coverAlt: z.string().trim().max(200).nullable().optional(),
   status: z.enum(["draft", "published"]).default("draft"),
@@ -39,8 +51,10 @@ const newsShape = baseArticle.extend({
   category: z.string().trim().max(40).nullable().optional(),
   sourceName: z.string().trim().max(120).nullable().optional(),
   sourceUrl: z
-    .string()
-    .regex(/^https?:\/\//i, "La fuente debe empezar por http:// o https://.")
+    .url()
+    .refine((value) => /^https?:\/\//i.test(value), {
+      message: "La fuente debe usar http:// o https://.",
+    })
     .nullable()
     .optional(),
 });
