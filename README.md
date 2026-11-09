@@ -6,7 +6,7 @@ Netti es una publicación independiente de videojuegos en español. El sitio org
 
 - Next.js 16 (App Router y Cache Components).
 - React 19 y TypeScript estricto.
-- PostgreSQL en Neon, consultado con `pg` y Drizzle ORM.
+- PostgreSQL en Neon, consultado con pg y Drizzle ORM.
 - Vercel Blob para imágenes.
 - Zod para validar entradas.
 - React Markdown + remark-gfm + rehype-sanitize para renderizar contenido Markdown sin habilitar HTML arbitrario.
@@ -15,7 +15,7 @@ Netti es una publicación independiente de videojuegos en español. El sitio org
 
 - Node.js 22.
 - npm.
-- Variables locales configuradas a partir de `.env.example`.
+- Variables locales configuradas a partir de .env.example.
 
 ## Desarrollo
 
@@ -30,22 +30,23 @@ Abrí http://localhost:3000.
 
 | Comando | Uso |
 | --- | --- |
-| `npm run dev` | Servidor local |
-| `npm run typecheck` | Verificación TypeScript sin emitir archivos |
-| `npm run build` | Build de producción |
-| `npm run start` | Servir el build generado |
+| npm run dev | Servidor local |
+| npm run typecheck | Verificación TypeScript sin emitir archivos |
+| npm test | Tests unitarios de utilidades, rutas y validación |
+| npm run build | Build de producción |
+| npm run start | Servir el build generado |
 
 ## Variables de entorno
 
-Copiá `.env.example` a `.env.local` y reemplazá todos los valores de ejemplo. No subas secretos al repositorio.
+Copiá .env.example a .env.local y reemplazá todos los valores de ejemplo. No subas secretos al repositorio.
 
-- `DATABASE_URL`: conexión PostgreSQL usada por la aplicación.
-- `DATABASE_URL_UNPOOLED`: conexión directa para operaciones administrativas y herramientas.
-- `ADMIN_PASSWORD_HASH`: hash scrypt del acceso editorial; nunca una contraseña en texto plano.
-- `BLOB_READ_WRITE_TOKEN`: token del store de Vercel Blob.
-- `CRON_SECRET`: secreto aleatorio para endpoints de tareas programadas.
-- `PUBLIC_SITE_URL`: URL canónica pública, requerida en producción.
-- `DATABASE_POOL_MAX`: conexiones máximas por instancia (1–10; predeterminado 2).
+- DATABASE_URL: conexión PostgreSQL usada por la aplicación.
+- DATABASE_URL_UNPOOLED: conexión directa para operaciones administrativas y herramientas.
+- ADMIN_PASSWORD_HASH: hash scrypt del acceso editorial; nunca una contraseña en texto plano.
+- BLOB_READ_WRITE_TOKEN: token del store de Vercel Blob.
+- CRON_SECRET: secreto aleatorio para endpoints de tareas programadas.
+- PUBLIC_SITE_URL: URL canónica pública, requerida en producción.
+- DATABASE_POOL_MAX: conexiones máximas por instancia (1–10; predeterminado 2).
 
 ## Estructura actual
 
@@ -62,19 +63,19 @@ docs/                  Arquitectura, decisiones y estado de implementación
 
 ## Rutas públicas
 
-- `/`: portada editorial.
-- `/resenas`, `/noticias`, `/guias`: colecciones publicadas.
-- `/{coleccion}/{slug}`: artículo individual.
-- `/api/health`: liveness independiente de Neon y Blob.
-- `/robots.txt`: política de rastreo; requiere `PUBLIC_SITE_URL` para publicar el sitemap.
+- /: portada editorial.
+- /resenas, /noticias, /guias: colecciones publicadas.
+- /{coleccion}/{slug}: artículo individual.
+- /api/health: liveness independiente de Neon y Blob.
+- /robots.txt y /sitemap.xml: política de rastreo y sitemap de contenido visible.
 
 Los artículos programados no son visibles hasta su fecha de publicación. Las consultas públicas aplican el predicado común de visibilidad.
 
 ## Calidad y CI
 
-Cada pull request ejecuta typecheck y build de producción mediante GitHub Actions. El resultado de esos checks, no la mera existencia del workflow, es la evidencia de que una revisión pasó.
+Cada pull request ejecuta tests unitarios, typecheck y build de producción mediante GitHub Actions. El resultado de esos checks, no la mera existencia del workflow, es la evidencia de que una revisión pasó.
 
-El lockfile debe mantenerse sincronizado con `package.json`. Hasta que el lockfile refleje todas las dependencias, el workflow resuelve dependencias con `npm install`; no se considera una instalación reproducible equivalente a `npm ci`.
+El lockfile debe mantenerse sincronizado con package.json. Hasta que el lockfile refleje todas las dependencias, el workflow resuelve dependencias con npm install; no se considera una instalación reproducible equivalente a npm ci.
 
 ## Estado de implementación
 
