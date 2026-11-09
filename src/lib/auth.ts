@@ -1,13 +1,19 @@
 import "server-only";
 import { createHash, createHmac, randomBytes, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
-import { promisify } from "node:util";
 import { cookies } from "next/headers";
 import { and, count, desc, eq, gte } from "drizzle-orm";
 import { db } from "@/db/index.js";
 import { loginAttempts, sessions } from "@/db/schema.js";
 import { env } from "@/lib/env.js";
 import { remainingLoginDelay } from "@/lib/rate-limit.js";
-const scrypt = promisify(scryptCallback);
+function deriveScrypt(password: string, salt: Buffer, keyLength: number): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    scryptCallback(password, salt, keyLength, { N: 131072, r: 8, p: 1, maxmem: MAXMEM }, (error, derived) => {
+      if (error) reject(error);
+      else resolve(derived as Buffer);
+    });
+  });
+}
 const IDLE_MS = 8 * 60 * 60 * 1000;
 const ABSOLUTE_MS = 30 * 24 * 60 * 60 * 1000;
 const TOUCH_MS = 5 * 60 * 1000;
@@ -37,7 +43,7 @@ export async function verifyAdminPassword(password: string): Promise<boolean> {
   if (parts.length !== 6 || parts[0] !== "scrypt" || Number(parts[1]) !== 131072 || Number(parts[2]) !== 8 || Number(parts[3]) !== 1) throw new Error("ADMIN_PASSWORD_HASH inválido");
   const salt = Buffer.from(parts[4], "base64"); const expected = Buffer.from(parts[5], "base64");
   if (salt.length < 16 || expected.length !== 64) throw new Error("ADMIN_PASSWORD_HASH inválido");
-  const actual = await withScryptSlot(() => scrypt(password, salt, expected.length, { N: 131072, r: 8, p: 1, maxmem: MAXMEM })) as Buffer;
+  const actual = await withScryptSlot(() => deriveScrypt(password, salt, expected.length)) as Buffer;
   return actual.length === expected.length && timingSafeEqual(actual, expected);
 }
 export function createSessionToken() { const token = randomBytes(32).toString("base64url"); return { token, sessionId: digestToken(token) }; }
