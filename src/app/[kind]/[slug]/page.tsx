@@ -17,7 +17,6 @@ const COLLECTION_TITLES = {
 } as const;
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
-  await connection();
   const { kind: segment, slug } = await params;
   const kind = articleKindFromSegment(segment);
   if (!kind) return { title: "Artículo no encontrado | Netti" };
