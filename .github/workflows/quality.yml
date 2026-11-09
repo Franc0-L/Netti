@@ -38,7 +38,7 @@ jobs:
       # The tracked lockfile predates the dependency added in PR #1.
       # Resolve it in the runner until a regenerated lockfile is committed.
       - name: Resolve dependencies
-        run: npm install --ignore-scripts --no-audit --no-fund
+        run: npm install --no-audit --no-fund
 
       - name: Typecheck
         run: npm run typecheck
