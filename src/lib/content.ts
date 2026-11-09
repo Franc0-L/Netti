@@ -1,8 +1,8 @@
 import { cache } from "react";
 import { cacheLife, cacheTag } from "next/cache";
 import { and, desc, eq, lte } from "drizzle-orm";
-import { db } from "@/db/index.js";
-import { articles } from "@/db/schema.js";
+import { db } from "@/db/index";
+import { articles } from "@/db/schema";
 
 export type ArticleKind = "review" | "news" | "guide";
 

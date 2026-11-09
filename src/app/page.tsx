@@ -1,8 +1,8 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { connection } from "next/server";
-import { getVisibleArticles, type ArticleKind } from "@/lib/content.js";
-import { articlePath } from "@/lib/routes.js";
+import { getVisibleArticles, type ArticleKind } from "@/lib/content";
+import { articlePath } from "@/lib/routes";
 
 const sections: Array<{
   kind: ArticleKind;

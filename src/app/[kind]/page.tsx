@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getVisibleArticles } from "@/lib/content.js";
-import { articleKindFromSegment, articlePath } from "@/lib/routes.js";
+import { getVisibleArticles } from "@/lib/content";
+import { articleKindFromSegment, articlePath } from "@/lib/routes";
 
 const COLLECTIONS = {
   resenas: { title: "Reseñas", description: "Análisis y opiniones sobre videojuegos." },

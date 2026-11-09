@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { MarkdownContent } from "@/components/markdown-content.js";
-import { getArticle } from "@/lib/content.js";
-import { articleCollectionPath, articleKindFromSegment } from "@/lib/routes.js";
+import { MarkdownContent } from "@/components/markdown-content";
+import { getArticle } from "@/lib/content";
+import { articleCollectionPath, articleKindFromSegment } from "@/lib/routes";
 
 type PageProps = {
   params: Promise<{ kind: string; slug: string }>;

@@ -1,7 +1,7 @@
 import type { MetadataRoute } from "next";
 import { connection } from "next/server";
-import { getVisibleSlugs, type ArticleKind } from "@/lib/content.js";
-import { articlePath } from "@/lib/routes.js";
+import { getVisibleSlugs, type ArticleKind } from "@/lib/content";
+import { articlePath } from "@/lib/routes";
 
 const COLLECTIONS: ArticleKind[] = ["review", "news", "guide"];
 

@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
 
 // Liveness endpoint: intentionally independent from Neon, Blob and other services.
-export const dynamic = "force-dynamic";
-
 export function GET() {
   return NextResponse.json(
     {
