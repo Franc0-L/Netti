@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { connection } from "next/server";
 import { notFound } from "next/navigation";
 import { getVisibleArticles } from "@/lib/content.js";
 import { articleKindFromSegment, articlePath } from "@/lib/routes.js";
@@ -15,7 +14,6 @@ export default async function CollectionPage({
 }: {
   params: Promise<{ kind: string }>;
 }) {
-  await connection();
   const { kind: segment } = await params;
   const kind = articleKindFromSegment(segment);
   if (!kind) notFound();
