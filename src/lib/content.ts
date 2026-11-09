@@ -1,45 +1,74 @@
 import { cache } from "react";
-import { cacheTag } from "next/cache";
-import { and, eq, lte } from "drizzle-orm";
+import { cacheLife, cacheTag } from "next/cache";
+import { and, desc, eq, lte } from "drizzle-orm";
 import { db } from "@/db/index.js";
 import { articles } from "@/db/schema.js";
 
+export type ArticleKind = "review" | "news" | "guide";
+
 export const visibleArticle = (now: Date = new Date()) =>
-  and(eq(articles.status, "published"), lte(articles.publishedAt, now));
+  and(
+    eq(articles.status, "published"),
+    lte(articles.publishedAt, now),
+  );
 
 export const getVisibleSlugs = cache(
-  async (kind: string): Promise<string[]> => {
+  async (kind: ArticleKind): Promise<string[]> => {
     "use cache";
+    // Until publication/revalidation actions are connected, keep schedule visibility bounded.
+    cacheLife("minutes");
     cacheTag(`kind:${kind}`, "articles");
 
     const rows = await db
       .select({ slug: articles.slug })
       .from(articles)
-      .where(
-        and(
-          eq(articles.kind, kind),
-          eq(articles.status, "published"),
-          lte(articles.publishedAt, new Date()),
-        ),
-      );
+      .where(and(eq(articles.kind, kind), visibleArticle(new Date())));
 
-    return rows.map((r) => r.slug);
+    return rows.map((row) => row.slug);
   },
 );
 
-export async function getArticle(kind: string, slug: string) {
+export async function getVisibleArticles(kind: ArticleKind, limit = 12) {
   "use cache";
+  cacheLife("minutes");
+  cacheTag(`kind:${kind}`, "articles");
+
+  const safeLimit = Math.min(Math.max(Math.trunc(limit), 1), 50);
+  return db
+    .select({
+      id: articles.id,
+      kind: articles.kind,
+      slug: articles.slug,
+      title: articles.title,
+      description: articles.description,
+      publishedAt: articles.publishedAt,
+      author: articles.author,
+      tags: articles.tags,
+      coverImageUrl: articles.coverImageUrl,
+      coverAlt: articles.coverAlt,
+      featured: articles.featured,
+      score: articles.score,
+      verdict: articles.verdict,
+    })
+    .from(articles)
+    .where(and(eq(articles.kind, kind), visibleArticle(new Date())))
+    .orderBy(desc(articles.publishedAt), desc(articles.id))
+    .limit(safeLimit);
+}
+
+export async function getArticle(kind: ArticleKind, slug: string) {
+  "use cache";
+  cacheLife("minutes");
   const validSlugs = await getVisibleSlugs(kind);
   if (!validSlugs.includes(slug)) return null;
 
   cacheTag(`article:${kind}:${slug}`, `kind:${kind}`, "articles");
 
-  const now = new Date();
   return db.query.articles.findFirst({
     where: and(
       eq(articles.kind, kind),
       eq(articles.slug, slug),
-      visibleArticle(now),
+      visibleArticle(new Date()),
     ),
   });
 }

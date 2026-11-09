@@ -1,7 +1,8 @@
 export interface StoredObject {
   key: string;
   url: string;
-  bytes: number;
+  /** Null when the input is a stream and its byte length is not known here. */
+  bytes: number | null;
 }
 
 export interface Storage {
@@ -29,14 +30,21 @@ export const storage: Storage = {
       cacheControlMaxAge: options.cacheControlMaxAge,
       addRandomSuffix: false,
     });
+
     return {
-      key: (result as any).key as string,
+      key: result.pathname,
       url: result.url,
-      bytes: body instanceof Blob ? body.size : 0,
+      bytes:
+        body instanceof Blob
+          ? body.size
+          : body instanceof ArrayBuffer
+            ? body.byteLength
+            : null,
     };
   },
 
   async del(keys) {
+    if (keys.length === 0) return;
     const { del } = await import("@vercel/blob");
     await del(keys);
   },
@@ -48,11 +56,12 @@ export const storage: Storage = {
       cursor: args.cursor,
       limit: args.limit,
     });
+
     return {
-      objects: result.blobs.map((b: any) => ({
-        key: b.key,
-        bytes: b.size,
-        uploadedAt: b.uploadedAt,
+      objects: result.blobs.map((blob) => ({
+        key: blob.pathname,
+        bytes: blob.size,
+        uploadedAt: blob.uploadedAt,
       })),
       nextCursor: result.cursor ?? null,
     };
