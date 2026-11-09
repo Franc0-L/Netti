@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { connection } from "next/server";
 import { notFound } from "next/navigation";
 import { MarkdownContent } from "@/components/markdown-content.js";
 import { getArticle } from "@/lib/content.js";
@@ -39,7 +38,6 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 }
 
 export default async function ArticlePage({ params }: PageProps) {
-  await connection();
   const { kind: segment, slug } = await params;
   const kind = articleKindFromSegment(segment);
   if (!kind) notFound();
