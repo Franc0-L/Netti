@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "typecheck": "tsc --noEmit",
+    "test": "tsx --test src/lib/*.test.ts",
     "build": "next build",
     "start": "next start"
   },
@@ -30,6 +31,7 @@
     "@types/react-dom": "^19",
     "drizzle-kit": "^0.31.11",
     "tailwindcss": "^4",
+    "tsx": "^4.20.6",
     "typescript": "^5"
   },
   "allowScripts": {
