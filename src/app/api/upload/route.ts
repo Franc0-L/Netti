@@ -7,7 +7,7 @@ import { processImage, UPLOAD_MAX_BYTES } from "@/lib/images.js";
 import { storage } from "@/lib/storage.js";
 
 export const runtime = "nodejs";
-export const maxDuration = 30;
+export const maxDuration = 10;
 function toArrayBuffer(value: Buffer): ArrayBuffer { return value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength) as ArrayBuffer; }
 function errorResponse(status: number, error: string) { return NextResponse.json({ ok: false, error }, { status, headers: { "Cache-Control": "no-store" } }); }
 
@@ -54,7 +54,10 @@ export async function POST(request: Request) {
       const master = uploaded[0];
       const [record] = await tx.insert(media).values({ storageKey: master.key, publicUrl: master.url, width: master.width, height: master.height, bytes: master.bytes, contentType: "image/webp", rights: "own" }).returning();
       if (!record) throw new Error("MEDIA_INSERT_FAILED");
-      await tx.insert(mediaVariants).values(uploaded.slice(1).map((item) => ({ mediaId: record.id, width: item.width, storageKey: item.key, publicUrl: item.url, bytes: item.bytes })));
+      const variants = uploaded.slice(1);
+      if (variants.length > 0) {
+        await tx.insert(mediaVariants).values(variants.map((item) => ({ mediaId: record.id, width: item.width, storageKey: item.key, publicUrl: item.url, bytes: item.bytes })));
+      }
       return record;
     });
     return NextResponse.json({ ok: true, data: { mediaId: created.id, publicUrl: created.publicUrl, width: created.width, height: created.height, bytes: created.bytes, contentType: created.contentType, variants: uploaded.slice(1).map(({ width, url, bytes }) => ({ width, url, bytes })) } }, { headers: { "Cache-Control": "no-store" } });
