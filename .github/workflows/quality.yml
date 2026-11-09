@@ -1,0 +1,47 @@
+name: Quality gates
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Typecheck and production build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/netti
+      DATABASE_URL_UNPOOLED: postgresql://ci:ci@127.0.0.1:5432/netti
+      ADMIN_PASSWORD_HASH: ci-placeholder-not-a-real-password-hash
+      BLOB_READ_WRITE_TOKEN: ci-placeholder
+      CRON_SECRET: ci-placeholder
+      PUBLIC_SITE_URL: https://example.invalid
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # The tracked lockfile predates the dependency added in PR #1.
+      # Resolve it in the runner until a regenerated lockfile is committed.
+      - name: Resolve dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Production build
+        run: npm run build
