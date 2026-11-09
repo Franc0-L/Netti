@@ -1,9 +1,9 @@
 "use server";
 import { cookies, headers } from "next/headers";
-import { db } from "@/db/index.js";
-import { sessions } from "@/db/schema.js";
-import { assertSameOrigin, checkLoginRateLimit, createSessionToken, getClientIp, recordLoginAttempt, revokeAllSessions, revokeCurrentSession, sessionDurations, verifyAdminPassword } from "@/lib/auth.js";
-import { failure, type ActionResult } from "@/lib/action-result.js";
+import { db } from "@/db/index";
+import { sessions } from "@/db/schema";
+import { assertSameOrigin, checkLoginRateLimit, createSessionToken, getClientIp, recordLoginAttempt, revokeAllSessions, revokeCurrentSession, sessionDurations, verifyAdminPassword } from "@/lib/auth";
+import { failure, type ActionResult } from "@/lib/action-result";
 function originOf(h: Headers): string | undefined { const origin = h.get("origin"); if (origin) return origin; const referer = h.get("referer"); try { return referer ? new URL(referer).origin : undefined; } catch { return undefined; } }
 export async function login(input: { password: string }): Promise<ActionResult<{ expiresAt: string }>> {
   try {
