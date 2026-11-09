@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { connection } from "next/server";
 import { getVisibleArticles, type ArticleKind } from "@/lib/content.js";
 import { articlePath } from "@/lib/routes.js";
 
@@ -7,28 +8,34 @@ const sections: Array<{
   title: string;
   eyebrow: string;
   description: string;
+  path: string;
 }> = [
   {
     kind: "review",
     title: "Reseñas",
     eyebrow: "01 / ANÁLISIS",
     description: "Opiniones argumentadas, contexto y una puntuación con fundamento.",
+    path: "/resenas",
   },
   {
     kind: "news",
     title: "Noticias",
     eyebrow: "02 / ACTUALIDAD",
     description: "Novedades relevantes del sector, explicadas sin exageraciones.",
+    path: "/noticias",
   },
   {
     kind: "guide",
     title: "Guías",
     eyebrow: "03 / RECURSOS",
     description: "Información útil para jugar mejor y resolver lo que se complica.",
+    path: "/guias",
   },
 ];
 
 export default async function Home() {
+  await connection();
+
   const [reviews, news, guides] = await Promise.all([
     getVisibleArticles("review", 3),
     getVisibleArticles("news", 3),
@@ -41,7 +48,7 @@ export default async function Home() {
   };
 
   return (
-    <main className="site-shell">
+    <main id="top" className="site-shell">
       <header className="site-header">
         <Link className="wordmark" href="/" aria-label="Netti, inicio">NETTI<span>.</span></Link>
         <nav aria-label="Navegación principal" className="site-nav">
@@ -80,11 +87,7 @@ export default async function Home() {
 
       <section className="collections" aria-label="Colecciones editoriales">
         {sections.map((section) => (
-          <Link
-            className="collection-tile"
-            href={`/${section.kind === "review" ? "resenas" : section.kind === "news" ? "noticias" : "guias"}`}
-            key={section.kind}
-          >
+          <Link className="collection-tile" href={section.path} key={section.kind}>
             <span className="eyebrow">{section.eyebrow}</span>
             <span className="collection-title">{section.title}</span>
             <span className="collection-description">{section.description}</span>
@@ -130,9 +133,7 @@ export default async function Home() {
       <footer className="site-footer">
         <span>NETTI<span className="accent">.</span></span>
         <span>Videojuegos, con criterio.</span>
-        <a href="#top" onClick={(event) => { event.preventDefault(); window.scrollTo({ top: 0, behavior: "smooth" }); }}>
-          Volver arriba ↑
-        </a>
+        <a href="#top">Volver arriba ↑</a>
       </footer>
     </main>
   );
