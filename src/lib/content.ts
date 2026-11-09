@@ -1,5 +1,5 @@
 import { cache } from "react";
-import { cacheTag } from "next/cache";
+import { cacheLife, cacheTag } from "next/cache";
 import { and, desc, eq, lte } from "drizzle-orm";
 import { db } from "@/db/index.js";
 import { articles } from "@/db/schema.js";
@@ -15,6 +15,8 @@ export const visibleArticle = (now: Date = new Date()) =>
 export const getVisibleSlugs = cache(
   async (kind: ArticleKind): Promise<string[]> => {
     "use cache";
+    // Until publication/revalidation actions are connected, keep schedule visibility bounded.
+    cacheLife("minutes");
     cacheTag(`kind:${kind}`, "articles");
 
     const rows = await db
@@ -28,6 +30,7 @@ export const getVisibleSlugs = cache(
 
 export async function getVisibleArticles(kind: ArticleKind, limit = 12) {
   "use cache";
+  cacheLife("minutes");
   cacheTag(`kind:${kind}`, "articles");
 
   const safeLimit = Math.min(Math.max(Math.trunc(limit), 1), 50);
@@ -55,6 +58,7 @@ export async function getVisibleArticles(kind: ArticleKind, limit = 12) {
 
 export async function getArticle(kind: ArticleKind, slug: string) {
   "use cache";
+  cacheLife("minutes");
   const validSlugs = await getVisibleSlugs(kind);
   if (!validSlugs.includes(slug)) return null;
 
