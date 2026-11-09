@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { connection } from "next/server";
 import { notFound } from "next/navigation";
 import { MarkdownContent } from "@/components/markdown-content.js";
 import { getArticle } from "@/lib/content.js";
@@ -16,6 +17,7 @@ const COLLECTION_TITLES = {
 } as const;
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  await connection();
   const { kind: segment, slug } = await params;
   const kind = articleKindFromSegment(segment);
   if (!kind) return { title: "Artículo no encontrado | Netti" };
@@ -38,6 +40,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 }
 
 export default async function ArticlePage({ params }: PageProps) {
+  await connection();
   const { kind: segment, slug } = await params;
   const kind = articleKindFromSegment(segment);
   if (!kind) notFound();
@@ -76,7 +79,6 @@ export default async function ArticlePage({ params }: PageProps) {
         </header>
         {article.coverImageUrl ? (
           <figure className="article-cover">
-            {/* The URL is stored in the media record and is rendered without transformation. */}
             <img src={article.coverImageUrl} alt={article.coverAlt || article.title} />
           </figure>
         ) : null}
