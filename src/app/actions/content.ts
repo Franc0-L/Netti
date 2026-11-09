@@ -2,13 +2,13 @@
 import { updateTag } from "next/cache";
 import { and, eq } from "drizzle-orm";
 import { headers } from "next/headers";
-import { db } from "@/db/index.js";
-import { articleRevisions, articles, games, media, redirects } from "@/db/schema.js";
-import { assertSameOrigin, requireSession } from "@/lib/auth.js";
-import { failure, type ActionResult, zodFieldErrors } from "@/lib/action-result.js";
-import { affectedTags, type ArticleTagState } from "@/lib/tags.js";
-import { articlePath } from "@/lib/routes.js";
-import { makeArticleSchema } from "@/lib/validation.js";
+import { db } from "@/db/index";
+import { articleRevisions, articles, games, media, redirects } from "@/db/schema";
+import { assertSameOrigin, requireSession } from "@/lib/auth";
+import { failure, type ActionResult, zodFieldErrors } from "@/lib/action-result";
+import { affectedTags, type ArticleTagState } from "@/lib/tags";
+import { articlePath } from "@/lib/routes";
+import { makeArticleSchema } from "@/lib/validation";
 
 type ArticleRow = typeof articles.$inferSelect;
 type ArticleKind = "review" | "news" | "guide";
