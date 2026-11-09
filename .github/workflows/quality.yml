@@ -15,15 +15,15 @@ concurrency:
 
 jobs:
   validate:
-    name: Typecheck and production build
+    name: Tests, typecheck and production build
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     env:
       DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/netti
       DATABASE_URL_UNPOOLED: postgresql://ci:ci@127.0.0.1:5432/netti
       ADMIN_PASSWORD_HASH: ci-placeholder-not-a-real-password-hash
       BLOB_READ_WRITE_TOKEN: ci-placeholder
-      CRON_SECRET: ci-placeholder
+      CRON_SECRET: ci-placeholder-secret-with-more-than-32-characters
       PUBLIC_SITE_URL: https://example.invalid
     steps:
       - name: Checkout
@@ -35,10 +35,13 @@ jobs:
           node-version: 22
           cache: npm
 
-      # The tracked lockfile predates the dependency added in PR #1.
+      # The tracked lockfile predates the dependency set in this PR.
       # Resolve it in the runner until a regenerated lockfile is committed.
       - name: Resolve dependencies
         run: npm install --no-audit --no-fund
+
+      - name: Unit tests
+        run: npm test
 
       - name: Typecheck
         run: npm run typecheck
