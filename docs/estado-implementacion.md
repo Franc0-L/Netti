@@ -49,7 +49,7 @@ No usar “funciona”, “seguro”, “rápido” o “listo para producción�
 
 - La política de cache debe validarse con las reglas de Cache Components de la versión instalada y con x-vercel-cache; no inferir persistencia compartida entre instancias.
 - El contenido Markdown se sanitiza con el esquema por defecto de rehype-sanitize. Si se habilitan componentes Markdown adicionales, ampliar el esquema de forma explícita y probarlo.
-- Las URLs de portada proceden de registros de medios; la carga y la validación de esos registros aún deben implementarse.
+- La subida y validación de medios ya tienen endpoint; falta la UI administrativa para elegirlos y probar el flujo visual completo.
 - El workflow actual usa npm install porque el lockfile está desactualizado. Esto no ofrece reproducibilidad equivalente a npm ci.
 - El cache de contenido tiene una vida acotada de minutos como medida transitoria; la invalidación inmediata depende de que se implementen las acciones editoriales.
 
@@ -59,4 +59,5 @@ No usar “funciona”, “seguro”, “rápido” o “listo para producción�
 - publishArticle vuelve a validar el contenido antes de cambiar el estado; updateArticle usa control optimista por version.
 - El login usa scrypt asíncrono (N=131072, r=8, p=1), límite de concurrencia local, HMAC de IP y backoff progresivo.
 - El upload acepta JPEG, PNG, WebP y AVIF hasta 2 MiB, valida firma y dimensiones, elimina metadatos mediante re-encodeo WebP y crea variantes.
+- `npm run hash:admin` genera por stdin el hash scrypt esperado por `ADMIN_PASSWORD_HASH`; no se debe guardar la contraseña en argumentos de proceso.
 - No se afirma que el esquema desplegado contenga los índices parciales, triggers de versión, FK o constraints descritos en docs/02.1-modelo-tablas.md: las migraciones reproducibles siguen pendientes.
