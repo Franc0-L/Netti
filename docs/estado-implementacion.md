@@ -11,7 +11,7 @@ Este documento separa el diseño objetivo de las capacidades que existen en el r
 | Health | GET /api/health independiente de DB y Blob | Código revisado; despliegue no probado |
 | Lectura pública | Portada, colecciones y páginas de artículo por tipo/slug | Implementado en rama; falta CI y datos reales |
 | Visibilidad | Solo artículos publicados cuya fecha ya llegó | Consulta implementada; falta prueba de integración |
-| Markdown | React Markdown, GFM y sanitización rehype | Pipeline conectado; faltan pruebas específicas XSS |
+| Markdown | React Markdown, GFM y sanitización rehype | Test XSS añadido; falta ejecución CI |
 | SEO | Metadata base, Open Graph, robots y sitemap de contenido visible | Código agregado; falta inspección HTTP en deployment |
 | Validación | Esquema Zod discriminado; pruebas de publicación, etiquetas y URL | Tests añadidos; falta ejecución CI |
 | Utilidades SEO | JSON-LD y CDATA seguros con pruebas unitarias | Tests añadidos; falta ejecución CI |
