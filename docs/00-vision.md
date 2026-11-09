@@ -71,6 +71,8 @@ Cada afirmación de infraestructura lleva su grado de certeza. Sin esto, una hip
 
 ## Estado
 
-Documentación revisada contra las versiones de noviembre de 2026 y contra varias revisiones arquitectónicas independientes. No hay código todavía.
+El repositorio ya contiene una primera base ejecutable: infraestructura inicial, health check, utilidades de sesión, controles de CI en construcción y, en la rama de trabajo actual, la primera experiencia pública editorial. Eso no significa que el producto esté terminado ni que la arquitectura haya superado el spike.
 
-**Próximo paso**: Fase 0 de `06.2-operaciones-backup-hoja.md`. Es un spike de 2–3 días para medir consumo de Neon, invalidación de caché, `scrypt`, subida real a Blob y backup restaurado, antes de escribir el panel. Si esos números no cierran, se corrige el diseño con evidencia y no se sigue documentando.
+El estado verificable de cada módulo, las pruebas existentes y las validaciones pendientes se mantiene en [docs/estado-implementacion.md](estado-implementacion.md). No se deben presentar decisiones de arquitectura o funcionalidades planeadas como capacidades operativas.
+
+**Siguiente prioridad**: hacer pasar tests, typecheck y build; sincronizar el lockfile; y después completar autenticación/admin, upload, migraciones y cron. La validación real de Neon, caché, scrypt, Blob, CSP y backups sigue siendo requisito para cambiar el estado NO-GO de Fase 0.
