@@ -2,10 +2,10 @@ import "server-only";
 import { createHash, createHmac, randomBytes, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 import { and, count, desc, eq, gte } from "drizzle-orm";
-import { db } from "@/db/index.js";
-import { loginAttempts, sessions } from "@/db/schema.js";
-import { env } from "@/lib/env.js";
-import { remainingLoginDelay } from "@/lib/rate-limit.js";
+import { db } from "@/db/index";
+import { loginAttempts, sessions } from "@/db/schema";
+import { env } from "@/lib/env";
+import { remainingLoginDelay } from "@/lib/rate-limit";
 function deriveScrypt(password: string, salt: Buffer, keyLength: number): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     scryptCallback(password, salt, keyLength, { N: 131072, r: 8, p: 1, maxmem: MAXMEM }, (error, derived) => {
