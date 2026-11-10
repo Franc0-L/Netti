@@ -12,7 +12,7 @@ La restauración automatizada está limitada deliberadamente a una base PostgreS
 - `pg_dump` y `pg_restore` versión 18 o posterior disponibles en `PATH`.
 - Node.js y dependencias del proyecto instaladas.
 - `DATABASE_URL_UNPOOLED` apuntando a la base que se quiere respaldar.
-- Una base local de pruebas creada previamente, por ejemplo `netti_test`, para la restauración.
+- Una base local desechable para restauración, preferentemente `netti_restore_test`.
 - Espacio libre suficiente para el dump y la base restaurada.
 
 Comprobá los clientes:
@@ -44,19 +44,19 @@ El comando debe terminar con código 0. Revisá también que el archivo exista y
 
 ## Restaurar en una base local de prueba
 
-1. Creá previamente una base local vacía, por ejemplo `netti_test`.
+1. Creá una base local vacía y desechable, preferentemente `netti_restore_test`.
 2. Definí `NETTI_RESTORE_DATABASE_URL` en el entorno del proceso apuntando a esa base. No reutilices `DATABASE_URL` ni `DATABASE_URL_UNPOOLED`.
 3. Indicá el dump como argumento:
 
 ```powershell
-$env:NETTI_RESTORE_DATABASE_URL = 'postgresql://usuario:clave@localhost:5432/netti_test'
+$env:NETTI_RESTORE_DATABASE_URL = 'postgresql://usuario:clave@localhost:5432/netti_restore_test'
 npm run db:restore -- backups/<archivo>.dump
 Remove-Item Env:NETTI_RESTORE_DATABASE_URL
 ```
 
 El script ejecuta primero `pg_restore --list`. Solo después valida el destino y restaura con `--clean --if-exists --exit-on-error --single-transaction`. El destino debe estar en loopback y tener sufijo de test; si no cumple ambas condiciones, la restauración se cancela. El usuario PostgreSQL debe tener permisos para crear/modificar los objetos del esquema.
 
-Al terminar, verificá manualmente las tablas y los datos esperados. Para una prueba completa, arrancá la aplicación contra la base restaurada y comprobá consultas de lectura y acceso al panel. La restauración elimina/recrea objetos existentes dentro de esa base de prueba: no la uses con una base que contenga datos que quieras conservar.
+La restauración elimina/recrea objetos existentes dentro de la base destino. No apuntes a `netti_test` si querés conservar sus datos; usala únicamente si aceptás que sea sobrescrita. Al terminar, verificá manualmente las tablas y los datos esperados. Para una prueba completa, arrancá la aplicación contra la base restaurada y comprobá consultas de lectura y acceso al panel.
 
 ## Cifrado y custodia
 
