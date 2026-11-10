@@ -1,0 +1,6 @@
+.next/
+node_modules/
+.vercel/
+coverage/
+package-lock.json
+next-env.d.ts
