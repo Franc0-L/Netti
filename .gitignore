@@ -37,6 +37,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# husky hooks (local configuration only)
+.husky/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
