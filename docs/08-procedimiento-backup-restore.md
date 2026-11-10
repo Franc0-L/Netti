@@ -2,7 +2,7 @@
 
 ## Alcance y límites
 
-Estos scripts operan sobre PostgreSQL mediante las herramientas oficiales de línea de comandos. El backup usa exclusivamente `DATABASE_URL_UNPOOLED`. La restauración exige una variable independiente, `NETTI_RESTORE_DATABASE_URL`, y bloquea destinos remotos o bases cuyo nombre no termine en `_test`, `-test`, `_testing` o `-testing`.
+Estos scripts operan sobre PostgreSQL mediante las herramientas oficiales de línea de comandos. El backup usa exclusivamente `DATABASE_URL_UNPOOLED`. Los scripts cargan las variables locales desde `.env.local` mediante el cargador de entorno de Next.js. La restauración exige una variable independiente, `NETTI_RESTORE_DATABASE_URL`, y bloquea destinos remotos o bases cuyo nombre no termine en `_test`, `-test`, `_testing` o `-testing`.
 
 La restauración automatizada está limitada deliberadamente a una base PostgreSQL local de pruebas. No existe un modo para restaurar sobre Neon ni producción. El dump no contiene objetos de Vercel Blob.
 
@@ -26,7 +26,7 @@ Ambos deben informar PostgreSQL 18 o posterior. Un cliente más nuevo puede resp
 
 ## Crear un backup
 
-Configurá `DATABASE_URL_UNPOOLED` en el entorno local sin copiar su valor a archivos versionados. El script no imprime la URL ni pasa la contraseña como argumento del proceso.
+Configurá `DATABASE_URL_UNPOOLED` en `.env.local` o en el entorno del proceso. El script no imprime la URL ni pasa la contraseña como argumento del proceso.
 
 ```bash
 npm run db:backup
@@ -45,11 +45,13 @@ El comando debe terminar con código 0. Revisá también que el archivo exista y
 ## Restaurar en una base local de prueba
 
 1. Creá previamente una base local vacía, por ejemplo `netti_test`.
-2. Definí `NETTI_RESTORE_DATABASE_URL` apuntando a esa base. No reutilices `DATABASE_URL` ni `DATABASE_URL_UNPOOLED`.
+2. Definí `NETTI_RESTORE_DATABASE_URL` en el entorno del proceso apuntando a esa base. No reutilices `DATABASE_URL` ni `DATABASE_URL_UNPOOLED`.
 3. Indicá el dump como argumento:
 
-```bash
+```powershell
+$env:NETTI_RESTORE_DATABASE_URL = 'postgresql://usuario:clave@localhost:5432/netti_test'
 npm run db:restore -- backups/<archivo>.dump
+Remove-Item Env:NETTI_RESTORE_DATABASE_URL
 ```
 
 El script ejecuta primero `pg_restore --list`. Solo después valida el destino y restaura con `--clean --if-exists --exit-on-error --single-transaction`. El destino debe estar en loopback y tener sufijo de test; si no cumple ambas condiciones, la restauración se cancela. El usuario PostgreSQL debe tener permisos para crear/modificar los objetos del esquema.

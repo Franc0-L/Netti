@@ -16,7 +16,7 @@ Este inventario refleja el código de la rama actual. No contiene valores reales
 
 | Variable | Estado | Uso y origen |
 | --- | --- | --- |
-| `PUBLIC_SITE_URL` | Opcional en desarrollo; obligatoria en producción | URL canónica del sitio. En producción debe ser un origen HTTPS válido del sitio. Configurar en el entorno de despliegue. |
+| `PUBLIC_SITE_URL` | Opcional en desarrollo; obligatoria en producción | URL canónica del sitio. En producción debe ser una URL válida del sitio. Configurar en el entorno de despliegue. |
 | `DATABASE_POOL_MAX` | Opcional; predeterminado 2 | Máximo de conexiones por instancia. El código acepta enteros de 1 a 10. Definirlo solo después de estimar el presupuesto total de conexiones. |
 | `VERCEL_OIDC_TOKEN` | Opcional en schema | Token OIDC provisto por Vercel cuando la integración/runtime lo habilita. El código actual no lo consume explícitamente. |
 | `BLOB_STORE_ID` | Opcional en schema | Identificador del store Blob. El código actual no lo consume explícitamente. |
@@ -40,7 +40,7 @@ Este inventario refleja el código de la rama actual. No contiene valores reales
 
 Algunos documentos operativos previos describen `IP_HASH_SECRET`, `PREVIEW_ORIGIN_REGEX`, `AGE_PUBLIC_KEY` como variable requerida, o un uso de OIDC que sustituye el token Blob. Esas afirmaciones no coinciden con el schema/código actual: el hash de IP usa `CRON_SECRET`, no se encontró uso de `PREVIEW_ORIGIN_REGEX`, `age` es una operación manual opcional y `BLOB_READ_WRITE_TOKEN` sigue siendo obligatorio en `src/lib/env.ts`.
 
-Además, `drizzle.config.ts` debe usar `DATABASE_URL_UNPOOLED` para que las migraciones no dependan del pooler. El comando de migración lee esa variable; la aplicación sigue usando `DATABASE_URL` para su pool.
+Además, `drizzle.config.ts` usa `DATABASE_URL_UNPOOLED` para que las migraciones no dependan del pooler. El comando de migración lee esa variable; la aplicación sigue usando `DATABASE_URL` para su pool.
 
 ## Reglas de seguridad
 
