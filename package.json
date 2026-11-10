@@ -8,7 +8,10 @@
     "test": "tsx --test src/lib/*.test.ts src/components/*.test.tsx",
     "build": "next build",
     "start": "next start",
-    "hash:admin": "tsx scripts/hash-admin-password.ts"
+    "hash:admin": "tsx scripts/hash-admin-password.ts",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
     "@vercel/blob": "^2.8.2",
