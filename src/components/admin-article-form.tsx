@@ -74,17 +74,21 @@ export function AdminArticleForm({ articleId, version: initialVersion, initial, 
     setMessage("");
     setFieldErrors({});
     const input = payload(status);
-    const result = id
-      ? await updateArticle({ id, version, input })
-      : await createArticle(input);
+    if (id) {
+      const result = await updateArticle({ id, version, input });
+      if (!result.ok) {
+        setMessage(result.message);
+        setFieldErrors(result.fieldErrors ?? {});
+        return null;
+      }
+      setVersion(result.data.version);
+      return { id, version: result.data.version };
+    }
+    const result = await createArticle(input);
     if (!result.ok) {
       setMessage(result.message);
       setFieldErrors(result.fieldErrors ?? {});
       return null;
-    }
-    if (id) {
-      setVersion(result.data.version);
-      return { id, version: result.data.version };
     }
     setId(result.data.id);
     setVersion(result.data.version);
