@@ -7,7 +7,7 @@ Este documento separa el diseño objetivo de las capacidades que existen en el r
 | Área | Implementación visible | Estado de validación |
 | --- | --- | --- |
 | Framework | Next.js App Router, Cache Components y TypeScript estricto | Build/typecheck pendientes de CI |
-| Base de datos | Pool pg, Drizzle y esquema tipado | Sin conexión real a Neon validada |
+| Base de datos | Pool pg, Drizzle, constraints/índices en schema.ts y baseline SQL versionado | Migración no ejecutada contra Neon; generación CLI/snapshot pendiente de validar |
 | Health | GET /api/health independiente de DB y Blob | Código revisado; despliegue no probado |
 | Lectura pública | Portada, colecciones y páginas de artículo por tipo/slug | Implementado en rama; falta CI y datos reales |
 | Visibilidad | Solo artículos publicados cuya fecha ya llegó | Consulta implementada; falta prueba de integración |
@@ -61,3 +61,11 @@ No usar “funciona”, “seguro”, “rápido” o “listo para producción�
 - El upload acepta JPEG, PNG, WebP y AVIF hasta 2 MiB, valida firma y dimensiones, elimina metadatos mediante re-encodeo WebP y crea variantes.
 - `npm run hash:admin` genera por stdin el hash scrypt esperado por `ADMIN_PASSWORD_HASH`; no se debe guardar la contraseña en argumentos de proceso.
 - No se afirma que el esquema desplegado contenga los índices parciales, triggers de versión, FK o constraints descritos en docs/02.1-modelo-tablas.md: las migraciones reproducibles siguen pendientes.
+
+
+## Migraciones reproducibles (rama feat/database-migrations)
+
+- Se versiona un baseline SQL con las diez tablas runtime, FKs, checks, índices parciales/GIN y triggers de versión, tags y redirecciones.
+- Se registra en el journal PostgreSQL de Drizzle y se agregan los comandos db:generate, db:migrate y db:studio.
+- El baseline refleja los tipos del esquema runtime actual; no convierte silenciosamente release_date, snapshots ni identificadores para que coincidan con documentos de diseño más antiguos.
+- No se ejecutó el CLI de Drizzle ni se aplicó la migración a Neon desde el conector. La validación de snapshot y una ejecución en una base de prueba siguen pendientes; no usarla sobre una base ya creada sin baseline/introspección.
