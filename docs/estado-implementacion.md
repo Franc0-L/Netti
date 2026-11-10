@@ -69,3 +69,14 @@ No usar “funciona”, “seguro”, “rápido” o “listo para producción�
 - Se registra en el journal PostgreSQL de Drizzle y se agregan los comandos db:generate, db:migrate y db:studio.
 - El baseline refleja los tipos del esquema runtime actual; no convierte silenciosamente release_date, snapshots ni identificadores para que coincidan con documentos de diseño más antiguos.
 - No se ejecutó el CLI de Drizzle ni se aplicó la migración a Neon desde el conector. La validación de snapshot y una ejecución en una base de prueba siguen pendientes; no usarla sobre una base ya creada sin baseline/introspección.
+
+
+## Panel editorial (rama feat/admin-editorial-panel)
+
+- Rutas privadas bajo /admin protegidas en layout de servidor con requireSession; /admin/login queda fuera del layout protegido.
+- Login consume la Server Action existente y permite cookies no-Secure solo en desarrollo HTTP local; producción mantiene Secure.
+- Dashboard lista artículos recientes y permite editar borradores/publicados.
+- El editor guarda borradores, actualiza publicaciones, publica borradores mediante publishArticle, y expone campos específicos para reseñas/noticias.
+- Selector de medios usa registros existentes; la subida consume POST /api/upload y selecciona la nueva portada. OG media y texto alternativo también son configurables.
+- No incluye todavía gestión de juegos, papelera/restauración, revisiones/rollback ni edición de contenido multimedia embebido en Markdown.
+- No se ha probado contra una base real ni en deployment.
