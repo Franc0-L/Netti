@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   validate:
-    name: Tests, typecheck and production build
+    name: Tests, lint, typecheck and production build
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -35,13 +35,18 @@ jobs:
           node-version: 22
           cache: npm
 
-      # The tracked lockfile predates the dependency set in this PR.
-      # Resolve it in the runner until a regenerated lockfile is committed.
+      # Resolve dependencies until the tracked lockfile is regenerated locally.
       - name: Resolve dependencies
         run: npm install --no-audit --no-fund
 
       - name: Unit tests
         run: npm test
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: Prettier check
+        run: npm run format:check
 
       - name: Typecheck
         run: npm run typecheck
