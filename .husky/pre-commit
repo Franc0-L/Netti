@@ -1,2 +1,4 @@
+#!/usr/bin/env sh
+export PATH="$PATH:/c/Users/Franco/AppData/Roaming/fnm/node-versions/v24.22.2/installation"
 npx lint-staged
 npm run typecheck
