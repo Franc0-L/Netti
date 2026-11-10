@@ -178,7 +178,7 @@ export function AdminArticleForm({ articleId, version: initialVersion, initial, 
           </select>
 
           <label className="admin-label" htmlFor="title">Título</label>
-          <input id="title" className={inputClass} value={values.title} maxLength={120} required onChange={(e) => change("title", e.target.value)} />
+          <input id="title" className={inputClass} value={values.title} maxLength={120} onChange={(e) => change("title", e.target.value)} />
           {fieldErrors.title?.map((error) => <small className="admin-error" key={error}>{error}</small>)}
 
           <label className="admin-label" htmlFor="slug">Slug</label>
@@ -218,6 +218,7 @@ export function AdminArticleForm({ articleId, version: initialVersion, initial, 
             {selectedMedia ? <img className="admin-preview" src={selectedMedia.publicUrl} alt={values.coverAlt || selectedMedia.alt || "Vista previa de portada"} /> : null}
             <label className="admin-label" htmlFor="cover-alt">Texto alternativo</label>
             <input id="cover-alt" className={inputClass} value={values.coverAlt} maxLength={200} onChange={(e) => change("coverAlt", e.target.value)} />
+            {fieldErrors.coverAlt?.map((error) => <small className="admin-error" key={error}>{error}</small>)}
             <label className="admin-label" htmlFor="upload">Subir imagen (máx. 2 MB)</label>
             <input id="upload" className={inputClass} type="file" accept="image/jpeg,image/png,image/webp,image/avif" disabled={uploading} onChange={(e) => void upload(e.target.files?.[0])} />
             {uploading ? <p className="admin-muted">Procesando y optimizando imagen…</p> : null}
@@ -237,10 +238,13 @@ export function AdminArticleForm({ articleId, version: initialVersion, initial, 
             </select>
             <label className="admin-label" htmlFor="score">Puntuación</label>
             <input id="score" className={inputClass} type="number" min={1} max={10} value={values.score} onChange={(e) => change("score", e.target.value)} />
+            {fieldErrors.score?.map((error) => <small className="admin-error" key={error}>{error}</small>)}
             <label className="admin-label" htmlFor="score-reason">Justificación</label>
             <textarea id="score-reason" className={inputClass} rows={4} value={values.scoreReason} onChange={(e) => change("scoreReason", e.target.value)} />
+            {fieldErrors.scoreReason?.map((error) => <small className="admin-error" key={error}>{error}</small>)}
             <label className="admin-label" htmlFor="verdict">Veredicto</label>
             <textarea id="verdict" className={inputClass} rows={3} value={values.verdict} onChange={(e) => change("verdict", e.target.value)} />
+            {fieldErrors.verdict?.map((error) => <small className="admin-error" key={error}>{error}</small>)}
           </section> : null}
 
           {values.kind === "news" ? <section className="admin-panel">
