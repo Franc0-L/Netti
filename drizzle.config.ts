@@ -8,6 +8,6 @@ export default defineConfig({
   verbose: true,
   migrations: { schema: "drizzle", table: "__drizzle_migrations" },
   dbCredentials: {
-    url: process.env.DATABASE_URL!,
+    url: process.env.DATABASE_URL_UNPOOLED!,
   },
 });
