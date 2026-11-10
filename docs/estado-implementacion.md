@@ -19,7 +19,7 @@ Este documento separa el diseño objetivo de las capacidades que existen en el r
 | Blob e imágenes | Upload autenticado de 2 MB, magic bytes, MIME, Sharp, WebP y variantes 480/960/1600; compensación de objetos | Implementado en rama; Blob/Neon reales y límites de runtime pendientes |
 | Sesiones | login/logout/logoutAll con scrypt asíncrono, token opaco, digest en BD, expiración y rate limit por IP | Implementado en rama; falta probar contra Neon y revisar parámetros en Vercel |
 | Server Actions editoriales | createArticle, updateArticle y publishArticle con Zod, control de sesión/origen, revisión transaccional y cache tags | Implementado en rama; typecheck, CI y DB real pendientes |
-| Cron y reconciliación | No hay endpoint operativo de publicación/reconciliación | Pendiente |
+| Cron y limpieza | GET /api/cron/cleanup con bearer secret, retención de intentos/sesiones y reintento acotado de Blob huérfano | Implementado en rama feat/cron-cleanup; CI pendiente, no programado en Vercel |
 | Backups | No hay workflow operativo de backup/restauración | Pendiente |
 
 ## Criterios para declarar algo terminado
@@ -69,3 +69,22 @@ No usar “funciona”, “seguro”, “rápido” o “listo para producción�
 - Se registra en el journal PostgreSQL de Drizzle y se agregan los comandos db:generate, db:migrate y db:studio.
 - El baseline refleja los tipos del esquema runtime actual; no convierte silenciosamente release_date, snapshots ni identificadores para que coincidan con documentos de diseño más antiguos.
 - No se ejecutó el CLI de Drizzle ni se aplicó la migración a Neon desde el conector. La validación de snapshot y una ejecución en una base de prueba siguen pendientes; no usarla sobre una base ya creada sin baseline/introspección.
+
+
+## Panel editorial (rama feat/admin-editorial-panel)
+
+- Rutas privadas bajo /admin protegidas en layout de servidor con requireSession; /admin/login queda fuera del layout protegido.
+- Login consume la Server Action existente y permite cookies no-Secure solo en desarrollo HTTP local; producción mantiene Secure.
+- Dashboard lista artículos recientes y permite editar borradores/publicados.
+- El editor guarda borradores, actualiza publicaciones, publica borradores mediante publishArticle, y expone campos específicos para reseñas/noticias.
+- Selector de medios usa registros existentes; la subida consume POST /api/upload y selecciona la nueva portada. OG media y texto alternativo también son configurables.
+- No incluye todavía gestión de juegos, papelera/restauración, revisiones/rollback ni edición de contenido multimedia embebido en Markdown.
+- No se ha probado contra una base real ni en deployment.
+
+
+## Cron de limpieza (rama feat/cron-cleanup)
+
+- Limpia login_attempts de más de 30 días y sesiones con expiración idle/absoluta vencida.
+- Procesa hasta 25 storage_orphans por ejecución, consulta referencias en media/media_variants y evita borrar objetos aún utilizados.
+- Reintenta los fallos Blob en la próxima ejecución y registra el resultado en cron_runs.
+- El endpoint requiere Bearer CRON_SECRET (mínimo 32 caracteres). No se añade schedule ni se toca Vercel en esta fase.

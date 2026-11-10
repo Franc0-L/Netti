@@ -17,7 +17,7 @@ export async function login(input: { password: string }): Promise<ActionResult<{
     const absoluteExpiresAt = new Date(now.getTime() + sessionDurations.absoluteMs);
     const expiresAt = new Date(Math.min(now.getTime() + sessionDurations.idleMs, absoluteExpiresAt.getTime()));
     await db.insert(sessions).values({ id: sessionId, expiresAt, absoluteExpiresAt, lastUsedAt: now, userAgent: h.get("user-agent")?.slice(0, 300) ?? null });
-    const store = await cookies(); store.set("session", token, { httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: Math.floor(sessionDurations.absoluteMs / 1000) });
+    const store = await cookies(); store.set("session", token, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: Math.floor(sessionDurations.absoluteMs / 1000) });
     return { ok: true, data: { expiresAt: absoluteExpiresAt.toISOString() } };
   } catch (error) {
     if (error instanceof Error && error.message.includes("Origen")) return failure("forbidden", "Origen no permitido.");
