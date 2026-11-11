@@ -1,45 +1,54 @@
-import { timingSafeEqual } from "node:crypto";
-import { NextResponse } from "next/server";
-import { asc, eq, inArray, lt, or } from "drizzle-orm";
-import { db } from "@/db/index";
-import { cronRuns, loginAttempts, media, mediaVariants, sessions, storageOrphans } from "@/db/schema";
-import { storage } from "@/lib/storage";
-import { planOrphanCleanup } from "@/lib/cleanup-plan";
+import { NextResponse } from 'next/server';
+import { asc, eq, inArray, lt, or } from 'drizzle-orm';
+import { db } from '@/db/index';
+import {
+  cronRuns,
+  loginAttempts,
+  media,
+  mediaVariants,
+  sessions,
+  storageOrphans,
+} from '@/db/schema';
+import { planOrphanCleanup } from '@/lib/cleanup-plan';
+import { isAuthorizedCron } from '@/lib/cron-auth';
+import { storage } from '@/lib/storage';
 
 export const maxDuration = 10;
-const LOGIN_ATTEMPT_RETENTION_DAYS = 30;
+const LOGIN_ATTEMPT_RETENTION_DAYS = 7;
 const ORPHAN_BATCH_SIZE = 25;
 
-function authorized(request: Request): boolean {
-  const expected = process.env.CRON_SECRET ?? "";
-  const authorization = request.headers.get("authorization") ?? "";
-  const supplied = authorization.startsWith("Bearer ") ? authorization.slice(7) : "";
-  if (expected.length < 32 || supplied.length !== expected.length) return false;
-  return timingSafeEqual(Buffer.from(supplied), Buffer.from(expected));
-}
-
 function response(status: number, body: Record<string, unknown>) {
-  return NextResponse.json(body, { status, headers: { "Cache-Control": "no-store" } });
+  return NextResponse.json(body, { status, headers: { 'Cache-Control': 'no-store' } });
 }
 
 export async function GET(request: Request) {
-  if (!authorized(request)) return response(401, { ok: false, error: "Unauthorized" });
+  if (!isAuthorizedCron(request)) return response(401, { ok: false, error: 'Unauthorized' });
 
   const now = new Date();
-  const attemptsBefore = new Date(now.getTime() - LOGIN_ATTEMPT_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+  const attemptsBefore = new Date(
+    now.getTime() - LOGIN_ATTEMPT_RETENTION_DAYS * 24 * 60 * 60 * 1000
+  );
 
   try {
     const [removedAttempts, removedSessions] = await Promise.all([
-      db.delete(loginAttempts).where(lt(loginAttempts.attemptedAt, attemptsBefore)).returning({ id: loginAttempts.id }),
-      db.delete(sessions).where(or(lt(sessions.expiresAt, now), lt(sessions.absoluteExpiresAt, now))).returning({ id: sessions.id }),
+      db
+        .delete(loginAttempts)
+        .where(lt(loginAttempts.attemptedAt, attemptsBefore))
+        .returning({ id: loginAttempts.id }),
+      db
+        .delete(sessions)
+        .where(or(lt(sessions.expiresAt, now), lt(sessions.absoluteExpiresAt, now)))
+        .returning({ id: sessions.id }),
     ]);
 
-    const pending = await db.select({
-      id: storageOrphans.id,
-      storageKey: storageOrphans.storageKey,
-      action: storageOrphans.action,
-    }).from(storageOrphans)
-      .where(eq(storageOrphans.status, "pending"))
+    const pending = await db
+      .select({
+        id: storageOrphans.id,
+        storageKey: storageOrphans.storageKey,
+        action: storageOrphans.action,
+      })
+      .from(storageOrphans)
+      .where(eq(storageOrphans.status, 'pending'))
       .orderBy(asc(storageOrphans.createdAt))
       .limit(ORPHAN_BATCH_SIZE);
 
@@ -50,18 +59,25 @@ export async function GET(request: Request) {
     if (pending.length > 0) {
       const keys = pending.map((item) => item.storageKey);
       const [mediaRows, variantRows] = await Promise.all([
-        db.select({ storageKey: media.storageKey }).from(media).where(inArray(media.storageKey, keys)),
-        db.select({ storageKey: mediaVariants.storageKey }).from(mediaVariants).where(inArray(mediaVariants.storageKey, keys)),
+        db
+          .select({ storageKey: media.storageKey })
+          .from(media)
+          .where(inArray(media.storageKey, keys)),
+        db
+          .select({ storageKey: mediaVariants.storageKey })
+          .from(mediaVariants)
+          .where(inArray(mediaVariants.storageKey, keys)),
       ]);
       const referenced = new Set([...mediaRows, ...variantRows].map((item) => item.storageKey));
       const plan = planOrphanCleanup(
-        pending.map((item) => ({ ...item, action: item.action as "put" | "delete" })),
-        referenced,
+        pending.map((item) => ({ ...item, action: item.action as 'put' | 'delete' })),
+        referenced
       );
 
       if (plan.repairWithoutDeleteIds.length > 0) {
-        await db.update(storageOrphans)
-          .set({ status: "repaired", repairedAt: now })
+        await db
+          .update(storageOrphans)
+          .set({ status: 'repaired', repairedAt: now })
           .where(inArray(storageOrphans.id, plan.repairWithoutDeleteIds));
         repaired += plan.repairWithoutDeleteIds.length;
       }
@@ -71,8 +87,9 @@ export async function GET(request: Request) {
       if (plan.deleteKeys.length > 0) {
         try {
           await storage.del(plan.deleteKeys);
-          await db.update(storageOrphans)
-            .set({ status: "repaired", repairedAt: now })
+          await db
+            .update(storageOrphans)
+            .set({ status: 'repaired', repairedAt: now })
             .where(inArray(storageOrphans.id, plan.deleteIds));
           repaired += plan.deleteIds.length;
         } catch {
@@ -85,10 +102,17 @@ export async function GET(request: Request) {
     const unresolved = pending.length - repaired;
     const update = { lastRunAt: now };
     if (unresolved === 0) {
-      await db.insert(cronRuns).values({ jobName: "cleanup", lastRunAt: now, lastSuccessAt: now })
-        .onConflictDoUpdate({ target: cronRuns.jobName, set: { lastRunAt: now, lastSuccessAt: now } });
+      await db
+        .insert(cronRuns)
+        .values({ jobName: 'cleanup', lastRunAt: now, lastSuccessAt: now })
+        .onConflictDoUpdate({
+          target: cronRuns.jobName,
+          set: { lastRunAt: now, lastSuccessAt: now },
+        });
     } else {
-      await db.insert(cronRuns).values({ jobName: "cleanup", ...update })
+      await db
+        .insert(cronRuns)
+        .values({ jobName: 'cleanup', ...update })
         .onConflictDoUpdate({ target: cronRuns.jobName, set: update });
     }
 
@@ -103,6 +127,6 @@ export async function GET(request: Request) {
       batchLimit: ORPHAN_BATCH_SIZE,
     });
   } catch {
-    return response(500, { ok: false, error: "Cleanup failed" });
+    return response(500, { ok: false, error: 'Cleanup failed' });
   }
 }

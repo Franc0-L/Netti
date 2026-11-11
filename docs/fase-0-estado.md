@@ -20,21 +20,21 @@ Tampoco se implementa la mutación editorial para demostrar `updateTag`: aún no
 
 Estas pruebas no pueden considerarse aprobadas por compilar el repositorio ni por inspección estática:
 
-| Prueba | Evidencia que debe guardarse |
-|---|---|
-| Región Neon `sa-east-1` y Vercel `gru1` | Configuración real de ambos proyectos |
-| Lectura pública sin despertar Neon | CU-h antes/después, separando caché CDN de caché de datos |
-| 30 visitas y 50 slugs inexistentes | Logs de requests y métricas CU-h |
-| `updateTag` tras mutación | Server Action + lectura inmediata en una prueba de integración |
-| Upload multipart real de 2 MB | Respuesta Blob, bytes descargados y hash |
-| Validación de imágenes | MIME, magic bytes, dimensiones y límite de megapíxeles |
-| Procesamiento Sharp | WebP original y variantes 480/960/1600 verificadas |
-| Backup PostgreSQL 17 | `pg_dump` con `DATABASE_URL_UNPOOLED`, `pg_restore --list` y restauración efectiva |
-| Scrypt N=2^17 | Latencia p50/p95 y pico de memoria |
-| Cache/CDN y operaciones Blob | `x-vercel-cache`, operaciones list/CDN miss y costos |
-| Cron | Frecuencia efectiva y costo por ejecución |
-| CSP | Hashes/nonce y verificación en navegador |
-| Rutas y redirects | 404/308 con Cache Components |
+| Prueba                                  | Evidencia que debe guardarse                                                       |
+| --------------------------------------- | ---------------------------------------------------------------------------------- |
+| Región Neon `sa-east-1` y Vercel `gru1` | Configuración real de ambos proyectos                                              |
+| Lectura pública sin despertar Neon      | CU-h antes/después, separando caché CDN de caché de datos                          |
+| 30 visitas y 50 slugs inexistentes      | Logs de requests y métricas CU-h                                                   |
+| `updateTag` tras mutación               | Server Action + lectura inmediata en una prueba de integración                     |
+| Upload multipart real de 2 MB           | Respuesta Blob, bytes descargados y hash                                           |
+| Validación de imágenes                  | MIME, magic bytes, dimensiones y límite de megapíxeles                             |
+| Procesamiento Sharp                     | WebP original y variantes 480/960/1600 verificadas                                 |
+| Backup PostgreSQL 18                    | `pg_dump` con `DATABASE_URL_UNPOOLED`, `pg_restore --list` y restauración efectiva |
+| Scrypt N=2^17                           | Latencia p50/p95 y pico de memoria                                                 |
+| Cache/CDN y operaciones Blob            | `x-vercel-cache`, operaciones list/CDN miss y costos                               |
+| Cron                                    | Frecuencia efectiva y costo por ejecución                                          |
+| CSP                                     | Hashes/nonce y verificación en navegador                                           |
+| Rutas y redirects                       | 404/308 con Cache Components                                                       |
 
 ## Criterio de salida
 

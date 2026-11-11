@@ -12,7 +12,7 @@ export interface Storage {
     options: {
       contentType: string;
       cacheControlMaxAge: number;
-    },
+    }
   ): Promise<StoredObject>;
   del(keys: string[]): Promise<void>;
   list(args: { prefix: string; cursor?: string; limit?: number }): Promise<{
@@ -23,9 +23,9 @@ export interface Storage {
 
 export const storage: Storage = {
   async put(key, body, options) {
-    const { put } = await import("@vercel/blob");
+    const { put } = await import('@vercel/blob');
     const result = await put(key, body, {
-      access: "public",
+      access: 'public',
       contentType: options.contentType,
       cacheControlMaxAge: options.cacheControlMaxAge,
       addRandomSuffix: false,
@@ -35,22 +35,18 @@ export const storage: Storage = {
       key: result.pathname,
       url: result.url,
       bytes:
-        body instanceof Blob
-          ? body.size
-          : body instanceof ArrayBuffer
-            ? body.byteLength
-            : null,
+        body instanceof Blob ? body.size : body instanceof ArrayBuffer ? body.byteLength : null,
     };
   },
 
   async del(keys) {
     if (keys.length === 0) return;
-    const { del } = await import("@vercel/blob");
+    const { del } = await import('@vercel/blob');
     await del(keys);
   },
 
   async list(args) {
-    const { list } = await import("@vercel/blob");
+    const { list } = await import('@vercel/blob');
     const result = await list({
       prefix: args.prefix,
       cursor: args.cursor,

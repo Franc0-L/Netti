@@ -6,6 +6,8 @@
     "dev": "next dev",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test src/lib/*.test.ts src/components/*.test.tsx",
+    "test:db": "node --conditions=react-server --import tsx scripts/integration-check.ts",
+    "test:http": "tsx scripts/http-smoke.ts",
     "build": "next build",
     "start": "next start",
     "hash:admin": "tsx scripts/hash-admin-password.ts",
@@ -31,13 +33,14 @@
     "react-markdown": "^10.1.0",
     "rehype-sanitize": "^6.0.0",
     "remark-gfm": "^4.0.1",
+    "server-only": "^0.0.1",
     "sharp": "^0.35.5",
     "zod": "^4.6.7"
   },
   "devDependencies": {
     "@tailwindcss/turbopack": "^4",
     "@types/eslint": "^9.6.1",
-    "@types/node": "^20",
+    "@types/node": "^24",
     "@types/pg": "^8.23.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
@@ -55,6 +58,11 @@
   "lint-staged": {
     "*.{ts,tsx,js,jsx,json,md}": "prettier --write",
     "*.{ts,tsx}": "eslint --fix"
+  },
+  "overrides": {
+    "@vercel/cli-config": {
+      "zod": "^4.6.7"
+    }
   },
   "allowScripts": {
     "esbuild@0.18.20": true,

@@ -4,12 +4,12 @@ El panel no necesita una API REST: tiene un solo cliente escrito por la misma pe
 
 ## 1. Por qué Server Actions
 
-| Necesidad | Server Action | Route Handler |
-|-----------|---------------|---------------|
-| Lectura inmediata tras escribir | `updateTag` | `revalidateTag(tag, { expire: 0 })` |
-| Verificación de origen | Resuelta contra el host | Manual |
-| Tipado de punta a punta | Nativo | Duplicado |
-| Subida de archivos de 2 MB | Límite de body chico | Sin problema |
+| Necesidad                       | Server Action           | Route Handler                       |
+| ------------------------------- | ----------------------- | ----------------------------------- |
+| Lectura inmediata tras escribir | `updateTag`             | `revalidateTag(tag, { expire: 0 })` |
+| Verificación de origen          | Resuelta contra el host | Manual                              |
+| Tipado de punta a punta         | Nativo                  | Duplicado                           |
+| Subida de archivos de 2 MB      | Límite de body chico    | Sin problema                        |
 
 Con Server Actions desaparece el contrato de 300 líneas que antes describía `/api/content`. El panel importa la acción y recibe un resultado tipado.
 
@@ -23,14 +23,14 @@ export type ActionResult<T = undefined> =
   | {
       ok: false;
       code:
-        | "unauthorized"
-        | "forbidden"
-        | "invalid"
-        | "conflict"
-        | "not_found"
-        | "rate_limited"
-        | "too_large"
-        | "server";
+        | 'unauthorized'
+        | 'forbidden'
+        | 'invalid'
+        | 'conflict'
+        | 'not_found'
+        | 'rate_limited'
+        | 'too_large'
+        | 'server';
       message: string;
       fieldErrors?: Record<string, string[]>;
       current?: unknown;
@@ -45,29 +45,31 @@ Los componentes leen `result.ok` y muestran `message` o `fieldErrors`. No hay c�
 ### `login({ password })`
 
 ```ts
-"use server";
-export async function login(input: { password: string }): Promise<ActionResult<{ expiresAt: string }>>;
+'use server';
+export async function login(input: {
+  password: string;
+}): Promise<ActionResult<{ expiresAt: string }>>;
 ```
 
 Orden de ejecución: `assertSameOrigin()` → rate limit por IP → `scrypt` asíncrono → `timingSafeEqual` → crear sesión → setear cookie.
 
-| Resultado | `code` | `message` |
-|-----------|--------|-----------|
-| Cookie emitida | — (`ok: true`) | — |
-| Contraseña incorrecta | `unauthorized` | "La contraseña no es correcta." |
-| Demasiados intentos | `rate_limited` | "Demasiados intentos. Probá en unos minutos." con `retryAfter` |
-| Origen ajeno | `forbidden` | "Origen no permitido." |
-| Falta configuración | `server` | "El panel no está configurado." |
+| Resultado             | `code`         | `message`                                                      |
+| --------------------- | -------------- | -------------------------------------------------------------- |
+| Cookie emitida        | — (`ok: true`) | —                                                              |
+| Contraseña incorrecta | `unauthorized` | "La contraseña no es correcta."                                |
+| Demasiados intentos   | `rate_limited` | "Demasiados intentos. Probá en unos minutos." con `retryAfter` |
+| Origen ajeno          | `forbidden`    | "Origen no permitido."                                         |
+| Falta configuración   | `server`       | "El panel no está configurado."                                |
 
 La cookie se emite dentro de la acción con `cookies()` (async en Next 16):
 
 ```ts
 const cookieStore = await cookies();
-cookieStore.set("session", token, {
+cookieStore.set('session', token, {
   httpOnly: true,
   secure: true,
-  sameSite: "lax",
-  path: "/",
+  sameSite: 'lax',
+  path: '/',
   maxAge: 30 * 24 * 60 * 60, // 30 días: el tope absoluto de la sesión
 });
 ```
@@ -111,17 +113,19 @@ El trigger `BEFORE UPDATE` incrementa `version` y fija `updated_at`. `RETURNING`
 ### `createArticle(input)`
 
 ```ts
-async function createArticle(input: ArticleInput): Promise<ActionResult<{ id: number; version: number; slug: string }>>;
+async function createArticle(
+  input: ArticleInput
+): Promise<ActionResult<{ id: number; version: number; slug: string }>>;
 ```
 
 - `status: "draft"` → guarda lo que haya. Un borrador puede estar vacío salvo `kind`.
 - `status: "published"` → valida completitud; si falta `publishedAt`, el servidor pone `now()`.
 
-| `code` | Cuándo |
-|--------|--------|
-| `invalid` | Zod falló; `fieldErrors` trae el detalle por campo |
-| `conflict` | El slug ya existe para ese `kind` |
-| `server` | Error de base |
+| `code`     | Cuándo                                             |
+| ---------- | -------------------------------------------------- |
+| `invalid`  | Zod falló; `fieldErrors` trae el detalle por campo |
+| `conflict` | El slug ya existe para ese `kind`                  |
+| `server`   | Error de base                                      |
 
 **Validación de medios**: antes de insertar, verificar que `coverMediaId` y `ogMediaId` (si se proporcionan) existan en `media` y que `pending_delete_at` sea nulo. También verificar que cualquier referencia `media:<id>` en el cuerpo apunte a medios existentes y sin marca de purga. Si algún medio está marcado para borrado o no existe, devolver `conflict` con `fieldErrors.coverMediaId` o `fieldErrors.ogMediaId` según corresponda.
 
@@ -132,22 +136,30 @@ async function updateArticle(args: {
   id: number;
   version: number;
   input: ArticleInput;
-}): Promise<ActionResult<{ version: number; slug: string; status: ContentStatus; oldSlug?: string }>>;
+}): Promise<
+  ActionResult<{ version: number; slug: string; status: ContentStatus; oldSlug?: string }>
+>;
 ```
 
 Ejecuta la transacción de §4.0: `UPDATE ... WHERE id = $id AND version = $version RETURNING version` + `INSERT` en `article_revisions`. Si no devuelve fila, hace un `SELECT` para distinguir:
 
-| Situación | `code` | Extra |
-|-----------|--------|-------|
-| No existe | `not_found` | — |
-| Versión desactualizada | `conflict` | `current` con el estado actual |
-| Slug ocupado | `conflict` | `fieldErrors.slug` |
+| Situación              | `code`      | Extra                          |
+| ---------------------- | ----------- | ------------------------------ |
+| No existe              | `not_found` | —                              |
+| Versión desactualizada | `conflict`  | `current` con el estado actual |
+| Slug ocupado           | `conflict`  | `fieldErrors.slug`             |
 
 **Cambio de slug**: si `input.slug` difiere del slug actual **y el artículo ya estaba publicado** (`published_at` no nulo), dentro de la misma transacción se inserta una redirección. Las rutas públicas usan prefijos por colección (definidos en `lib/routes.ts`):
 
 ```ts
 const [existing] = await tx
-  .select({ publishedAt: articles.publishedAt, status: articles.status, previousStatus: articles.previousStatus, slug: articles.slug, kind: articles.kind })
+  .select({
+    publishedAt: articles.publishedAt,
+    status: articles.status,
+    previousStatus: articles.previousStatus,
+    slug: articles.slug,
+    kind: articles.kind,
+  })
   .from(articles)
   .where(eq(articles.id, id))
   .limit(1)
@@ -171,7 +183,7 @@ if (input.slug !== oldSlug) {
       });
       await tx.releaseSavepoint('redirect_insert');
     } catch (error) {
-      if (!isUniqueViolation(error, "redirects_from_path_key")) throw error;
+      if (!isUniqueViolation(error, 'redirects_from_path_key')) throw error;
       await tx.rollbackToSavepoint('redirect_insert');
       throw new SlugRedirectConflict();
     }
@@ -195,7 +207,7 @@ La función `articlePath(kind, slug)` vive en `lib/routes.ts`, no en `app/action
 async function publishArticle(args: {
   id: number;
   version: number;
-}): Promise<ActionResult<{ version: number; slug: string; status: "published" }>>;
+}): Promise<ActionResult<{ version: number; slug: string; status: 'published' }>>;
 ```
 
 Invalidación: `article:<kind>:<slug>`, `kind:<kind>`, `articles`, `home`, `redirects`.
@@ -208,7 +220,7 @@ Invalidación: `article:<kind>:<slug>`, `kind:<kind>`, `articles`, `home`, `redi
 async function unpublishArticle(args: {
   id: number;
   version: number;
-}): Promise<ActionResult<{ version: number; status: "draft" }>>;
+}): Promise<ActionResult<{ version: number; status: 'draft' }>>;
 ```
 
 Invalidación: `article:<kind>:<slug>`, `kind:<kind>`, `articles`, `home`, `redirects`.
@@ -221,7 +233,7 @@ Invalidación: `article:<kind>:<slug>`, `kind:<kind>`, `articles`, `home`, `redi
 async function trashArticle(args: {
   id: number;
   version: number;
-}): Promise<ActionResult<{ version: number; status: "trashed" }>>;
+}): Promise<ActionResult<{ version: number; status: 'trashed' }>>;
 ```
 
 Invalidación: `article:<kind>:<slug>`, `kind:<kind>`, `articles`, `home` si estaba publicado o destacado, `tag:<t>` para cada etiqueta previa, `redirects`.
@@ -248,7 +260,7 @@ Cada intento debe ejecutarse en una **transacción independiente** o usar un `SA
 try {
   return await restoreWithSlug(id, slug); // UPDATE ... RETURNING
 } catch (error) {
-  if (!isUniqueViolation(error, "articles_kind_slug_active")) throw error;
+  if (!isUniqueViolation(error, 'articles_kind_slug_active')) throw error;
 }
 
 for (let attempt = 2; attempt <= 10; attempt++) {
@@ -256,11 +268,11 @@ for (let attempt = 2; attempt <= 10; attempt++) {
   try {
     return await restoreWithSlug(id, candidate); // UPDATE ... RETURNING en transacción nueva o savepoint
   } catch (error) {
-    if (!isUniqueViolation(error, "articles_kind_slug_active")) throw error;
+    if (!isUniqueViolation(error, 'articles_kind_slug_active')) throw error;
   }
 }
 
-return { ok: false, code: "conflict", message: "No se pudo liberar el slug." };
+return { ok: false, code: 'conflict', message: 'No se pudo liberar el slug.' };
 ```
 
 Cada reintento es un `UPDATE`; el que gana es el que la base acepta. El resultado exitoso incluye el slug definitivo para que el panel lo muestre.
@@ -298,9 +310,7 @@ Invalidación: `article:<kind>:<slug>`, `kind:<kind>`, `articles`, `home` si est
 Revalida un artículo específico desde el panel (runbook de monitoreo). Lee el artículo y revalida sus tags.
 
 ```ts
-async function revalidateArticle(args: {
-  id: number;
-}): Promise<ActionResult<{ tags: string[] }>>;
+async function revalidateArticle(args: { id: number }): Promise<ActionResult<{ tags: string[] }>>;
 ```
 
 ### `searchGames({ q, limit })`
@@ -329,13 +339,24 @@ export async function searchGames(args: {
 Todas con `requireSession()` + `assertSameOrigin()`.
 
 ```ts
-export async function createGame(input: GameInput): Promise<ActionResult<{ id: number; version: number; slug: string }>>;
-export async function updateGame(args: { id: number; version: number; input: GameInput }): Promise<ActionResult<{ version: number; slug: string }>>;
-export async function deleteGame(args: { id: number; version: number }): Promise<ActionResult<undefined>>;
-export async function getGame(id: number): Promise<ActionResult<{ game: GameRecord; version: number }>>;
+export async function createGame(
+  input: GameInput
+): Promise<ActionResult<{ id: number; version: number; slug: string }>>;
+export async function updateGame(args: {
+  id: number;
+  version: number;
+  input: GameInput;
+}): Promise<ActionResult<{ version: number; slug: string }>>;
+export async function deleteGame(args: {
+  id: number;
+  version: number;
+}): Promise<ActionResult<undefined>>;
+export async function getGame(
+  id: number
+): Promise<ActionResult<{ game: GameRecord; version: number }>>;
 export async function listGames(args?: {
   q?: string;
-  status?: "draft" | "published";
+  status?: 'draft' | 'published';
   limit?: number;
   cursor?: number;
 }): Promise<ActionResult<{ items: GameListItem[]; nextCursor: number | null }>>;
@@ -381,17 +402,26 @@ export async function searchArticles(args: {
 
 Una revisión por cada escritura efectiva sobre `articles` (si el trigger no sube `version`, no se inserta nada).
 
-| Operación | ¿Snapshot? |
-|-----------|:---:|
-| Crear (v1), guardar cambios, publicar, despublicar, papelera, restaurar, restaurar revisión | Sí |
-| Purgar | No (caen por `CASCADE`) |
+| Operación                                                                                   |       ¿Snapshot?        |
+| ------------------------------------------------------------------------------------------- | :---------------------: |
+| Crear (v1), guardar cambios, publicar, despublicar, papelera, restaurar, restaurar revisión |           Sí            |
+| Purgar                                                                                      | No (caen por `CASCADE`) |
 
 Snapshot = fila completa de `RETURNING *` sin `search_vector`. Retención inline, en la misma transacción: `delete from article_revisions where article_id = $1 and version <= $2 - 20`. Sin cron.
 
 ```ts
-export async function listRevisions(args: { articleId: number }): Promise<ActionResult<Array<{ version: number; createdAt: string }>>>;
-export async function getRevision(args: { articleId: number; version: number }): Promise<ActionResult<{ snapshot: unknown }>>;
-export async function restoreRevision(args: { id: number; version: number; revisionVersion: number }): Promise<ActionResult<{ version: number }>>;
+export async function listRevisions(args: {
+  articleId: number;
+}): Promise<ActionResult<Array<{ version: number; createdAt: string }>>>;
+export async function getRevision(args: {
+  articleId: number;
+  version: number;
+}): Promise<ActionResult<{ snapshot: unknown }>>;
+export async function restoreRevision(args: {
+  id: number;
+  version: number;
+  revisionVersion: number;
+}): Promise<ActionResult<{ version: number }>>;
 ```
 
 `restoreRevision` restaura solo contenido (título, descripción, cuerpo, etiquetas, portada, og, SEO, campos de reseña/noticia, autor). **No** restaura `slug`, `status`, `publishedAt`, `featured` ni `kind`. Pasa por Zod.
@@ -405,7 +435,7 @@ export type MediaListItem = {
   width: number;
   height: number;
   alt: string | null;
-  rights: "own" | "press" | "third_party";
+  rights: 'own' | 'press' | 'third_party';
   createdAt: string;
   referenced: boolean;
 };
@@ -428,7 +458,7 @@ export async function updateMediaMetadata(args: {
   mediaId: number;
   alt: string;
   credit?: string | null;
-  rights: "own" | "press" | "third_party";
+  rights: 'own' | 'press' | 'third_party';
   sourceUrl?: string | null;
 }): Promise<ActionResult<{ mediaId: number }>>;
 ```
@@ -451,12 +481,12 @@ kind=review            # uno de: review, news, guide, game. Determina el prefijo
 
 El parámetro `kind` acepta exactamente cuatro valores:
 
-| `kind` | Prefijo de clave en Blob | Uso |
-|--------|-------------------------|-----|
-| `review` | `articles/` | Reseña de juego |
-| `news` | `articles/` | Noticia |
-| `guide` | `articles/` | Guía |
-| `game` | `games/` | Ficha de juego |
+| `kind`   | Prefijo de clave en Blob | Uso             |
+| -------- | ------------------------ | --------------- |
+| `review` | `articles/`              | Reseña de juego |
+| `news`   | `articles/`              | Noticia         |
+| `guide`  | `articles/`              | Guía            |
+| `game`   | `games/`                 | Ficha de juego  |
 
 El servidor valida una whitelist estricta y resuelve el prefijo internamente. El cliente no puede enviar un prefijo de almacenamiento arbitrario.
 
@@ -484,22 +514,31 @@ La respuesta:
     "height": 900,
     "bytes": 184320,
     "variants": [
-      { "width": 480, "url": "https://ce0rcu23vrrdzqap.public.blob.vercel-storage.com/articles/8f3c1a2e-480.webp" },
-      { "width": 960, "url": "https://ce0rcu23vrrdzqap.public.blob.vercel-storage.com/articles/8f3c1a2e-960.webp" },
-      { "width": 1600, "url": "https://ce0rcu23vrrdzqap.public.blob.vercel-storage.com/articles/8f3c1a2e-1600.webp" }
+      {
+        "width": 480,
+        "url": "https://ce0rcu23vrrdzqap.public.blob.vercel-storage.com/articles/8f3c1a2e-480.webp"
+      },
+      {
+        "width": 960,
+        "url": "https://ce0rcu23vrrdzqap.public.blob.vercel-storage.com/articles/8f3c1a2e-960.webp"
+      },
+      {
+        "width": 1600,
+        "url": "https://ce0rcu23vrrdzqap.public.blob.vercel-storage.com/articles/8f3c1a2e-1600.webp"
+      }
     ]
   }
 }
 ```
 
-| Código | Cuerpo |
-|--------|--------|
-| 400 | `{ "error": "Formato no admitido. Usá JPEG, PNG, WebP o AVIF." }` |
-| 400 | `{ "error": "El archivo no coincide con su tipo declarado." }` |
-| 400 | `{ "error": "Las imágenes animadas no están soportadas." }` |
-| 400 | `{ "error": "La imagen supera el tamaño de píxeles permitido." }` |
-| 413 | `{ "error": "La imagen no puede superar los 2 MB." }` |
-| 500 | `{ "error": "No se pudo guardar la imagen." }` |
+| Código | Cuerpo                                                            |
+| ------ | ----------------------------------------------------------------- |
+| 400    | `{ "error": "Formato no admitido. Usá JPEG, PNG, WebP o AVIF." }` |
+| 400    | `{ "error": "El archivo no coincide con su tipo declarado." }`    |
+| 400    | `{ "error": "Las imágenes animadas no están soportadas." }`       |
+| 400    | `{ "error": "La imagen supera el tamaño de píxeles permitido." }` |
+| 413    | `{ "error": "La imagen no puede superar los 2 MB." }`             |
+| 500    | `{ "error": "No se pudo guardar la imagen." }`                    |
 
 La subida pasa por `@vercel/blob` (`put`) desde el servidor. El token se resuelve con OIDC en Vercel; en desarrollo local se usa `BLOB_READ_WRITE_TOKEN`.
 
@@ -517,38 +556,57 @@ Authorization: Bearer $CRON_SECRET
 ```
 
 ```json
-{ "revalidated": ["article:review:mi-resena", "kind:review", "home"] }
+{
+  "ok": true,
+  "revalidated": 1,
+  "tags": ["article:news:mi-noticia", "kind:news", "articles"],
+  "cursor": { "publishedAt": "2026-11-11T12:00:00.000Z", "id": 42 },
+  "more": false
+}
 ```
 
-Si `CRON_SECRET` falta o no coincide: `401`. El endpoint usa `revalidateTag(tag, { expire: 0 })` para forzar un miss bloqueante en la próxima lectura. Sin este endpoint, un artículo programado se ve tarde o no se ve.
+Si `CRON_SECRET` falta o no coincide: `401`. El endpoint agrupa los tags afectados y llama a `revalidateTag(tag, { expire: 0 })` para forzar un miss en la próxima lectura. Usa un cursor `(published_at, id)` persistido en `cron_runs`, así que es idempotente y reanudable: si hay más de 200 artículos pendientes devuelve `more: true` para la siguiente corrida.
 
 ### 5.3 `GET /api/health` y `GET /api/ready`
 
 Son dos comprobaciones distintas y no intercambiables.
 
-| Endpoint | Qué prueba | Toca Postgres | Frecuencia |
-|----------|-----------|---------------|------------|
-| `/api/health` | *Liveness*: el proceso responde | No | Cada 1–5 min (uptime monitor) |
-| `/api/ready` | *Readiness*: DB y almacenamiento alcanzables | Sí (`select 1`) | Cada 30–60 min, o solo desde el runbook |
+| Endpoint      | Qué prueba                         | Toca Postgres          | Autenticación         | Frecuencia                              |
+| ------------- | ---------------------------------- | ---------------------- | --------------------- | --------------------------------------- |
+| `/api/health` | _Liveness_: el proceso responde    | No                     | No                    | Cada 1–5 min (uptime monitor)           |
+| `/api/ready`  | _Readiness_: DB y Blob alcanzables | Sí (`select 1` + Blob) | `Bearer $CRON_SECRET` | Cada 30–60 min, o solo desde el runbook |
 
-`/api/health` devuelve `200` con `{ "ok": true }` y `Cache-Control: no-store`. Un health que consulta la base la despierta y consume CU-horas: eso es exactamente lo que este diseño evita.
-
-`/api/ready` no se expone al monitor público. Requiere `Authorization: Bearer $CRON_SECRET` y se llama a mano cuando algo falla, o desde un job de baja frecuencia que además registra el resultado. Devuelve `503` con el componente que falló:
+`/api/health` devuelve `200` con `Cache-Control: no-store`:
 
 ```json
-{ "ok": false, "db": "unreachable", "storage": "ok" }
+{ "status": "ok", "service": "netti", "checkedAt": "2026-11-11T09:08:23.872Z" }
 ```
+
+No consulta la base ni Blob: un health que toca Neon la despierta y consume CU-horas.
+
+`/api/ready` devuelve `401` sin credenciales y, con credenciales, el estado por dependencia:
+
+```json
+{
+  "status": "ok",
+  "service": "netti",
+  "checkedAt": "2026-11-11T09:10:00.000Z",
+  "dependencies": { "database": "ok", "blob": "ok" }
+}
+```
+
+`status` es `ok`, `degraded` (algún componente omitido, por ejemplo Blob sin token) o `unhealthy` (`503`, algún componente falló).
 
 ### 5.4 `POST /api/reconcile-storage`
 
-Endpoint protegido con `CRON_SECRET` que ejecuta `reconcileStorage()` (definido en `07-reconciliacion-y-cron.md` §3). Corre dentro del workflow del backup nocturno, misma despertada de Neon.
+Endpoint protegido con `CRON_SECRET` que ejecuta la parte segura de la reconciliación basada en la base: purga sesiones expiradas e intentos viejos, reintenta orphans registrados y barre medios marcados para borrar tras el período de gracia. No lista el store completo de Blob.
 
 ```http
 POST /api/reconcile-storage
 Authorization: Bearer $CRON_SECRET
 ```
 
-No lo llama el panel ni el público. Es idempotente y acotado en tiempo: si tarda más del presupuesto de la ejecución, se detiene y deja lo pendiente para la próxima corrida.
+Se bloquea con `409` si hubo una restauración de backup en los últimos 7 días (`cron_runs.backup_restored_at`). No lo llama el panel ni el público. Es idempotente y acotado en tiempo: si tarda más del presupuesto de la ejecución, se detiene y deja lo pendiente para la próxima corrida.
 
 ## 6. Cabeceras
 
@@ -559,14 +617,30 @@ Cache-Control: no-store
 X-Content-Type-Options: nosniff
 ```
 
-En el resto del sitio, desde `next.config.ts`:
+En el resto del sitio, desde `next.config.ts` y `src/proxy.ts`:
 
 ```
-Strict-Transport-Security: max-age=63072000; includeSubDomains
+Strict-Transport-Security: max-age=63072000; includeSubDomains (solo producción)
 Referrer-Policy: strict-origin-when-cross-origin
 X-Frame-Options: DENY
 Permissions-Policy: camera=(), microphone=(), geolocation=()
-Content-Security-Policy: default-src 'self'; img-src 'self' https://<IMAGES_PUBLIC_BASE_URL_HOST>; ...
+Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; ...
 ```
 
-En `/admin/*` la CSP usa nonces y esas rutas se renderizan dinámicamente.
+En `/admin/*` la CSP usa un nonce por solicitud con `'strict-dynamic'`; esas rutas se renderizan dinámicamente. Ver `11-seguridad-hardening.md`.
+
+## 7. Errores HTTP y rutas inexistentes
+
+| Situación                                       | Respuesta                                 |
+| ----------------------------------------------- | ----------------------------------------- |
+| Ruta que no coincide con ninguna ruta de la app | `404` de Next.js                          |
+| Colección inexistente (`/no-existe`)            | `404` desde el proxy                      |
+| Slug inexistente o no publicado                 | `404` desde el proxy                      |
+| `/admin/*` sin cookie de sesión                 | `307` hacia `/admin/login`                |
+| `/admin/*` con cookie inválida                  | Redirección entregada en el payload (200) |
+
+Motivo: con Cache Components la respuesta empieza a transmitirse antes de que la página resuelva, así que `notFound()` ya no puede cambiar el estado. La decisión se toma en `src/proxy.ts` (ver D-023 en `01-stack-arquitectura.md`).
+
+El 404 del proxy es un documento HTML propio, en español, con el mismo mensaje y la misma paleta que `src/app/not-found.tsx`, e incluye `Cache-Control: no-store`, la CSP pública y `X-Robots-Tag` implícito mediante `<meta name="robots" content="noindex">`.
+
+Verificación: `npm run test:http` comprueba que una ruta inexistente y un slug inexistente devuelven `404` y que `/admin` sin sesión devuelve una redirección.

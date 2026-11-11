@@ -1,6 +1,6 @@
-import ReactMarkdown from "react-markdown";
-import rehypeSanitize from "rehype-sanitize";
-import remarkGfm from "remark-gfm";
+import ReactMarkdown from 'react-markdown';
+import rehypeSanitize from 'rehype-sanitize';
+import remarkGfm from 'remark-gfm';
 
 export function MarkdownContent({ source }: { source: string }) {
   return (
@@ -10,14 +10,17 @@ export function MarkdownContent({ source }: { source: string }) {
         rehypePlugins={[rehypeSanitize]}
         components={{
           a: ({ href, children }) => {
-            const external = href?.startsWith("https://") || href?.startsWith("http://");
+            const external = href?.startsWith('https://') || href?.startsWith('http://');
             return (
               <a
                 href={href}
-                target={external ? "_blank" : undefined}
-                rel={external ? "noopener noreferrer nofollow" : undefined}
+                target={external ? '_blank' : undefined}
+                rel={external ? 'noopener noreferrer nofollow' : undefined}
               >
                 {children}
+                {external ? (
+                  <span className="visually-hidden"> (se abre en una nueva ventana)</span>
+                ) : null}
               </a>
             );
           },

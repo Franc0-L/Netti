@@ -1,22 +1,19 @@
 export function safeJsonLd(value: unknown): string {
   try {
     const json = JSON.stringify(value);
-    if (typeof json !== "string") {
-      throw new Error("El valor no produce JSON");
+    if (typeof json !== 'string') {
+      throw new Error('El valor no produce JSON');
     }
 
-    return json
-      .replace(/</g, "\\u003c")
-      .replace(/>/g, "\\u003e")
-      .replace(/&/g, "\\u0026");
+    return json.replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026');
   } catch {
-    throw new Error("No se pudo serializar JSON-LD");
+    throw new Error('No se pudo serializar JSON-LD');
   }
 }
 
 export function safeCdata(text: string): string {
-  if (text.includes("]]>")) {
-    throw new Error("CDATA no puede contener ]]>");
+  if (text.includes(']]>')) {
+    throw new Error('CDATA no puede contener ]]>');
   }
   return text;
 }

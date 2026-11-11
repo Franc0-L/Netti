@@ -2,9 +2,9 @@
 
 ## 1. Git
 
-| Rama | Uso |
-|------|-----|
-| `main` | Producción |
+| Rama                         | Uso                        |
+| ---------------------------- | -------------------------- |
+| `main`                       | Producción                 |
 | `feat/*`, `fix/*`, `chore/*` | Cambios cortos con preview |
 
 El contenido no toca Git: vive en Postgres y se escribe desde el panel. No hay rama de contenido.
@@ -27,22 +27,22 @@ npm run build
 
 ### 2.1 Servicios y costo real
 
-| Componente | Servicio | Costo |
-|------------|----------|-------|
-| Base de datos | Neon Free | $0 |
-| Imágenes | Vercel Blob | $0 en Hobby dentro de los límites |
-| Hosting | Vercel Hobby | $0, solo uso no comercial |
-| CI | GitHub Actions | $0 en repo público |
-| Monitoreo | Servicio de uptime + tracker de errores | $0 en planes gratuitos |
+| Componente    | Servicio                                | Costo                             |
+| ------------- | --------------------------------------- | --------------------------------- |
+| Base de datos | Neon Free                               | $0                                |
+| Imágenes      | Vercel Blob                             | $0 en Hobby dentro de los límites |
+| Hosting       | Vercel Hobby                            | $0, solo uso no comercial         |
+| CI            | GitHub Actions                          | $0 en repo público                |
+| Monitoreo     | Servicio de uptime + tracker de errores | $0 en planes gratuitos            |
 
 **El "costo cero" es real en el plan Hobby.** Solo hay que respetar los límites de Blob:
 
-| Recurso | Incluido | Consecuencia de excederlo |
-|---------|----------|---------------------------|
-| Storage | 1 GB | Blob deja de estar accesible |
-| Transferencia | 10 GB/mes | Blob deja de estar accesible |
-| Operaciones simples | 10.000/mes | Blob deja de estar accesible |
-| Operaciones avanzadas | 2.000/mes | Blob deja de estar accesible |
+| Recurso               | Incluido   | Consecuencia de excederlo    |
+| --------------------- | ---------- | ---------------------------- |
+| Storage               | 1 GB       | Blob deja de estar accesible |
+| Transferencia         | 10 GB/mes  | Blob deja de estar accesible |
+| Operaciones simples   | 10.000/mes | Blob deja de estar accesible |
+| Operaciones avanzadas | 2.000/mes  | Blob deja de estar accesible |
 
 No hay factura sorpresa: **no se cobra el exceso, se bloquea el almacenamiento hasta 30 días** y hay que esperar el ciclo. El límite más ajustado son las operaciones avanzadas: subir una imagen con tres variantes son cuatro `put` (cuatro operaciones). Da para ~500 imágenes nuevas al mes, muy por encima de un blog de un autor. Se mide y se evita resubir la misma imagen.
 
@@ -50,19 +50,19 @@ No hay factura sorpresa: **no se cobra el exceso, se bloquea el almacenamiento h
 
 ### 2.2 Variables
 
-| Variable | Requerida | Descripción |
-|----------|-----------|-------------|
-| `DATABASE_URL` | Sí | Cadena **pooled** de Neon, para la aplicación |
-| `DATABASE_URL_UNPOOLED` | Sí | Cadena directa, para migraciones y `pg_dump` |
-| `ADMIN_PASSWORD_HASH` | Sí | `scrypt:131072:8:1:<saltB64>:<hashB64>` |
-| `IP_HASH_SECRET` | Sí | Secreto del HMAC que hashea IPs |
-| `PUBLIC_SITE_URL` | Sí | Origen de producción |
-| `PREVIEW_ORIGIN_REGEX` | No | Patrón de origen permitido en previews, anclado al dominio del proyecto (no aceptar subdominios arbitrarios) |
-| `IMAGES_PUBLIC_BASE_URL` | Sí | URL pública de Blob (`https://<store>.public.blob.vercel-storage.com`) |
-| `CRON_SECRET` | Sí | Bearer del endpoint de revalidación |
-| `AGE_PUBLIC_KEY` | Sí | Clave pública `age` para cifrar el dump de backup |
-| `BLOB_STORE_ID` | No | ID del store de Vercel Blob (OIDC en Vercel suele proveerlo automáticamente; confirmar si el código lo usa realmente) |
-| `BLOB_READ_WRITE_TOKEN` | No | Token de lectura/escritura para desarrollo local y CI; en producción se usa OIDC |
+| Variable                 | Requerida | Descripción                                                                                                           |
+| ------------------------ | --------- | --------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`           | Sí        | Cadena **pooled** de Neon, para la aplicación                                                                         |
+| `DATABASE_URL_UNPOOLED`  | Sí        | Cadena directa, para migraciones y `pg_dump`                                                                          |
+| `ADMIN_PASSWORD_HASH`    | Sí        | `scrypt:131072:8:1:<saltB64>:<hashB64>`                                                                               |
+| `IP_HASH_SECRET`         | Sí        | Secreto del HMAC que hashea IPs                                                                                       |
+| `PUBLIC_SITE_URL`        | Sí        | Origen de producción                                                                                                  |
+| `PREVIEW_ORIGIN_REGEX`   | No        | Patrón de origen permitido en previews, anclado al dominio del proyecto (no aceptar subdominios arbitrarios)          |
+| `IMAGES_PUBLIC_BASE_URL` | Sí        | URL pública de Blob (`https://<store>.public.blob.vercel-storage.com`)                                                |
+| `CRON_SECRET`            | Sí        | Bearer del endpoint de revalidación                                                                                   |
+| `AGE_PUBLIC_KEY`         | Sí        | Clave pública `age` para cifrar el dump de backup                                                                     |
+| `BLOB_STORE_ID`          | No        | ID del store de Vercel Blob (OIDC en Vercel suele proveerlo automáticamente; confirmar si el código lo usa realmente) |
+| `BLOB_READ_WRITE_TOKEN`  | No        | Token de lectura/escritura para desarrollo local y CI; en producción se usa OIDC                                      |
 
 **Custodia de la clave `age`**: la clave pública (`AGE_PUBLIC_KEY`) se usa para cifrar el backup en GitHub Actions. La clave privada (`AGE_PRIVATE_KEY`) se conserva fuera del repo y fuera de GitHub Actions (por ejemplo, en el gestor de contraseñas del autor o un secreto de entorno protegido), y se usa solo para la restauración mensual de prueba. Si se pierde, el backup cifrado no se puede recuperar. Para la restauración mensual se hace desde la máquina del autor con la clave privada local, no desde un job automático de GitHub.
 

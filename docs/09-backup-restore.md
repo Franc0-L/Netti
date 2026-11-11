@@ -79,12 +79,12 @@ La carpeta local `backups/` no es un destino de recuperación ante pérdida o ro
 
 ## Qué cubre y qué no cubre
 
-| Datos | Cobertura |
-| --- | --- |
-| Artículos, juegos, medios y metadatos relacionales | PostgreSQL |
-| Sesiones y registros de intentos de login | Se excluyen intencionalmente del dump |
-| Archivos e imágenes almacenados en Vercel Blob | No incluidos; requieren estrategia de durabilidad/inventario separada |
-| Variables, tokens y configuración de despliegue | No incluidos; deben custodiarse por separado |
+| Datos                                              | Cobertura                                                             |
+| -------------------------------------------------- | --------------------------------------------------------------------- |
+| Artículos, juegos, medios y metadatos relacionales | PostgreSQL                                                            |
+| Sesiones y registros de intentos de login          | Se excluyen intencionalmente del dump                                 |
+| Archivos e imágenes almacenados en Vercel Blob     | No incluidos; requieren estrategia de durabilidad/inventario separada |
+| Variables, tokens y configuración de despliegue    | No incluidos; deben custodiarse por separado                          |
 
 ## Recuperación ante incidente
 
@@ -94,3 +94,22 @@ La carpeta local `backups/` no es un destino de recuperación ante pérdida o ro
 4. Restaurá primero en una base local de prueba siguiendo el procedimiento anterior.
 5. Verificá tablas, conteos, constraints y lecturas representativas.
 6. Planificá una recuperación de producción separada, revisada y autorizada. No improvises un `pg_restore --clean` contra una URL de producción.
+
+## Ensayo realizado (PostgreSQL 18.6)
+
+El 11 de noviembre de 2026 se ejecutó el ciclo completo contra PostgreSQL 18.6 local:
+
+1. `npm run db:backup` sobre una base migrada con datos de prueba (juego, reseña, medio, variante, sesión e intento de login).
+2. `npm run db:restore -- backups/<archivo>.dump` sobre `netti_restore_test`.
+
+Resultado verificado:
+
+| Comprobación                          | Resultado                              |
+| ------------------------------------- | -------------------------------------- |
+| `pg_restore --list`                   | Archivo custom válido                  |
+| Tablas restauradas                    | 10                                     |
+| Triggers restaurados                  | 4                                      |
+| Artículos, juegos, medios y variantes | Restaurados con datos e integridad     |
+| Sesiones e intentos de login          | Estructura restaurada, datos excluidos |
+
+`pg_dump` y `pg_restore` deben ser **18 o posterior** para respaldar un servidor 18; un cliente 17 no puede garantizar el dump de un servidor de versión mayor.

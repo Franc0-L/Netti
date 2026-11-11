@@ -5,14 +5,12 @@ import { db } from '@/db/index';
 import { sessions } from '@/db/schema';
 import {
   assertSameOrigin,
-  checkLoginRateLimit,
+  attemptLogin,
   createSessionToken,
   getClientIp,
-  recordLoginAttempt,
   revokeAllSessions,
   revokeCurrentSession,
   sessionDurations,
-  verifyAdminPassword,
 } from '@/lib/auth';
 import { failure, type ActionResult } from '@/lib/action-result';
 import { logger } from '@/lib/logger';
@@ -44,17 +42,15 @@ export async function login(input: {
     }
 
     const ip = getClientIp(h);
-    const rate = await checkLoginRateLimit(ip);
-    if (!rate.allowed) {
+    const attempt = await attemptLogin(ip, input.password);
+    if (!attempt.allowed) {
       logger.warn('admin.login.rate_limited');
       return failure('rate_limited', 'Demasiados intentos. Probá en unos minutos.', {
-        retryAfter: rate.retryAfter,
+        retryAfter: attempt.retryAfter,
       });
     }
 
-    const valid = await verifyAdminPassword(input.password);
-    await recordLoginAttempt(ip, valid);
-    if (!valid) {
+    if (!attempt.valid) {
       logger.warn('admin.login.rejected');
       return failure('unauthorized', 'La contraseña no es correcta.');
     }

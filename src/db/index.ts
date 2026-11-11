@@ -1,22 +1,18 @@
-import { attachDatabasePool } from "@vercel/functions";
-import { Pool } from "pg";
-import { drizzle } from "drizzle-orm/node-postgres";
-import * as schema from "./schema";
+import { attachDatabasePool } from '@vercel/functions';
+import { Pool } from 'pg';
+import { drizzle } from 'drizzle-orm/node-postgres';
+import * as schema from './schema';
 
 const connectionString = process.env.DATABASE_URL;
 
 if (!connectionString) {
-  throw new Error("DATABASE_URL no está definida");
+  throw new Error('DATABASE_URL no está definida');
 }
 
 const configuredPoolMax = Number(process.env.DATABASE_POOL_MAX ?? 2);
 
-if (
-  !Number.isInteger(configuredPoolMax) ||
-  configuredPoolMax < 1 ||
-  configuredPoolMax > 10
-) {
-  throw new Error("DATABASE_POOL_MAX debe ser un entero entre 1 y 10");
+if (!Number.isInteger(configuredPoolMax) || configuredPoolMax < 1 || configuredPoolMax > 10) {
+  throw new Error('DATABASE_POOL_MAX debe ser un entero entre 1 y 10');
 }
 
 // Each serverless instance owns its own pool. Keep the default deliberately small.

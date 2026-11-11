@@ -4,18 +4,18 @@ Define el esquema PostgreSQL (Neon), las restricciones que viven en la base, las
 
 ## 1. Tablas
 
-| Tabla | Función |
-|-------|---------|
-| `games` | Catálogo de juegos (entidad propia, referenciada por las reseñas) |
-| `articles` | Reseñas, noticias y guías. Una tabla con `kind`, no tres |
-| `media` | Imágenes subidas, con dimensiones y variantes |
-| `media_variants` | Variantes pregeneradas (480/960/1600 px) de cada medio |
-| `article_revisions` | Snapshots por guardado, para deshacer |
-| `sessions` | Sesiones del panel |
-| `login_attempts` | Rate limiting del login |
-| `redirects` | Redirecciones por cambio de slug |
-| `storage_orphans` | Registro de compensación entre Blob y Postgres |
-| `cron_runs` | Cursor del job de revalidación programada y otros jobs |
+| Tabla               | Función                                                           |
+| ------------------- | ----------------------------------------------------------------- |
+| `games`             | Catálogo de juegos (entidad propia, referenciada por las reseñas) |
+| `articles`          | Reseñas, noticias y guías. Una tabla con `kind`, no tres          |
+| `media`             | Imágenes subidas, con dimensiones y variantes                     |
+| `media_variants`    | Variantes pregeneradas (480/960/1600 px) de cada medio            |
+| `article_revisions` | Snapshots por guardado, para deshacer                             |
+| `sessions`          | Sesiones del panel                                                |
+| `login_attempts`    | Rate limiting del login                                           |
+| `redirects`         | Redirecciones por cambio de slug                                  |
+| `storage_orphans`   | Registro de compensación entre Blob y Postgres                    |
+| `cron_runs`         | Cursor del job de revalidación programada y otros jobs            |
 
 ### Por qué una sola tabla `articles`
 

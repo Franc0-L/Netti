@@ -12,10 +12,7 @@ type DatabaseConnection = {
   sslmode?: string;
 };
 
-function parseDatabaseUrl(
-  value: string | undefined,
-  variable: string,
-): DatabaseConnection {
+function parseDatabaseUrl(value: string | undefined, variable: string): DatabaseConnection {
   if (!value) throw new Error(`${variable} no está definida.`);
 
   let url: URL;
@@ -26,9 +23,7 @@ function parseDatabaseUrl(
   }
 
   if (url.protocol !== 'postgres:' && url.protocol !== 'postgresql:') {
-    throw new Error(
-      `${variable} debe usar el protocolo postgres o postgresql.`,
-    );
+    throw new Error(`${variable} debe usar el protocolo postgres o postgresql.`);
   }
 
   const database = decodeURIComponent(url.pathname.replace(/^\//, ''));
@@ -41,18 +36,9 @@ function parseDatabaseUrl(
   const sslmode = url.searchParams.get('sslmode') ?? undefined;
   if (
     sslmode &&
-    ![
-      'disable',
-      'allow',
-      'prefer',
-      'require',
-      'verify-ca',
-      'verify-full',
-    ].includes(sslmode)
+    !['disable', 'allow', 'prefer', 'require', 'verify-ca', 'verify-full'].includes(sslmode)
   ) {
-    throw new Error(
-      `${variable} contiene un sslmode no reconocido por libpq.`,
-    );
+    throw new Error(`${variable} contiene un sslmode no reconocido por libpq.`);
   }
 
   return {
@@ -69,23 +55,19 @@ function assertPostgres18Client(): void {
   const result = spawnSync('pg_dump', ['--version'], { encoding: 'utf8' });
   if (result.error || result.status !== 0) {
     throw new Error(
-      'No se pudo ejecutar pg_dump. Instalá el cliente PostgreSQL 18 y agregalo al PATH.',
+      'No se pudo ejecutar pg_dump. Instalá el cliente PostgreSQL 18 y agregalo al PATH.'
     );
   }
 
   const major = Number(result.stdout.match(/\b(\d+)\./)?.[1]);
   if (!Number.isInteger(major) || major < 18) {
     throw new Error(
-      `Se requiere pg_dump 18 o posterior; versión detectada: ${result.stdout.trim() || 'desconocida'}.`,
+      `Se requiere pg_dump 18 o posterior; versión detectada: ${result.stdout.trim() || 'desconocida'}.`
     );
   }
 }
 
-function run(
-  command: string,
-  args: string[],
-  env: NodeJS.ProcessEnv,
-): Promise<void> {
+function run(command: string, args: string[], env: NodeJS.ProcessEnv): Promise<void> {
   return new Promise((resolveRun, reject) => {
     const child = spawn(command, args, {
       env,
@@ -95,16 +77,13 @@ function run(
     child.once('error', () =>
       reject(
         new Error(
-          `No se pudo iniciar ${command}. Verificá que PostgreSQL 18 esté instalado y en PATH.`,
-        ),
-      ),
+          `No se pudo iniciar ${command}. Verificá que PostgreSQL 18 esté instalado y en PATH.`
+        )
+      )
     );
     child.once('close', (code) => {
       if (code === 0) resolveRun();
-      else
-        reject(
-          new Error(`${command} terminó con código ${code ?? 'desconocido'}.`),
-        );
+      else reject(new Error(`${command} terminó con código ${code ?? 'desconocido'}.`));
     });
   });
 }
@@ -114,10 +93,7 @@ async function main(): Promise<void> {
   process.umask(0o077);
   assertPostgres18Client();
 
-  const connection = parseDatabaseUrl(
-    process.env.DATABASE_URL_UNPOOLED,
-    'DATABASE_URL_UNPOOLED',
-  );
+  const connection = parseDatabaseUrl(process.env.DATABASE_URL_UNPOOLED, 'DATABASE_URL_UNPOOLED');
   const outputDirectory = resolve(process.cwd(), 'backups');
   await mkdir(outputDirectory, { recursive: true, mode: 0o700 });
 

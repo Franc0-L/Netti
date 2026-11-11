@@ -2,22 +2,22 @@
 
 ## 1. Paleta
 
-| Token | Valor | Uso |
-|-------|-------|-----|
-| `--accent` | `#a78bfa` | Botones, enlaces, foco, selección |
-| `--accent-strong` | `#c9bbff` | Hover |
-| `--accent-deep` | `#5b21b6` | Bordes, sombras |
-| `--on-accent` | `#1a0b2e` | Texto sobre morado |
-| `--bg` | `#141218` | Fondo |
-| `--surface` | `#1e1b24` | Tarjetas |
-| `--surface-raised` | `#272232` | Modales |
-| `--text` | `#f4effc` | Texto |
-| `--muted` | `#b6adc9` | Secundario |
-| `--border` | `#352d45` | Bordes |
-| `--red` | `#f16c79` | Errores, borrar |
-| `--gold` | `#e6bd55` | Puntuación, destacados |
-| `--cyan` | `#5ac7e8` | Juegos |
-| `--green` | `#53bd83` | Guías |
+| Token              | Valor     | Uso                               |
+| ------------------ | --------- | --------------------------------- |
+| `--accent`         | `#a78bfa` | Botones, enlaces, foco, selección |
+| `--accent-strong`  | `#c9bbff` | Hover                             |
+| `--accent-deep`    | `#5b21b6` | Bordes, sombras                   |
+| `--on-accent`      | `#1a0b2e` | Texto sobre morado                |
+| `--bg`             | `#141218` | Fondo                             |
+| `--surface`        | `#1e1b24` | Tarjetas                          |
+| `--surface-raised` | `#272232` | Modales                           |
+| `--text`           | `#f4effc` | Texto                             |
+| `--muted`          | `#b6adc9` | Secundario                        |
+| `--border`         | `#352d45` | Bordes                            |
+| `--red`            | `#f16c79` | Errores, borrar                   |
+| `--gold`           | `#e6bd55` | Puntuación, destacados            |
+| `--cyan`           | `#5ac7e8` | Juegos                            |
+| `--green`          | `#53bd83` | Guías                             |
 
 Tokens en `app/globals.css` como variables CSS; Tailwind v4 los consume con `@theme`. Ningún color literal suelto en componentes.
 
@@ -136,16 +136,39 @@ Borra la sesión en el servidor y la cookie. "Cerrar todas las sesiones" invalid
 
 ## 8. Mensajes
 
-| Situación | Texto |
-|-----------|-------|
-| Borrador | "Borrador guardado." |
-| Publicado | "Publicado. Ya está visible en el sitio." |
-| Programado | "Se va a publicar el 12/12 a las 09:00." |
-| Conflicto | "La publicación cambió mientras editabas. Recargá para ver la última versión." |
-| Slug ocupado | "Ese slug ya está en uso. Probá con otro." |
-| Sesión vencida | "Tu sesión venció. Volvé a entrar; tu borrador está guardado en este navegador." |
-| Imagen grande | "La imagen no puede superar los 2 MB." |
-| Imagen animada | "Las imágenes animadas no están soportadas." |
-| Formato inválido | "Formato no admitido. Usá JPEG, PNG, WebP o AVIF." |
-| Recuperado con sufijo | "Se recuperó como «mi-articulo-2»." |
-| Sin conexión | "No se pudo guardar. Tu borrador sigue en este navegador." |
+| Situación             | Texto                                                                            |
+| --------------------- | -------------------------------------------------------------------------------- |
+| Borrador              | "Borrador guardado."                                                             |
+| Publicado             | "Publicado. Ya está visible en el sitio."                                        |
+| Programado            | "Se va a publicar el 12/12 a las 09:00."                                         |
+| Conflicto             | "La publicación cambió mientras editabas. Recargá para ver la última versión."   |
+| Slug ocupado          | "Ese slug ya está en uso. Probá con otro."                                       |
+| Sesión vencida        | "Tu sesión venció. Volvé a entrar; tu borrador está guardado en este navegador." |
+| Imagen grande         | "La imagen no puede superar los 2 MB."                                           |
+| Imagen animada        | "Las imágenes animadas no están soportadas."                                     |
+| Formato inválido      | "Formato no admitido. Usá JPEG, PNG, WebP o AVIF."                               |
+| Recuperado con sufijo | "Se recuperó como «mi-articulo-2»."                                              |
+| Sin conexión          | "No se pudo guardar. Tu borrador sigue en este navegador."                       |
+
+## 9. Accesibilidad implementada (WCAG 2.2 AA)
+
+Estado real del código. La sección 1 describe la paleta objetivo del diseño; el repositorio actual usa los tokens `--background`, `--surface`, `--foreground`, `--muted`, `--line`, `--accent` y `--accent-strong` de `src/app/globals.css`, con la tipografía Geist.
+
+| Criterio                        | Implementación                                                                          | Archivo                                 |
+| ------------------------------- | --------------------------------------------------------------------------------------- | --------------------------------------- |
+| 2.4.1 Evitar bloques            | Skip link "Ir al contenido principal" como primer elemento enfocable                    | `src/components/site-chrome.tsx`        |
+| 1.3.1 Información y relaciones  | `<main id="contenido">`, `<header>` y `<footer>` fuera del `main`, landmarks por página | páginas públicas y panel                |
+| 1.4.3 Contraste                 | Texto muted 7.9:1, accent 8.5:1, etiquetas del hero 7.9:1 sobre el fondo                | `src/app/globals.css`                   |
+| 1.4.11 Contraste no textual     | Bordes de inputs y botones con `rgba(218, 202, 245, 0.4)` o más (3:1 o superior)        | `src/app/globals.css`                   |
+| 2.4.7 Foco visible              | Anillo de 2 px en todos los elementos con `:focus-visible`                              | `src/app/globals.css`                   |
+| 2.4.11 Foco no tapado           | `scroll-margin-block` para el encabezado fijo                                           | `src/app/globals.css`                   |
+| 2.5.8 Tamaño del objetivo       | Botones de 40 px, checkbox de 18 px dentro de una fila de 24 px                         | `src/app/globals.css`                   |
+| 3.3.1 Identificación de errores | `aria-invalid` y `aria-describedby` con ids estables por campo                          | `src/components/admin-article-form.tsx` |
+| 4.1.3 Mensajes                  | `role="alert"` para errores y `role="status"` para confirmaciones                       | formulario editorial y login            |
+| 3.1.1 Idioma                    | `<html lang="es">` en todas las páginas                                                 | `src/app/layout.tsx`                    |
+| 2.4.5 / 2.4.6 Títulos           | Un solo `h1` por página y jerarquía de encabezados coherente                            | páginas públicas                        |
+| Tablas                          | `<caption>` visualmente oculto y `scope="col"`                                          | panel editorial                         |
+| Enlaces externos                | Aviso para lectores de pantalla "(se abre en una nueva ventana)"                        | `src/components/markdown-content.tsx`   |
+| 2.3.3 Animaciones               | `prefers-reduced-motion` respetado                                                      | `src/app/globals.css`                   |
+
+Verificación automática en `npm run test:http`: idioma, `title`, viewport, canonical, skip link antes de la navegación, un único `h1`, imágenes con `alt`, `robots.txt` y `sitemap.xml`. La revisión manual con lector de pantalla y navegación por teclado queda pendiente de un entorno con navegador.

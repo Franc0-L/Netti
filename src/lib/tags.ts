@@ -1,5 +1,5 @@
-export type ArticleKind = "review" | "news" | "guide";
-export type ContentStatus = "draft" | "published" | "trashed";
+export type ArticleKind = 'review' | 'news' | 'guide';
+export type ContentStatus = 'draft' | 'published' | 'trashed';
 
 export interface ArticleTagState {
   id: number;
@@ -18,25 +18,25 @@ export interface ArticleTagState {
 
 export function affectedTags(
   before: ArticleTagState | null,
-  after: ArticleTagState | null,
+  after: ArticleTagState | null
 ): string[] {
   const tags = new Set<string>();
 
   if (before) {
     tags.add(`article:${before.kind}:${before.slug}`);
     tags.add(`kind:${before.kind}`);
-    tags.add("articles");
+    tags.add('articles');
     before.tags.forEach((t) => tags.add(`tag:${t}`));
-    if (before.featured) tags.add("home");
+    if (before.featured) tags.add('home');
     if (before.gameId) tags.add(`game:${before.gameId}`);
   }
 
   if (after) {
     tags.add(`article:${after.kind}:${after.slug}`);
     tags.add(`kind:${after.kind}`);
-    tags.add("articles");
+    tags.add('articles');
     after.tags.forEach((t) => tags.add(`tag:${t}`));
-    if (after.featured) tags.add("home");
+    if (after.featured) tags.add('home');
     if (after.gameId) tags.add(`game:${after.gameId}`);
   }
 

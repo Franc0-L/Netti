@@ -1,8 +1,8 @@
-export type PendingStorageOrphan = { id: number; storageKey: string; action: "put" | "delete" };
+export type PendingStorageOrphan = { id: number; storageKey: string; action: 'put' | 'delete' };
 
 export function planOrphanCleanup(
   rows: PendingStorageOrphan[],
-  referencedKeys: ReadonlySet<string>,
+  referencedKeys: ReadonlySet<string>
 ) {
   const repairWithoutDeleteIds: number[] = [];
   const deleteIds: number[] = [];
@@ -11,7 +11,7 @@ export function planOrphanCleanup(
 
   for (const row of rows) {
     if (referencedKeys.has(row.storageKey)) {
-      if (row.action === "put") repairWithoutDeleteIds.push(row.id);
+      if (row.action === 'put') repairWithoutDeleteIds.push(row.id);
       else blockedIds.push(row.id);
       continue;
     }

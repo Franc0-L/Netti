@@ -27,8 +27,10 @@ Cuando pasaron al menos cinco minutos desde `lastUsedAt`, renueva `lastUsedAt` y
 - `logoutAll()` elimina todas las filas y borra la cookie actual.
 - Las cookies no sustituyen la revocación en base de datos: borrar solo la cookie dejaría sesiones válidas hasta su vencimiento.
 
-## Validación pendiente
+## Validación
 
-El repositorio todavía no contiene la Server Action de login que inserta la sesión y emite la cookie. Al implementarla, debe usar `createSessionToken()`, persistir `sessionId` (nunca `token`) y emitir `token` en cookie con `HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/` y duración máxima de 30 días.
+La Server Action `login` (`src/app/actions/auth.ts`) usa `createSessionToken()`, persiste `sessionId` (nunca `token`) y emite `token` en cookie con `HttpOnly`, `Secure` en producción, `SameSite=Lax`, `Path=/` y duración máxima de 30 días.
 
-Las pruebas de integración pendientes deben cubrir: token aleatorio distinto por emisión; la base solo recibe el digest; expiración idle; expiración absoluta aunque haya actividad; renovación solo cada cinco minutos; revocación de una sesión; cierre global; y origen inválido/ausente/no permitido.
+`npm run test:db` cubre contra PostgreSQL real: token aleatorio distinto por emisión; la base solo recibe el digest; backoff tras cinco fallos; atomicidad bajo concurrencia; y aceptación de la contraseña correcta. `npm run test:http` cubre: sesión ausente o falsificada rechazada, sesión válida aceptada y origen inválido rechazado en mutaciones.
+
+Pendiente de un entorno con navegador: expiración idle y absoluta observadas de punta a punta, renovación cada cinco minutos, cierre global y caducidad de la cookie.

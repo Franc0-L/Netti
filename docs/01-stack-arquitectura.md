@@ -4,23 +4,23 @@ Tecnologías, organización de las piezas y registro de decisiones. Revisado con
 
 ## 1. Stack
 
-| Capa | Tecnología |
-|------|-----------|
-| Framework | Next.js 16.4.5 (App Router, TypeScript estricto, Turbopack) |
-| Estilos | Tailwind CSS v4 con tokens en CSS |
-| Base de datos | Neon (PostgreSQL serverless), plan Free |
-| Acceso a datos | Drizzle ORM sobre `pg` (node-postgres) |
-| Mutaciones | Server Actions |
+| Capa           | Tecnología                                                                                                                                                              |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Framework      | Next.js 16.4.5 (App Router, TypeScript estricto, Turbopack)                                                                                                             |
+| Estilos        | Tailwind CSS v4 con tokens en CSS                                                                                                                                       |
+| Base de datos  | Neon (PostgreSQL serverless), plan Free                                                                                                                                 |
+| Acceso a datos | Drizzle ORM sobre `pg` (node-postgres)                                                                                                                                  |
+| Mutaciones     | Server Actions                                                                                                                                                          |
 | Endpoints HTTP | Route Handlers solo para `upload`, `revalidate`, `reconcile-storage`, `health` y `ready` (`rss.xml` y `sitemap.ts` son operativos de lectura, no mutaciones de negocio) |
-| Imágenes | Vercel Blob + `sharp` (variantes y re-encodeo) |
-| Markdown | `remark` + `remark-gfm` + `rehype` + `rehype-sanitize` |
-| Validación | Zod 4 |
-| Auth | Cookie de sesión propia + tabla `sessions` |
-| Rate limiting | Tabla `login_attempts` en Postgres |
-| Caché | Cache Components (`cacheComponents: true`) |
-| Hosting | Vercel Hobby, región `gru1` |
-| DB región | Neon `sa-east-1` |
-| CI | GitHub Actions: eslint, typecheck, test, build |
+| Imágenes       | Vercel Blob + `sharp` (variantes y re-encodeo)                                                                                                                          |
+| Markdown       | `remark` + `remark-gfm` + `rehype` + `rehype-sanitize`                                                                                                                  |
+| Validación     | Zod 4                                                                                                                                                                   |
+| Auth           | Cookie de sesión propia + tabla `sessions`                                                                                                                              |
+| Rate limiting  | Tabla `login_attempts` en Postgres                                                                                                                                      |
+| Caché          | Cache Components (`cacheComponents: true`)                                                                                                                              |
+| Hosting        | Vercel Hobby, región `gru1`                                                                                                                                             |
+| DB región      | Neon `sa-east-1`                                                                                                                                                        |
+| CI             | GitHub Actions: eslint, typecheck, test, build                                                                                                                          |
 
 ### 1.1 Next.js 16
 
@@ -36,16 +36,16 @@ Tecnologías, organización de las piezas y registro de decisiones. Revisado con
 
 **Límites del plan Free** (verificar en la consola antes de contratar):
 
-| Recurso | Límite |
-|---------|--------|
-| Cómputo | 100 CU-horas por proyecto al mes |
-| Storage | 1 GB por proyecto |
-| Ramas | 10 |
-| Transferencia | 5 GB |
-| Suspensión por inactividad | 5 minutos |
-| Cómputo mínimo | 0,25 CU |
-| Ventana de restauración | ~6 horas |
-| Historial de restauración | 6 horas, hasta 1 GB de cambios |
+| Recurso                    | Límite                           |
+| -------------------------- | -------------------------------- |
+| Cómputo                    | 100 CU-horas por proyecto al mes |
+| Storage                    | 1 GB por proyecto                |
+| Ramas                      | 10                               |
+| Transferencia              | 5 GB                             |
+| Suspensión por inactividad | 5 minutos                        |
+| Cómputo mínimo             | 0,25 CU                          |
+| Ventana de restauración    | ~6 horas                         |
+| Historial de restauración  | 6 horas, hasta 1 GB de cambios   |
 
 Algunos sitios de terceros citan 0,5 GB y 50 CU-horas; la documentación oficial de Neon (noviembre de 2026) confirma **1 GB y 100 CU-horas por proyecto**. El almacenamiento total de la cuenta no debe exceder 20 GB entre todos los proyectos Free. Estos valores se confirman en la consola antes de desplegar.
 
@@ -60,7 +60,7 @@ Por eso el diseño no puede permitir que las visitas públicas despierten la bas
 5. `/buscar` con consulta libre **no** consulta Postgres en tiempo real. Se usa un índice estático cacheado (títulos, descripción, etiquetas) buscado en el cliente, normalizando tildes. El full-text de Postgres queda para el panel. Solo los resultados cacheados de búsquedas frecuentes pueden servirse sin tocar la base.
 6. Las previews usan **otro proyecto** de Neon, no ramas del de producción (las ramas comparten la cuota de CU-horas y el tope de 10).
 
-**Driver**: `pg` con un pool chico y `attachDatabasePool` de `@vercel/functions` para liberar conexiones en Fluid compute. `max` se calibra: empezar con **1–3** por instancia y medir, no fijar 5 por intuición. El pooler de Neon también tiene un límite de conexiones, y varias instancias concurrentes multiplican los pools. No se usa `neon-http`: no soporta transacciones interactivas, y publicar un cambio de slug necesita una transacción. `@neondatabase/serverless` queda para edge, que no se usa.
+**Driver**: `pg` con un pool chico y `attachDatabasePool` de `@vercel/functions` para liberar conexiones en Fluid compute. `DATABASE_POOL_MAX` acepta valores de 1 a 10 y el valor por defecto es **2** por instancia; calibrar con medición antes de subirlo. El pooler de Neon también tiene un límite de conexiones, y varias instancias concurrentes multiplican los pools. No se usa `neon-http`: no soporta transacciones interactivas, y publicar un cambio de slug necesita una transacción. `@neondatabase/serverless` queda para edge, que no se usa.
 
 **Dos URLs**: `DATABASE_URL` pooled para la aplicación y `DATABASE_URL_UNPOOLED` para migraciones, `pg_dump` y `CREATE INDEX CONCURRENTLY`.
 
@@ -70,10 +70,10 @@ Por eso el diseño no puede permitir que las visitas públicas despierten la bas
 
 **La diferencia que importa**:
 
-| API | Comportamiento | Dónde |
-|-----|----------------|-------|
-| `revalidateTag(tag, { expire: 0 })` | Expira ya; la próxima request es un miss bloqueante | Route Handlers, cron |
-| `updateTag(tag)` | Expira ya y garantiza lectura de lo escrito | **Solo Server Actions** |
+| API                                 | Comportamiento                                      | Dónde                   |
+| ----------------------------------- | --------------------------------------------------- | ----------------------- |
+| `revalidateTag(tag, { expire: 0 })` | Expira ya; la próxima request es un miss bloqueante | Route Handlers, cron    |
+| `updateTag(tag)`                    | Expira ya y garantiza lectura de lo escrito         | **Solo Server Actions** |
 
 Las mutaciones del panel son Server Actions, así que usan `updateTag`. El autor ve su cambio publicado al volver al sitio, sin esperar la segunda visita.
 
@@ -93,16 +93,16 @@ Este punto es un bloqueante de la Fase 0: sin esta prueba, no apruebo la arquite
 
 **Inventario de proyecciones.** Un tag por entrada no alcanza si el contenido aparece en varios lugares. La tabla es chica y explícita:
 
-| Proyección | Tags |
-|------------|------|
-| Detalle | `article:<kind>:<slug>`, `kind:<kind>`, `articles` |
-| Listado por colección | `kind:<kind>`, `articles` |
-| Portada | `home` |
-| Etiquetas | `tag:<tag>` (viejas y nuevas) |
-| Cambio de etiquetas | `tags` (invalida el índice de etiquetas visibles) |
-| Ficha de juego | `game:<id>`, `kind:game` |
-| Sitemap y RSS | `articles`, `kind:<kind>` |
-| Redirecciones | `redirects` |
+| Proyección            | Tags                                               |
+| --------------------- | -------------------------------------------------- |
+| Detalle               | `article:<kind>:<slug>`, `kind:<kind>`, `articles` |
+| Listado por colección | `kind:<kind>`, `articles`                          |
+| Portada               | `home`                                             |
+| Etiquetas             | `tag:<tag>` (viejas y nuevas)                      |
+| Cambio de etiquetas   | `tags` (invalida el índice de etiquetas visibles)  |
+| Ficha de juego        | `game:<id>`, `kind:game`                           |
+| Sitemap y RSS         | `articles`, `kind:<kind>`                          |
+| Redirecciones         | `redirects`                                        |
 
 `affectedTags` agrega `redirects` cuando cambia el slug, y `game:<id>` cuando una reseña asociada a una ficha cambia de forma que afecte su listado de reseñas. `affectedTags` es la implementación, no la documentación: la tabla es la fuente. Los tests de integración publican, cambian slug, borran y restauran, y comprueban las siete proyecciones.
 
@@ -124,12 +124,12 @@ El re-encodeo reduce la superficie de un archivo manipulado y elimina metadatos;
 
 **Límites que hay que respetar** (Hobby, verificados):
 
-| Recurso | Incluido | Consecuencia de excederlo |
-|---------|----------|---------------------------|
-| Storage | 1 GB | Blob deja de estar accesible |
-| Transferencia | 10 GB/mes | Blob deja de estar accesible |
-| Operaciones simples | 10.000/mes | Blob deja de estar accesible |
-| Operaciones avanzadas | 2.000/mes | Blob deja de estar accesible |
+| Recurso               | Incluido   | Consecuencia de excederlo    |
+| --------------------- | ---------- | ---------------------------- |
+| Storage               | 1 GB       | Blob deja de estar accesible |
+| Transferencia         | 10 GB/mes  | Blob deja de estar accesible |
+| Operaciones simples   | 10.000/mes | Blob deja de estar accesible |
+| Operaciones avanzadas | 2.000/mes  | Blob deja de estar accesible |
 
 No hay factura sorpresa: **no se cobra el exceso, se bloquea el almacenamiento hasta 30 días**. El límite operativo más ajustado es el de operaciones avanzadas: subir una imagen con tres variantes son cuatro `put` (cuatro operaciones). Da para ~500 imágenes nuevas al mes, muy por encima de un blog de un autor. Aun así, se mide y se evita resubir la misma imagen.
 
@@ -175,13 +175,13 @@ No hay factura sorpresa: **no se cobra el exceso, se bloquea el almacenamiento h
 
 ## 6. Seguridad de la respuesta
 
-| Cabecera | Valor |
-|----------|-------|
+| Cabecera                    | Valor                                                                                   |
+| --------------------------- | --------------------------------------------------------------------------------------- |
 | `Strict-Transport-Security` | `max-age=63072000; includeSubDomains` (sin `preload` hasta tener el dominio definitivo) |
-| `Referrer-Policy` | `strict-origin-when-cross-origin` |
-| `X-Frame-Options` | `DENY` |
-| `Permissions-Policy` | `camera=(), microphone=(), geolocation=()` |
-| `Content-Security-Policy` | Público: `'self'` + hashes. Admin: nonces, renderizado dinámico |
+| `Referrer-Policy`           | `strict-origin-when-cross-origin`                                                       |
+| `X-Frame-Options`           | `DENY`                                                                                  |
+| `Permissions-Policy`        | `camera=(), microphone=(), geolocation=()`                                              |
+| `Content-Security-Policy`   | Público: `'self'` + hashes. Admin: nonces, renderizado dinámico                         |
 
 **Decisión sobre CSP**: nonces obligan a renderizar dinámicamente cada página, lo que choca con ISR y con el ahorro de CU-horas. Se aplica CSP con hashes en lo público y nonces solo en `/admin`. **Estado: Aceptada con Validación: pendiente** — en la Fase 0 hay que comprobar si los scripts inline de Next.js (bootstrap, JSON-LD por página) admiten hashes estáticos o si requieren SRI experimental. Si no es viable, se pasa a nonces en lo público con el costo de CU-horas que conlleva.
 
@@ -247,7 +247,7 @@ Sidebar + formulario, vista previa en modal con la plantilla real. **Aceptada.**
 
 ### D-012: Backups obligatorios desde la Fase 3
 
-`pg_dump` nocturno con cliente 17, contra la URL directa, cifrado y con restauración mensual manual. **Aceptada.**
+`pg_dump` nocturno con cliente 18 o posterior, contra la URL directa, cifrado y con restauración mensual manual. **Aceptada.** Un cliente 17 no puede garantizar el dump de un servidor PostgreSQL 18.
 
 ### D-013: Una tabla `articles` con `kind`
 
@@ -288,6 +288,18 @@ Artículo y revisión en una transacción; invalidación de caché después del 
 ### D-022: Revalidación programada fuera de Vercel
 
 GitHub Actions cada 30 minutos contra un endpoint idempotente. Cron Jobs de Vercel (Hobby) no baja de una ejecución diaria; Schedules sigue en beta. **Aceptada.**
+
+### D-023: Los 404 se deciden en el proxy
+
+Con Cache Components, `notFound()` se ejecuta después de que el shell de la respuesta ya salió: el estado HTTP ya no se puede cambiar y Next.js responde 200 con la pantalla de error y una etiqueta `noindex`. Para que una URL inexistente devuelva un 404 real, la decisión se toma en `src/proxy.ts`, antes de renderizar.
+
+- Colecciones (`/resenas`, `/noticias`, `/guias`): conjunto estático, sin base de datos.
+- Artículos: conjunto de slugs visibles cacheado 15 s en memoria por instancia y una consulta indexada de confirmación para los slugs desconocidos, con caché negativo de 10 s y un presupuesto de 20 confirmaciones por minuto.
+- El pool del proxy es propio y tiene `max: 1`, para no multiplicar las conexiones de Neon.
+- Ante cualquier error de base de datos el control falla abierto: la página decide y responde 200.
+- El panel responde 307 a `/admin/login` cuando no hay cookie de sesión.
+
+**Aceptada.** Costo: una consulta por instancia y por minuto como máximo, más un hit de caché en memoria por solicitud.
 
 ### Decisiones diferidas
 

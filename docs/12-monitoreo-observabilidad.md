@@ -1,16 +1,24 @@
 # Monitoreo y observabilidad
 
-## Health check: `GET /api/health`
+## Liveness: `GET /api/health`
 
-El endpoint comprueba dependencias en tiempo real y responde con `Cache-Control: no-store`.
+Comprueba únicamente que el proceso responde. No toca PostgreSQL ni Blob, así que no despierta el cómputo de Neon. Responde `200` con `Cache-Control: no-store`:
+
+```json
+{ "status": "ok", "service": "netti", "checkedAt": "2026-11-11T09:08:23.872Z" }
+```
+
+No requiere autenticación: es el endpoint para el monitor externo de disponibilidad.
+
+## Readiness: `GET /api/ready`
+
+Requiere `Authorization: Bearer $CRON_SECRET` y responde `401` sin credenciales. Comprueba dependencias en tiempo real y no devuelve mensajes de excepción, cadenas de conexión ni tokens.
 
 - `status: ok`: Neon y Blob respondieron correctamente.
-- `status: degraded`: la base responde, pero Blob no tiene token configurado y se omitió la comprobación.
+- `status: degraded`: una dependencia no configurada se omitió (por ejemplo Blob sin token).
 - `status: unhealthy`: falló una dependencia configurada; HTTP 503.
 
-`dependencies.database` ejecuta `SELECT 1` mediante el pool de Drizzle. `dependencies.blob` realiza una operación acotada de listado con prefijo reservado y límite 1; no devuelve nombres de objetos ni URLs. Si no hay `BLOB_READ_WRITE_TOKEN`, la dependencia queda como `skipped`. Un error de Neon o de Blob configurado produce HTTP 503.
-
-El endpoint no requiere autenticación para permitir comprobaciones externas de disponibilidad. No devuelve mensajes de excepción, cadenas de conexión, tokens ni detalles internos.
+`dependencies.database` ejecuta `SELECT 1` mediante el pool de Drizzle. `dependencies.blob` realiza una operación acotada de listado con prefijo reservado y límite 1; no devuelve nombres de objetos ni URLes.
 
 ## Métricas: `GET /api/metrics`
 
@@ -24,13 +32,13 @@ Las métricas se consultan en PostgreSQL en cada petición y llevan `Cache-Contr
 
 ## Logging estructurado
 
-La utilidad `src/lib/logger.ts` emite una línea JSON por evento con timestamp ISO, nivel (`info`, `warn`, `error`) y nombre de evento. Está integrada en las Server Actions de autenticación y en los endpoints de health y métricas.
+La utilidad `src/lib/logger.ts` emite una línea JSON por evento con timestamp ISO, nivel (`info`, `warn`, `error`) y nombre de evento. Está integrada en las Server Actions de autenticación y en los endpoints de readiness y métricas.
 
 Ejemplos de eventos:
 
 - `admin.login.succeeded`, `admin.login.rejected`, `admin.login.rate_limited`
 - `admin.logout.succeeded`
-- `health.database.failed`, `health.blob.failed`
+- `ready.database.failed`, `ready.blob.failed`
 - `metrics.query.failed`
 
 No se registran contraseñas, tokens, cookies, cabeceras de autorización, IP, user-agent, cuerpos de solicitudes ni mensajes de excepción. La utilidad elimina campos con nombres sensibles y redacta patrones comunes de credenciales. Aun así, los eventos y el contexto deben ser diseñados sin incluir datos personales ni secretos.
@@ -44,7 +52,8 @@ Filtrá por `level` y `event`; no copies líneas completas a tickets públicos s
 
 ## Coste y límites
 
-- Cada petición a `/api/health` ejecuta una consulta PostgreSQL y, si hay token, una operación de listado Blob. Evitá sondearlo con intervalos innecesariamente cortos.
+- `/api/health` no ejecuta consultas ni operaciones de Blob: se puede sondear con frecuencia.
+- `/api/ready` ejecuta `SELECT 1` y, si hay token, un listado Blob acotado. Sondealo con baja frecuencia o solo desde el runbook.
 - Cada petición a `/api/metrics` ejecuta tres consultas de conteo y requiere autenticación.
 - Los logs se envían a la salida estándar; retención, alertas y exportación dependen del proveedor de hosting y no se configuran en este bloque.
 - No hay trazas distribuidas, métricas temporales, dashboards ni alertas automáticas implementadas.

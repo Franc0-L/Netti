@@ -1,55 +1,23 @@
-import { sql } from 'drizzle-orm';
+import { connection } from 'next/server';
 import { NextResponse } from 'next/server';
-import { db } from '@/db/index';
-import { logger } from '@/lib/logger';
-import { storage } from '@/lib/storage';
 
-type DependencyStatus = 'ok' | 'error' | 'skipped';
-
+/**
+ * Liveness probe.
+ *
+ * It deliberately does not touch PostgreSQL or Vercel Blob: the public health
+ * check must never wake the Neon compute. Dependency readiness lives in
+ * /api/ready and is intended for internal monitoring.
+ */
 export async function GET() {
-  const checkedAt = new Date().toISOString();
-  const dependencies: {
-    database: DependencyStatus;
-    blob: DependencyStatus;
-  } = {
-    database: 'error',
-    blob: process.env.BLOB_READ_WRITE_TOKEN ? 'error' : 'skipped',
-  };
-
-  try {
-    await db.execute(sql`select 1`);
-    dependencies.database = 'ok';
-  } catch (error) {
-    logger.error('health.database.failed', {
-      errorType: error instanceof Error ? error.name : 'unknown',
-    });
-  }
-
-  if (process.env.BLOB_READ_WRITE_TOKEN) {
-    try {
-      // A bounded list request checks Blob API access without exposing object names.
-      await storage.list({ prefix: '__netti_health_check__/', limit: 1 });
-      dependencies.blob = 'ok';
-    } catch (error) {
-      logger.error('health.blob.failed', {
-        errorType: error instanceof Error ? error.name : 'unknown',
-      });
-    }
-  }
-
-  const failed = Object.values(dependencies).some((status) => status === 'error');
-  const skipped = Object.values(dependencies).some((status) => status === 'skipped');
-  const status = failed ? 'unhealthy' : skipped ? 'degraded' : 'ok';
-
+  // cacheComponents prerenders route handlers unless they opt into a request.
+  await connection();
   return NextResponse.json(
     {
-      status,
+      status: 'ok',
       service: 'netti',
-      checkedAt,
-      dependencies,
+      checkedAt: new Date().toISOString(),
     },
     {
-      status: failed ? 503 : 200,
       headers: {
         'Cache-Control': 'no-store, max-age=0',
       },

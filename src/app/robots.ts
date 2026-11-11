@@ -1,20 +1,20 @@
-import type { MetadataRoute } from "next";
+import type { MetadataRoute } from 'next';
 
 export default function robots(): MetadataRoute.Robots {
   const siteUrl = process.env.PUBLIC_SITE_URL;
 
   if (!siteUrl) {
     return {
-      rules: { userAgent: "*", disallow: ["/"] },
+      rules: { userAgent: '*', disallow: ['/'] },
     };
   }
 
   return {
     rules: {
-      userAgent: "*",
-      allow: ["/"],
-      disallow: ["/admin", "/api/"],
+      userAgent: '*',
+      allow: ['/'],
+      disallow: ['/admin', '/api/'],
     },
-    sitemap: new URL("/sitemap.xml", siteUrl).toString(),
+    sitemap: new URL('/sitemap.xml', siteUrl).toString(),
   };
 }

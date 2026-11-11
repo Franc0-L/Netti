@@ -13,33 +13,35 @@ concurrency:
   group: quality-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  ADMIN_PASSWORD_HASH: ci-placeholder-not-a-real-password-hash
+  BLOB_READ_WRITE_TOKEN: ci-placeholder
+  CRON_SECRET: ci-placeholder-secret-with-more-than-32-characters
+  HUSKY: '0'
+
 jobs:
   validate:
-    name: Tests, lint, typecheck and production build
+    name: Tests, lint, format, types and production build
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
       DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/netti
       DATABASE_URL_UNPOOLED: postgresql://ci:ci@127.0.0.1:5432/netti
-      ADMIN_PASSWORD_HASH: ci-placeholder-not-a-real-password-hash
-      BLOB_READ_WRITE_TOKEN: ci-placeholder
-      CRON_SECRET: ci-placeholder-secret-with-more-than-32-characters
       PUBLIC_SITE_URL: https://example.invalid
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
 
-      # Resolve dependencies until the tracked lockfile is regenerated locally.
-      - name: Resolve dependencies
-        run: npm install --no-audit --no-fund
+      - name: Install dependencies from the lockfile
+        run: npm ci --no-audit --no-fund
 
       - name: Unit tests
         run: npm test
@@ -47,25 +49,82 @@ jobs:
       - name: ESLint
         run: npm run lint
 
-      - name: Prettier check (changed files)
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
-        run: |
-          files=$(git diff --name-only --diff-filter=ACMR "$BASE_SHA"...HEAD)
-          if [ -z "$files" ]; then
-            echo "No changed files to format-check."
-          else
-            while IFS= read -r file; do
-              case "$file" in
-                *.ts|*.tsx|*.js|*.jsx|*.json|*.md|*.css|*.yml|*.yaml)
-                  npx prettier --check "$file"
-                  ;;
-              esac
-            done <<< "$files"
-          fi
+      - name: Prettier
+        run: npm run format:check
 
       - name: Typecheck
         run: npm run typecheck
 
       - name: Production build
         run: npm run build
+
+      - name: Dependency audit (production dependencies)
+        run: npm audit --omit=dev --audit-level=high
+
+  integration:
+    name: Integration against PostgreSQL 18
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: validate
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: netti
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci -d netti"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/netti
+      DATABASE_URL_UNPOOLED: postgresql://ci:ci@127.0.0.1:5432/netti
+      PUBLIC_SITE_URL: http://127.0.0.1:3000
+      SMOKE_BASE_URL: http://127.0.0.1:3000
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies from the lockfile
+        run: npm ci --no-audit --no-fund
+
+      - name: Apply the baseline migration
+        run: npm run db:migrate
+
+      - name: Production build
+        run: npm run build
+
+      - name: Authentication, sessions and rate limiting
+        run: npm run test:db
+
+      - name: HTTP smoke test (CSP, sessions, cron, upload limits)
+        run: |
+          npm run start &
+          server_pid=$!
+          ready=0
+          for _ in $(seq 1 40); do
+            if curl -fsS "$SMOKE_BASE_URL/api/health" > /dev/null; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" -ne 1 ]; then
+            echo "The server did not become ready."
+            kill "$server_pid" || true
+            exit 1
+          fi
+          npm run test:http
+          status=$?
+          kill "$server_pid" || true
+          exit "$status"

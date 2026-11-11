@@ -1,54 +1,69 @@
 # Seguridad y hardening — Netti (Fase 1.6)
 
-Este documento recopila las decisiones de seguridad, políticas de cabecera y protecciones implementadas en el proyecto, así como las vulnerabilidades conocidas de dependencias y su mitigación.
+Este documento recopila las decisiones de seguridad, políticas de cabecera y protecciones implementadas en el proyecto, así como el estado de las dependencias.
 
 ## 1. Cabeceras de seguridad (CSP y relacionadas)
 
-Todas las respuestas del sitio incluyen las siguientes cabeceras de seguridad, configuradas en `next.config.ts`:
+Las cabeceras base se configuran en `next.config.ts` y se aplican a todas las respuestas:
 
-| Cabecera | Valor | Propósito |
-|----------|-------|-----------|
-| `X-Content-Type-Options` | `nosniff` | Evita que el navegador adivine el tipo MIME de una respuesta. |
-| `X-Frame-Options` | `DENY` | Impide que el sitio sea embebido en `<iframe>` (clickjacking). |
-| `Referrer-Policy` | `strict-origin-when-cross-origin` | Limita la información de referencia enviada a sitios externos. |
-| `Permissions-Policy` | `camera=(), microphone=(), geolocation=()` | Deshabilita acceso a cámara, micrófono y geolocalización. |
-| `Content-Security-Policy` | Ver detalle a continuación | Restringe qué recursos pueden cargarse y ejecutarse. |
+| Cabecera                    | Valor                                      | Propósito                                                       |
+| --------------------------- | ------------------------------------------ | --------------------------------------------------------------- |
+| `X-Content-Type-Options`    | `nosniff`                                  | Evita que el navegador adivine el tipo MIME de una respuesta.   |
+| `X-Frame-Options`           | `DENY`                                     | Impide que el sitio sea embebido en `<iframe>` (clickjacking).  |
+| `Referrer-Policy`           | `strict-origin-when-cross-origin`          | Limita la información de referencia enviada a sitios externos.  |
+| `Permissions-Policy`        | `camera=(), microphone=(), geolocation=()` | Deshabilita acceso a cámara, micrófono y geolocalización.       |
+| `Strict-Transport-Security` | `max-age=63072000; includeSubDomains`      | Fuerza HTTPS en producción (solo cuando `NODE_ENV=production`). |
+| `Content-Security-Policy`   | Dos políticas, ver detalle                 | Restringe qué recursos pueden cargarse y ejecutarse.            |
+
+La CSP se emite desde `src/proxy.ts`, no desde `next.config.ts`, porque el panel necesita un nonce por solicitud.
 
 ### Content Security Policy (CSP)
 
-La política CSP aplicada a todas las rutas (`/`):
+Next.js App Router emite scripts inline para la hidratación y el streaming de RSC. Una política con solo `script-src 'self'` bloquea esos scripts y rompe la hidratación, incluido el panel. Por eso se aplican dos políticas:
+
+**Rutas públicas** (todo excepto `/admin`):
 
 ```
 default-src 'self';
-script-src 'self';
+script-src 'self' 'unsafe-inline';
 style-src 'self' 'unsafe-inline';
-img-src 'self' data: https:;
+img-src 'self' data: https://*.public.blob.vercel-storage.com https://*.vercel-storage.com;
 font-src 'self';
 connect-src 'self';
+object-src 'none';
 base-uri 'self';
 form-action 'self';
 frame-ancestors 'none';
 ```
 
+En desarrollo se agregan `'unsafe-eval'` (compilación de Turbopack) y `ws:` en `connect-src`.
+
+**Rutas `/admin`**: nonce por solicitud y `strict-dynamic`:
+
+```
+script-src 'self' 'nonce-<aleatorio>' 'strict-dynamic';
+```
+
+El nonce se genera en el proxy, se envía en la cabecera CSP de la solicitud (para que Next.js lo aplique a sus etiquetas `<script>`) y se devuelve en la cabecera CSP de la respuesta. El panel ya es dinámico (lee la cookie de sesión), así que el nonce no afecta al caché.
+
+`'unsafe-inline'` se mantiene en las rutas públicas porque todo el HTML lo genera la aplicación a partir de contenido controlado y sanitizado: no hay HTML de usuario sin filtrar. La política con hashes para el sitio público queda como validación futura.
+
 #### Detalle por directiva
 
-| Directiva | Valor | Justificación |
-|-----------|-------|---------------|
-| `default-src` | `'self'` | Por defecto, solo recursos del mismo origen. |
-| `script-src` | `'self'` | Solo scripts del mismo origen. No se permiten scripts inline ni externos no confiables. |
-| `style-src` | `'self' 'unsafe-inline'` | Estilos del mismo origen; `unsafe-inline` necesario para estilos inyectados por Next.js/Tailwind. |
-| `img-src` | `'self' data: https:` | Imágenes del mismo origen, data URIs (favicons, placeholders) y HTTPS externo (imágenes de portada de artículos). |
-| `font-src` | `'self'` | Fuentes autoalojadas mediante `next/font/google`. |
-| `connect-src` | `'self'` | Solo conexiones al mismo origen. Las llamadas a Neon y Blob son server-side, no desde el navegador. |
-| `base-uri` | `'self'` | Evita inyección de `<base>` malicioso. |
-| `form-action` | `'self'` | Los formularios solo pueden enviar al mismo origen. |
-| `frame-ancestors` | `'none'` | Ningún sitio puede embebedar este sitio en un iframe. |
+| Directiva         | Valor                                            | Justificación                                                                                            |
+| ----------------- | ------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| `default-src`     | `'self'`                                         | Por defecto, solo recursos del mismo origen.                                                             |
+| `script-src`      | `'self' 'unsafe-inline'` público / nonce         | Los scripts inline de Next.js requieren autorización explícita; el panel usa nonce por solicitud.        |
+| `style-src`       | `'self' 'unsafe-inline'`                         | Estilos del mismo origen; `unsafe-inline` es necesario para los estilos inyectados por Next.js/Tailwind. |
+| `img-src`         | `'self' data:` + Blob + `IMAGES_PUBLIC_BASE_URL` | Las imágenes viven en Vercel Blob; `data:` cubre favicons y placeholders.                                |
+| `font-src`        | `'self'`                                         | Fuentes autoalojadas.                                                                                    |
+| `connect-src`     | `'self'`                                         | Las llamadas a Neon y Blob son server-side, no desde el navegador.                                       |
+| `object-src`      | `'none'`                                         | Bloquea plugins y objetos embebidos.                                                                     |
+| `base-uri`        | `'self'`                                         | Evita inyección de `<base>` malicioso.                                                                   |
+| `form-action`     | `'self'`                                         | Los formularios solo pueden enviar al mismo origen.                                                      |
+| `frame-ancestors` | `'none'`                                         | Ningún sitio puede embeber este sitio en un iframe.                                                      |
 
-#### Decisiones de diseño
-
-- **No se usan nonces** para scripts inline porque Next.js 16 con Turbopack inyecta scripts dinámicos cuyo hash cambia en cada build. Mantener hashes actualizados manualmente no es sostenible sin un proceso de build que los calcule automáticamente.
-- **`unsafe-inline` solo en estilos**, no en scripts. Los estilos inyectados por Tailwind v4 y Next.js requieren esta excepción.
-- **No se permite `connect-src` externo** desde el navegador. Todas las llamadas a Neon y Blob se realizan server-side en Server Actions y Route Handlers.
+La política se valida en `npm run test:http`: la prueba comprueba que las rutas públicas autorizan los scripts inline y que `/admin` emite un nonce y que Next.js lo aplica a las etiquetas `<script>` renderizadas.
 
 ## 2. Protección CSRF (falsificación de solicitud entre sitios)
 
@@ -86,31 +101,33 @@ La sanitización de Markdown usa `remark` + `rehype` + `rehype-sanitize` (`src/c
 - **Cookie de sesión**: `HttpOnly`, `Secure`, `SameSite=Lax`, `maxAge` = 30 días (expiración absoluta).
 - **Expiración idle**: 8 horas deslizantes (se renueva en cada uso).
 - **Expiración absoluta**: 30 días (tope absoluto sin importar la actividad).
-- **Rate limiting de login**: backoff progresivo por IP (hash de IP con HMAC-SHA256 usando `CRON_SECRET`), empezando en el 5º intento fallido, con tope de 15 minutos.
+- **Rate limiting de login**: backoff progresivo por IP (hash de IP con HMAC-SHA256 usando `CRON_SECRET`), empezando en el 5.º intento fallido, con tope de 15 minutos.
+- **Atomicidad del rate limiting**: `attemptLogin` ejecuta el control de intentos, la verificación scrypt y el registro dentro de una transacción con `pg_advisory_xact_lock` por IP. Sin el bloqueo, varias solicitudes simultáneas podían leer el mismo contador y superar el límite. La prueba `npm run test:db` verifica que 10 intentos concurrentes de una misma IP producen exactamente 5 permitidos.
 - **Registro de intentos**: todos los intentos de login (éxitos y fallos) se registran en `login_attempts`.
 
 ## 5. Auditoría de dependencias (`npm audit`)
 
-Resultado de `npm audit --production` ejecutado el 11 de noviembre de 2026:
+Estado al 11 de noviembre de 2026: `npm audit --omit=dev` informa **0 vulnerabilidades**.
 
-| Severidad | Cantidad | Paquete afectado | Ruta de dependencia | Mitigación |
-|-----------|----------|------------------|---------------------|------------|
-| high | 4 | zod (< 4.6.6) | `@vercel/cli-config` → `@vercel/oidc` → `@vercel/blob` | Puede agotar memoria validando colecciones grandes restringidas (GHSA-mrhx-c7xc-m3w5). `npm audit fix --force` sugiere instalar `@vercel/cli-config`@2.4.0, cambio rotura. |
+Antes de la corrección había 4 alertas `high` por `zod < 4.6.6` en la ruta `@vercel/cli-config` → `@vercel/oidc` → `@vercel/blob` (GHSA-mrhx-c7xc-m3w5). Se resolvió sin `--force` mediante un `overrides` en `package.json`:
 
-### Decisión sobre vulnerabilidades
+```json
+"overrides": {
+  "@vercel/cli-config": {
+    "zod": "^4.6.7"
+  }
+}
+```
 
-Las 4 vulnerabilidades high residen en `@vercel/cli-config`, una dependencia de desarrollo/infraestructura de Vercel (no del runtime de la aplicación). No se expone directamente a entrada de usuario desde el navegador. Se dejó sin aplicar `npm audit fix --force` porque:
+El lockfile se regeneró y `npm ci` instala exactamente ese árbol. CI ejecuta `npm audit --omit=dev --audit-level=high` en cada push y pull request.
 
-1. Es una dependencia de tooling de despliegue, no del bundle del cliente ni del servidor de la app.
-2. `npm audit fix --force` introduce cambios rotura (`@vercel/cli-config`@2.4.0) que podrían afectar otros paquetes de Vercel.
-3. El riesgo de explotación es bajo dado que el paquete no procesa entrada de usuario no confiable.
-
-Se recomienda revisar periódicamente con `npm audit` y aplicar parches cuando estén disponibles sin cambios rotura.
+No se usa `npm audit fix --force`: proponía un cambio de versión mayor de `@vercel/blob` sin necesidad.
 
 ## 6. Almacenamiento de archivos (Blob)
 
 - Las subidas pasan por `POST /api/upload` con validación de sesión y origen.
-- Tamaño máximo: 2 MiB.
+- El cuerpo de la solicitud se lee con un límite duro (`readLimitedBody`, 2 MiB + 128 KiB) antes de parsear `multipart`. Confiar solo en `Content-Length` no alcanza: el encabezado puede faltar y `request.formData()` procesaría todo el cuerpo.
+- Tamaño máximo del archivo: 2 MiB.
 - Tipos permitidos: JPEG, PNG, WebP, AVIF (validados por magic bytes, no solo por MIME declarado).
 - Dimensiones máximas: 20 megapíxeles, lado mayor 2560 px.
 - Re-encodado a WebP con `sharp`, sin metadatos EXIF.
@@ -120,16 +137,41 @@ Se recomienda revisar periódicamente con `npm audit` y aplicar parches cuando e
 
 ## 7. Límites y cuotas
 
-| Recurso | Límite | Aplicado en |
-|---------|--------|-------------|
-| Pool de conexiones Neon | `max: 3` por instancia | `src/db/index.ts` |
-| Tiempo de subida | 10 segundos | `src/app/api/upload/route.ts` (`maxDuration`) |
-| Lote de limpieza de orphans | 25 objetos por ejecución | `src/lib/cleanup-plan.ts` |
-| Retención de intentos de login | 30 días | `src/app/api/cron/cleanup/route.ts` |
+| Recurso                          | Límite                                    | Aplicado en                                               |
+| -------------------------------- | ----------------------------------------- | --------------------------------------------------------- |
+| Pool de conexiones por instancia | `DATABASE_POOL_MAX`, 2 por defecto (1-10) | `src/db/index.ts`                                         |
+| Pool del proxy                   | 1 conexión; slugs cacheados 15 s          | `src/lib/public-content-guard.ts`                         |
+| Cuerpo de subida                 | 2 MiB + 128 KiB                           | `src/app/api/upload/route.ts` (`readLimitedBody`)         |
+| Tiempo de subida                 | 10 segundos                               | `src/app/api/upload/route.ts` (`maxDuration`)             |
+| Lote de limpieza de orphans      | 25 objetos por ejecución                  | `src/app/api/cron/cleanup/route.ts`                       |
+| Lote de reconciliación           | 50 filas por ejecución                    | `src/app/api/reconcile-storage/route.ts`                  |
+| Retención de intentos de login   | 7 días                                    | `src/app/api/cron/cleanup/route.ts` y `reconcile-storage` |
+
+### 7.1 El proxy consulta la base
+
+El proxy decide los 404 antes de renderizar (ver D-023 en `01-stack-arquitectura.md`). Para eso usa un pool propio con `max: 1`:
+
+- El conjunto de slugs visibles de cada colección se cachea 15 segundos en memoria.
+- Un slug desconocido se confirma con una consulta indexada y se cachea como ausente durante 10 segundos.
+- Hay un presupuesto de 20 confirmaciones por minuto y por instancia; agotado, el proxy responde 404 sin consultar.
+- Ante un error de base de datos el control falla abierto: la página decide y puede responder 200.
+
+El presupuesto limita el costo del tráfico de rastreadores: como máximo una consulta por minuto y por instancia para la lista completa, más las confirmaciones permitidas. El 404 que devuelve el proxy incluye la CSP pública, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy` y `Cache-Control: no-store`.
 
 ## 8. Qué no se implementa (por decisión de diseño)
 
-- **No se usa nonces para CSP**: Next.js inyecta scripts dinámicos cuyo hash cambia en cada build.
+- **Hashes CSP en el sitio público**: se usa `'unsafe-inline'` porque el HTML es generado por la app a partir de contenido sanitizado; el panel sí usa nonce. Endurecer el sitio público con hashes queda pendiente de medición.
 - **No se almacena IP ni user-agent en logs**: el logger sanitiza campos sensibles (`ip`, `authorization`, `cookie`, etc.).
 - **No hay comentarios ni cuentas de lectores**: reduce superficie de ataque (no hay registro de usuarios públicos).
 - **No hay Markdown crudo**: todo pasa por `rehype-sanitize`.
+
+## 9. Verificación continua
+
+CI (`.github/workflows/quality.yml`) usa Node 24 y `npm ci` (lockfile obligatorio), con dos trabajos:
+
+1. **validate**: tests unitarios, ESLint, Prettier (`--check` sobre todo el repo), typecheck, build de producción y `npm audit --omit=dev --audit-level=high`.
+2. **integration**: PostgreSQL 18 como servicio, `npm run db:migrate`, build, `npm run test:db` (auth, sesiones, rate limiting atómico contra la base real) y `npm run test:http` (CSP, cookies de sesión, origen, cron y límites de subida contra el servidor real).
+
+`npm run test:db` exige una base local o cuyo nombre termine en `_test`/`_testing`, porque borra sesiones e intentos de login mientras ejercita los flujos. `npm run test:http` tiene la misma protección.
+
+Pendiente de integración real (requiere credenciales): subida a Vercel Blob, ejecución del cron programado en Vercel y métricas de Neon en producción.

@@ -25,11 +25,26 @@ La acción rechaza con `conflict` si `pending_delete_at` no es nulo. Después in
 6. **Subidas abandonadas**: `media` de más de 7 días sin referencias → marcar `pending_delete_at`.
 7. `last_success_at` solo si 0–6 terminaron sin excepción. Correrlo dentro del workflow del backup nocturno (misma despertada de Neon).
 
+**Estado de implementación (`src/app/api/reconcile-storage/route.ts`):**
+
+| Paso                               | Estado                                                                  |
+| ---------------------------------- | ----------------------------------------------------------------------- |
+| 0. Freno por `backup_restored_at`  | Implementado (7 días, responde `409`)                                   |
+| 1. Purga de sesiones e intentos    | Implementado (retención de 7 días)                                      |
+| 2. Sweep de `pending_delete_at`    | Implementado (gracia de 24 h, regex con borde, compensación en orphans) |
+| 3. Huérfanos por `list` del store  | Pendiente: requiere credenciales de Blob y medición de operaciones      |
+| 4. Faltantes en el store           | Pendiente: depende del listado                                          |
+| 5. Reintentos de `storage_orphans` | Implementado (lote de 50)                                               |
+| 6. Subidas abandonadas             | Pendiente                                                               |
+| 7. `last_success_at`               | Implementado en `cron_runs`                                             |
+
+El freno del 10 % sobre claves totales no aplica todavía porque no se listan claves del store.
+
 ## 4. Cursor del cron (`POST /api/revalidate`)
 
 **Mitigación de CU-horas**: cada ejecución despierta Neon. Para evitar 48 despertares al día (~30 CU-h/mes solo en cómputo de arranque), el endpoint usa un reloj de aplicación (disponible sin consultar Neon) para decidir si hay trabajo, y solo consulta Neon cuando el almacén barato indica que corresponde revisar publicaciones.
 
-**Alimentación de `next_due`**: cada acción que cambie la visibilidad de un artículo (`createArticle`, `publishArticle`, `unpublishArticle`, `trashArticle`, `restoreArticle`, `updateArticle` si cambia `published_at` o elimina un artículo programado) recalcula `next_due` tras el `COMMIT` y lo escribe en el almacén barato (Edge Config de Vercel o JSON en Blob). Escribir `next_due` conservador (por ejemplo `now`) *antes* del `COMMIT` y corregirlo después evita leer `cron_runs` en cada ejecución del cron.
+**Alimentación de `next_due`**: cada acción que cambie la visibilidad de un artículo (`createArticle`, `publishArticle`, `unpublishArticle`, `trashArticle`, `restoreArticle`, `updateArticle` si cambia `published_at` o elimina un artículo programado) recalcula `next_due` tras el `COMMIT` y lo escribe en el almacén barato (Edge Config de Vercel o JSON en Blob). Escribir `next_due` conservador (por ejemplo `now`) _antes_ del `COMMIT` y corregirlo después evita leer `cron_runs` en cada ejecución del cron.
 
 ```
 0. Bearer con timingSafeEqual → 401
@@ -63,3 +78,5 @@ La acción rechaza con `conflict` si `pending_delete_at` no es nulo. Después in
 El cursor usa la tupla `(published_at, id)` para no omitir filas cuando varias comparten el mismo `published_at` en el borde del lote.
 
 No hace falta lock: dos ejecuciones solapadas revalidan dos veces y es idempotente. No uses `pg_try_advisory_lock` de sesión: el pooler de Neon (modo transacción) lo rompe; solo `xact` es seguro.
+
+**Estado de implementación (`src/app/api/revalidate/route.ts`):** se implementaron los pasos 0, 1, 3–10 y 12. El diseño de `next_due` en Edge Config/Blob (pasos 2 y 11) no está implementado: cada ejecución consulta `cron_runs` y `articles` directamente. Es correcto y reanudable, pero despierta Neon en cada corrida; el almacén barato queda como optimización de CU-horas a medir en Fase 0.
