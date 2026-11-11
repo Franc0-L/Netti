@@ -2,15 +2,15 @@
 
 ## 1. Contrato de almacenamiento (`lib/storage.ts`)
 
-La definición completa de `Storage` vive en `01.2.1-stack-caché-modelo.md` (§2.5). Incluye `put`, `del` y `list`. `@vercel/blob` expone `list` con `prefix` y `cursor`; confirmar en Fase 0 si `list` cuenta como operación avanzada.
+La definición completa de `Storage` vive en `01-stack-arquitectura.md` (§2.5). Incluye `put`, `del` y `list`. `@vercel/blob` expone `list` con `prefix` y `cursor`; confirmar en Fase 0 si `list` cuenta como operación avanzada.
 
 ## 2. Metadatos de imágenes — segundo paso
 
-El upload solo recibe el archivo y devuelve los datos de la imagen. La UI exige `alt` y permite crédito y procedencia. Después de subir, el autor completa los metadatos en un segundo paso mediante `updateMediaMetadata` (definido en `03-validacion-zod.md` como `makeMediaMetadataSchema` y en `04.1-api-acciones-contenido.md` como acción).
+El upload solo recibe el archivo y devuelve los datos de la imagen. La UI exige `alt` y permite crédito y procedencia. Después de subir, el autor completa los metadatos en un segundo paso mediante `updateMediaMetadata` (definido en `03-validacion-zod.md` como `makeMediaMetadataSchema` y en `04-api-endpoints.md` como acción).
 
 La acción rechaza con `conflict` si `pending_delete_at` no es nulo. Después invalida los artículos que usan el medio: `cover_media_id = $1 OR og_media_id = $1 OR body ~ ('media:' || $1 || '([^0-9]|$)')`, más juegos con esa portada. Sin esto, el `alt` y el crédito quedan viejos en caché.
 
-`listMedia` y `deleteMedia` están definidos en `04.1-api-acciones-contenido.md`. `deleteMedia` solo si no está referenciado; marca `pending_delete_at`. No generar variantes por encima del ancho de la fuente (una imagen de 800 px no necesita variantes de 960/1600); eso baja las operaciones por subida.
+`listMedia` y `deleteMedia` están definidos en `04-api-endpoints.md`. `deleteMedia` solo si no está referenciado; marca `pending_delete_at`. No generar variantes por encima del ancho de la fuente (una imagen de 800 px no necesita variantes de 960/1600); eso baja las operaciones por subida.
 
 ## 3. Reconciliación de Blob
 

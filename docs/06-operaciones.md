@@ -1,4 +1,4 @@
-# Operaciones: Git, Entorno y Despliegue — Netti (parte 1/2)
+# Operaciones: Git, Entorno y Despliegue — Netti
 
 ## 1. Git
 
@@ -22,8 +22,6 @@ npm run build
 ```
 
 `next build` ya no corre ESLint: si no se agrega `npm run lint`, un error de lint llega a producción.
-
----
 
 ## 2. Entorno
 

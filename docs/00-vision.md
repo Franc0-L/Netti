@@ -7,18 +7,12 @@ Plan de reconstrucción de Netti. Es la referencia para cualquier persona o agen
 | Archivo | Qué explica |
 |---------|-------------|
 | `00-vision.md` | Visión, alcance, reglas e índice |
-| `01.1-stack-basico.md` | Stack, Next.js 16, Neon |
-| `01.2.1-stack-caché-modelo.md` | Caché, arquitectura de lectura, contratos de lib/ |
-| `01.2.2-stack-imagenes-auth.md` | Imágenes (Vercel Blob), auth, Markdown, seguridad, decisiones D-001 a D-022 |
-| `02.1-modelo-tablas.md` | Esquema SQL: tipos, juegos, articles |
-| `02.2.1-modelo-busqueda-media.md` | Búsqueda FTS, media, article_revisions |
-| `02.2.2-modelo-sesiones-zod.md` | sessions, login_attempts, redirects, storage_orphans, cron_runs (esquemas SQL) |
+| `01-stack-arquitectura.md` | Stack, Next.js 16, Neon, caché, imágenes, auth, Markdown, seguridad, decisiones D-001 a D-022 |
+| `02-modelo-datos.md` | Esquema SQL: tipos, juegos, articles, media, sesiones, búsquedas |
 | `03-validacion-zod.md` | makeArticleSchema, makeGameSchema, makeMediaMetadataSchema |
-| `04.1-api-acciones-contenido.md` | Server Actions: auth, create/update/publish/trash/restore/purge |
-| `04.2-api-endpoints-cabeceras.md` | Route Handlers (upload/revalidate/health/ready), cabeceras |
+| `04-api-endpoints.md` | Server Actions y Route Handlers: auth, contenido, upload, health, headers |
 | `05-ui-flujo.md` | Paleta, panel, flujo editorial |
-| `06.1-operaciones-entorno.md` | Git, entorno, variables, migraciones |
-| `06.2-operaciones-backup-hoja.md` | Backups, despliegue, hoja de ruta |
+| `06-operaciones.md` | Git, entorno, variables, migraciones, backups, despliegue |
 | `07-reconciliacion-y-cron.md` | Contrato Storage, reconciliación de Blob, cursor del cron |
 
 ## Qué es Netti
@@ -27,13 +21,13 @@ Blog editorial de videojuegos en español, de un solo autor, con reseñas (puntu
 
 ## Cómo usar estos documentos
 
-1. Para entender el contexto y el stack: `01.1-stack-basico.md`.
-2. Para modelar datos: `02.1-modelo-tablas.md`.
+1. Para entender el contexto y el stack: `01-stack-arquitectura.md`.
+2. Para modelar datos: `02-modelo-datos.md`.
 3. Para validación: `03-validacion-zod.md`.
-4. Para escribir Server Actions o endpoints: `04.1-api-acciones-contenido.md`.
+4. Para escribir Server Actions o endpoints: `04-api-endpoints.md`.
 5. Para construir interfaz: `05-ui-flujo.md`.
-6. Para configurar el repo y desplegar: `06.1-operaciones-entorno.md`.
-7. Para empezar a programar: `06.2-operaciones-backup-hoja.md`, **Fase 0**.
+6. Para configurar el repo y desplegar: `06-operaciones.md`.
+7. Para empezar a programar: `06-operaciones.md` y `07-reconciliacion-y-cron.md`, **Fase 0**.
 
 ## Reglas
 

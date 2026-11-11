@@ -1,4 +1,4 @@
-# Contrato de Acciones y Endpoints — Netti (parte 1/2)
+# Contrato de Acciones y Endpoints — Netti
 
 El panel no necesita una API REST: tiene un solo cliente escrito por la misma persona. Las mutaciones son **Server Actions**; los Route Handlers quedan solo donde hace falta HTTP real (subida de archivos y cron).
 
@@ -146,8 +146,6 @@ Ejecuta la transacción de §4.0: `UPDATE ... WHERE id = $id AND version = $vers
 **Cambio de slug**: si `input.slug` difiere del slug actual **y el artículo ya estaba publicado** (`published_at` no nulo), dentro de la misma transacción se inserta una redirección. Las rutas públicas usan prefijos por colección (definidos en `lib/routes.ts`):
 
 ```ts
-// Obtener el estado previo dentro de la misma transacción para saber si ya estaba publicado.
-// FOR UPDATE bloquea la fila hasta el COMMIT para evitar condiciones de carrera.
 const [existing] = await tx
   .select({ publishedAt: articles.publishedAt, status: articles.status, previousStatus: articles.previousStatus, slug: articles.slug, kind: articles.kind })
   .from(articles)
@@ -159,21 +157,11 @@ const oldSlug = existing.slug;
 const kind = existing.kind;
 const wasPublished = existing.status === 'published';
 
-// Solo crear redirección si el slug realmente cambió
 if (input.slug !== oldSlug) {
-  // Borrar redirección existente del slug anterior (si la hay)
-  await tx
-    .delete(redirects)
-    .where(eq(redirects.fromPath, articlePath(kind, oldSlug)));
-
-  // Borrar redirección que apunte al nuevo slug (evita conflicto de unique en fromPath)
-  await tx
-    .delete(redirects)
-    .where(eq(redirects.fromPath, articlePath(kind, input.slug)));
+  await tx.delete(redirects).where(eq(redirects.fromPath, articlePath(kind, oldSlug)));
+  await tx.delete(redirects).where(eq(redirects.fromPath, articlePath(kind, input.slug)));
 
   if (wasPublished) {
-    // En PostgreSQL, una violación de restricción única dentro de una transacción
-    // aborta toda la transacción. Usar SAVEPOINT con rollback al savepoint.
     await tx.savepoint('redirect_insert');
     try {
       await tx.insert(redirects).values({
@@ -185,7 +173,6 @@ if (input.slug !== oldSlug) {
     } catch (error) {
       if (!isUniqueViolation(error, "redirects_from_path_key")) throw error;
       await tx.rollbackToSavepoint('redirect_insert');
-      // Otro artículo ya ocupa ese from_path; lanzar para que revierta la transacción
       throw new SlugRedirectConflict();
     }
   }
@@ -258,14 +245,12 @@ Dos detalles que un `catch (23505)` genérico no resuelve:
 Cada intento debe ejecutarse en una **transacción independiente** o usar un `SAVEPOINT` con rollback ante el conflicto. Si una violación de unicidad ocurre dentro de una transacción PostgreSQL, esa transacción queda abortada y no se puede continuar con otro `UPDATE` dentro de ella.
 
 ```ts
-// Intento 1: slug original
 try {
   return await restoreWithSlug(id, slug); // UPDATE ... RETURNING
 } catch (error) {
   if (!isUniqueViolation(error, "articles_kind_slug_active")) throw error;
 }
 
-// Intento 2 a 10: sufijos -2 hasta -10
 for (let attempt = 2; attempt <= 10; attempt++) {
   const candidate = `${slug}-${attempt}`;
   try {
@@ -339,9 +324,7 @@ export async function searchGames(args: {
 - Incluye borradores (la UI los marca).
 - `publishArticle` de una reseña exige `games.status = 'published'`, o la ficha enlazada daría 404.
 
----
-
-### CRUD de juegos
+## 5. CRUD de juegos
 
 Todas con `requireSession()` + `assertSameOrigin()`.
 
@@ -365,9 +348,7 @@ export async function listGames(args?: {
 - **Invalidación**: `game:<id>`, `kind:game`, y las reseñas asociadas (`select kind, slug from articles where game_id = $1` → `article:review:<slug>` y `kind:review`), porque la reseña muestra título y portada del juego.
 - `updateGame` sí acepta `status` en el input (no hay programación ni "guardar no publica" en juegos).
 
----
-
-### Búsqueda del panel
+## 6. Búsqueda del panel
 
 ```ts
 export type ArticleListItem = {
@@ -396,9 +377,7 @@ export async function searchArticles(args: {
 - Sin `status`, excluye `trashed`.
 - `/buscar` con consulta libre usa el índice estático cacheado (títulos, descripción, etiquetas) buscado en el cliente, normalizando tildes. El full-text de Postgres queda para el panel.
 
----
-
-### Revisiones
+## 7. Revisiones
 
 Una revisión por cada escritura efectiva sobre `articles` (si el trigger no sube `version`, no se inserta nada).
 
@@ -417,9 +396,7 @@ export async function restoreRevision(args: { id: number; version: number; revis
 
 `restoreRevision` restaura solo contenido (título, descripción, cuerpo, etiquetas, portada, og, SEO, campos de reseña/noticia, autor). **No** restaura `slug`, `status`, `publishedAt`, `featured` ni `kind`. Pasa por Zod.
 
----
-
-### Metadatos y biblioteca de imágenes
+## 8. Metadatos y biblioteca de imágenes
 
 ```ts
 export type MediaListItem = {
@@ -457,3 +434,139 @@ export async function updateMediaMetadata(args: {
 ```
 
 - `media.alt` es el alt base del medio en la biblioteca. `articles.cover_alt` (y `games.cover_alt`) es una sobreescritura opcional solo cuando el medio se usa como portada de ese artículo/juego.
+
+## 6. Route Handlers
+
+### 5.1 `POST /api/upload`
+
+Es el único lugar donde el navegador manda bytes.
+
+```http
+POST /api/upload
+Content-Type: multipart/form-data
+
+file=<binario>
+kind=review            # uno de: review, news, guide, game. Determina el prefijo de la clave (articles/ o games/)
+```
+
+El parámetro `kind` acepta exactamente cuatro valores:
+
+| `kind` | Prefijo de clave en Blob | Uso |
+|--------|-------------------------|-----|
+| `review` | `articles/` | Reseña de juego |
+| `news` | `articles/` | Noticia |
+| `guide` | `articles/` | Guía |
+| `game` | `games/` | Ficha de juego |
+
+El servidor valida una whitelist estricta y resuelve el prefijo internamente. El cliente no puede enviar un prefijo de almacenamiento arbitrario.
+
+Validaciones, en orden:
+
+1. Sesión válida → `401`.
+2. Origen permitido → `403`.
+3. `Content-Length <= 2 MB + margen` → `413` antes de leer el cuerpo. Es una optimización, **no la defensa**: el header puede faltar o mentir.
+4. Leer el `File` y comprobar el **tamaño real** ≤ 2 MB y que el cuerpo total no supere el presupuesto (2 MB + 64 KB de formulario).
+5. MIME declarado en la allowlist → `400`.
+6. Magic numbers del contenido real → `400`.
+7. Dimensiones decodificadas y megapíxeles ≤ 20 → `400`.
+8. `sharp`: re-encodeo a WebP, lado mayor ≤ 2560 px, sin EXIF.
+9. Variantes 480 / 960 / 1600 px, solo si son menores al ancho de la imagen fuente (una imagen de 800 px no genera variantes de 960 ni 1600).
+
+La respuesta:
+
+```json
+{
+  "ok": true,
+  "media": {
+    "id": 12,
+    "url": "https://ce0rcu23vrrdzqap.public.blob.vercel-storage.com/articles/8f3c1a2e.webp",
+    "width": 1600,
+    "height": 900,
+    "bytes": 184320,
+    "variants": [
+      { "width": 480, "url": "https://ce0rcu23vrrdzqap.public.blob.vercel-storage.com/articles/8f3c1a2e-480.webp" },
+      { "width": 960, "url": "https://ce0rcu23vrrdzqap.public.blob.vercel-storage.com/articles/8f3c1a2e-960.webp" },
+      { "width": 1600, "url": "https://ce0rcu23vrrdzqap.public.blob.vercel-storage.com/articles/8f3c1a2e-1600.webp" }
+    ]
+  }
+}
+```
+
+| Código | Cuerpo |
+|--------|--------|
+| 400 | `{ "error": "Formato no admitido. Usá JPEG, PNG, WebP o AVIF." }` |
+| 400 | `{ "error": "El archivo no coincide con su tipo declarado." }` |
+| 400 | `{ "error": "Las imágenes animadas no están soportadas." }` |
+| 400 | `{ "error": "La imagen supera el tamaño de píxeles permitido." }` |
+| 413 | `{ "error": "La imagen no puede superar los 2 MB." }` |
+| 500 | `{ "error": "No se pudo guardar la imagen." }` |
+
+La subida pasa por `@vercel/blob` (`put`) desde el servidor. El token se resuelve con OIDC en Vercel; en desarrollo local se usa `BLOB_READ_WRITE_TOKEN`.
+
+La clave del objeto es `articles/<uuid>.webp` o `games/<uuid>.webp`: nunca el nombre original ni el slug. Se guarda con `cacheControlMaxAge: 31536000` (caché larga; el contenido nunca cambia porque la clave lleva UUID).
+
+**Compensación de subida.** Si falla el `INSERT` en `media` tras subir a Blob, se intenta borrar los objetos de Blob y se registra la clave en un mecanismo de reconciliación para limpieza posterior. No hay transacción distribuida.
+
+### 5.2 `POST /api/revalidate`
+
+Lo llama la GitHub Action cada 30 minutos. No lo usa el panel.
+
+```http
+POST /api/revalidate
+Authorization: Bearer $CRON_SECRET
+```
+
+```json
+{ "revalidated": ["article:review:mi-resena", "kind:review", "home"] }
+```
+
+Si `CRON_SECRET` falta o no coincide: `401`. El endpoint usa `revalidateTag(tag, { expire: 0 })` para forzar un miss bloqueante en la próxima lectura. Sin este endpoint, un artículo programado se ve tarde o no se ve.
+
+### 5.3 `GET /api/health` y `GET /api/ready`
+
+Son dos comprobaciones distintas y no intercambiables.
+
+| Endpoint | Qué prueba | Toca Postgres | Frecuencia |
+|----------|-----------|---------------|------------|
+| `/api/health` | *Liveness*: el proceso responde | No | Cada 1–5 min (uptime monitor) |
+| `/api/ready` | *Readiness*: DB y almacenamiento alcanzables | Sí (`select 1`) | Cada 30–60 min, o solo desde el runbook |
+
+`/api/health` devuelve `200` con `{ "ok": true }` y `Cache-Control: no-store`. Un health que consulta la base la despierta y consume CU-horas: eso es exactamente lo que este diseño evita.
+
+`/api/ready` no se expone al monitor público. Requiere `Authorization: Bearer $CRON_SECRET` y se llama a mano cuando algo falla, o desde un job de baja frecuencia que además registra el resultado. Devuelve `503` con el componente que falló:
+
+```json
+{ "ok": false, "db": "unreachable", "storage": "ok" }
+```
+
+### 5.4 `POST /api/reconcile-storage`
+
+Endpoint protegido con `CRON_SECRET` que ejecuta `reconcileStorage()` (definido en `07-reconciliacion-y-cron.md` §3). Corre dentro del workflow del backup nocturno, misma despertada de Neon.
+
+```http
+POST /api/reconcile-storage
+Authorization: Bearer $CRON_SECRET
+```
+
+No lo llama el panel ni el público. Es idempotente y acotado en tiempo: si tarda más del presupuesto de la ejecución, se detiene y deja lo pendiente para la próxima corrida.
+
+## 6. Cabeceras
+
+En `/api/*`:
+
+```
+Cache-Control: no-store
+X-Content-Type-Options: nosniff
+```
+
+En el resto del sitio, desde `next.config.ts`:
+
+```
+Strict-Transport-Security: max-age=63072000; includeSubDomains
+Referrer-Policy: strict-origin-when-cross-origin
+X-Frame-Options: DENY
+Permissions-Policy: camera=(), microphone=(), geolocation=()
+Content-Security-Policy: default-src 'self'; img-src 'self' https://<IMAGES_PUBLIC_BASE_URL_HOST>; ...
+```
+
+En `/admin/*` la CSP usa nonces y esas rutas se renderizan dinámicamente.

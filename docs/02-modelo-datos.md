@@ -1,6 +1,6 @@
-# Modelo de Contenido y Validación — Netti (parte 2.1)
+# Modelo de Contenido y Datos — Netti
 
-Define el esquema PostgreSQL (Neon), las restricciones que viven en la base y las tablas auxiliares.
+Define el esquema PostgreSQL (Neon), las restricciones que viven en la base, las tablas auxiliares y la validación Zod.
 
 ## 1. Tablas
 
@@ -9,12 +9,13 @@ Define el esquema PostgreSQL (Neon), las restricciones que viven en la base y la
 | `games` | Catálogo de juegos (entidad propia, referenciada por las reseñas) |
 | `articles` | Reseñas, noticias y guías. Una tabla con `kind`, no tres |
 | `media` | Imágenes subidas, con dimensiones y variantes |
+| `media_variants` | Variantes pregeneradas (480/960/1600 px) de cada medio |
 | `article_revisions` | Snapshots por guardado, para deshacer |
 | `sessions` | Sesiones del panel |
 | `login_attempts` | Rate limiting del login |
 | `redirects` | Redirecciones por cambio de slug |
 | `storage_orphans` | Registro de compensación entre Blob y Postgres |
-| `cron_runs` | Cursor del job de revalidación programada |
+| `cron_runs` | Cursor del job de revalidación programada y otros jobs |
 
 ### Por qué una sola tabla `articles`
 
@@ -25,8 +26,6 @@ Con `articles(kind)` hay **un** lugar donde se define qué es visible, **un** í
 `games` queda aparte porque es una entidad de catálogo, no un artículo, y la comparten varias reseñas.
 
 No hay tabla `users`: un solo autor, contraseña como hash en el entorno.
-
----
 
 ## 2. Esquema SQL
 
@@ -300,8 +299,9 @@ create index articles_tags_idx on articles using gin (tags);
 
 -- Índice para consultar publicaciones por fecha. Incluye todas las publicadas
 -- (pasadas y futuras); el job de revalidación filtra las que ya cruzaron la hora.
--- Definición compuesta (publicado_at, id) en 02.2.1-modelo-busqueda-media.md;
--- no duplicar aquí.
+create index articles_pending_activation_idx
+  on articles (published_at, id)
+  where status = 'published';
 
 create trigger articles_validate_tags
   before insert or update on articles
@@ -316,32 +316,239 @@ create trigger articles_set_updated_at
     to_jsonb(new) - 'updated_at' - 'version'
   )
   execute function set_updated_at();
-
--- FKs de medios (se agregan tras crear la tabla `media`, definida en 02.2.1).
--- ON DELETE RESTRICT evita borrar un medio que aún se usa como portada u OG.
-alter table games
-  add constraint games_cover_media_fk
-    foreign key (cover_media_id) references media (id)
-    on delete restrict;
-
-alter table articles
-  add constraint articles_cover_media_fk
-    foreign key (cover_media_id) references media (id)
-    on delete restrict;
-
-alter table articles
-  add constraint articles_og_media_fk
-    foreign key (og_media_id) references media (id)
-    on delete restrict;
-
-create index games_cover_media_idx on games (cover_media_id);
-create index articles_cover_media_idx on articles (cover_media_id);
-create index articles_og_media_idx on articles (og_media_id);
 ```
 
-### Orden de migraciones
+`previous_status` y `trashed_at` existen porque "restaurar devuelve el estado anterior" necesita dónde guardarlo. Sin esas columnas, restaurar solo puede adivinar.
 
-Las FK de medios (`games_cover_media_fk`, `articles_cover_media_fk`, `articles_og_media_fk`) deben crearse **después** de la tabla `media` (definida en `02.2.1-modelo-busqueda-media.md`). Orden de ejecución:
+`WHEN` sobre `to_jsonb(old)` menos `updated_at` y `version` evita dos cosas: que un `UPDATE` que no cambia nada incremente `version`, y que el propio trigger, al escribir `updated_at`, se considere un cambio.
+
+**Qué permite un borrador**: `title` vacío, `slug` vacío, `body` vacío, sin portada, sin puntuación, sin fecha. Lo único obligatorio es `kind` y `status`. Todo lo demás se exige recién al publicar, mediante los `CHECK` con `status <> 'published' or ...`.
+
+### 2.3 Búsqueda full-text
+
+```sql
+create extension if not exists unaccent;
+create extension if not exists pg_trgm;
+
+create text search configuration es_unaccent (copy = spanish);
+
+alter text search configuration es_unaccent
+  alter mapping for hword, hword_part, word
+  with unaccent, spanish_stem;
+
+alter table articles add column search_vector tsvector
+  generated always as (
+    setweight(to_tsvector('es_unaccent'::regconfig, coalesce(title, '')), 'A') ||
+    setweight(to_tsvector('es_unaccent'::regconfig, coalesce(description, '')), 'B') ||
+    setweight(to_tsvector('es_unaccent'::regconfig, coalesce(body, '')), 'C')
+  ) stored;
+
+create index articles_search_idx on articles using gin (search_vector);
+```
+
+- **`unaccent`**: sin él, "resena" no encuentra "reseña", y en LATAM se busca sin tildes.
+- **`setweight`**: el título pesa más que el cuerpo, así los resultados relevantes suben.
+- **`::regconfig` literal**: `to_tsvector(text, text)` es `STABLE` y no se puede usar en una columna generada; la versión con `regconfig` sí es `IMMUTABLE`.
+- Consulta: `websearch_to_tsquery('es_unaccent', $1)`, que tolera frases entre comillas y `OR` sin romper con entrada arbitraria.
+- Autocompletado de juegos: `pg_trgm` con `gin (title gin_trgm_ops)` y `similarity()`. `tsvector` no sirve para prefijos de dos letras.
+
+```sql
+create index games_title_trgm_idx on games using gin (title gin_trgm_ops);
+```
+
+### 2.4 `media`
+
+```sql
+create table media (
+  id            integer generated always as identity primary key,
+  storage_key   text not null unique,
+  public_url    text not null,
+  width         integer not null check (width > 0),
+  height        integer not null check (height > 0),
+  bytes         integer not null check (bytes > 0),
+  content_type  text not null default 'image/webp'
+                  check (content_type = 'image/webp'),
+  alt           text,
+  credit        text,
+  rights        text not null default 'own'
+                  check (rights in ('own', 'press', 'third_party')),
+  source_url    text,
+  pending_delete_at timestamptz,
+  created_at    timestamptz not null default now(),
+  constraint media_rights_require_credit
+    check (rights = 'own' or char_length(btrim(coalesce(credit, ''))) > 0),
+  constraint media_source_url_valid
+    check (source_url is null or source_url ~* '^https?://')
+);
+
+create table media_variants (
+  id          integer generated always as identity primary key,
+  media_id    integer not null references media (id) on delete cascade,
+  width       integer not null check (width > 0),
+  storage_key text not null unique,
+  public_url  text not null,
+  bytes       integer not null check (bytes > 0),
+  unique (media_id, width)
+);
+
+create index media_variants_media_id_idx on media_variants (media_id);
+```
+
+**Precedencia del texto alternativo (`alt`)**:
+
+1. `articles.cover_alt` (o `games.cover_alt`): sobrescritura opcional solo cuando el medio se usa como portada de ese artículo/juego.
+2. El texto del Markdown en `![alt](media:12)`: usado para imágenes dentro del cuerpo del artículo.
+3. `media.alt`: alt base del medio en la biblioteca, usado cuando no hay sobrescritura de portada ni texto en el Markdown.
+
+Sin `media`, la purga de la papelera no sabe qué imágenes borrar y las subidas huérfanas se acumulan. `credit`, `rights` y `source_url` documentan procedencia: una carátula disponible públicamente no es una carátula libre de derechos.
+
+`article_id` y `game_id` **no existen** en `media` (recorte del MVP). Antes de purgar un medio, se comprueba exhaustivamente que ningún otro artículo o juego lo referencie en cualquiera de estos lugares:
+
+- `articles.cover_media_id` y `articles.og_media_id` y `games.cover_media_id`
+- Apariciones de `media:<id>` en `articles.body` (regex con borde: `media:1` no matchea `media:12`)
+- Apariciones de `media:<id>` en `games.body` (si se permite esa sintaxis en fichas)
+
+Solo si ninguna referencia existe, el medio se considera huérfano y se marca para purga.
+
+**Borrado consistente.** Postgres y Blob no comparten transacción, así que el orden importa:
+
+1. En una transacción: recolectar los ids de medios que solo referencia este artículo o juego (comprobando `cover_media_id`, referencias `media:<id>` en `articles.body` y `games.body`), borrar la fila del artículo o juego (la FK `ON DELETE RESTRICT` protege `media` si aún se usa como `cover_media_id`), y recién entonces marcar `pending_delete_at` en los medios huérfanos (las revisiones caen por `ON DELETE CASCADE`).
+2. Fuera de la transacción: borrar en Blob el objeto y sus variantes.
+3. Solo si Blob confirma: borrar las filas de `media` y `media_variants`.
+
+Si Blob falla, la fila queda marcada y se reintenta. Nunca al revés: borrar el objeto antes de confirmar la base deja referencias rotas que no se pueden reparar. Las imágenes referenciadas por otro artículo no se marcan.
+
+**Imágenes dentro del cuerpo.** No se pegan URLs. El editor inserta `![texto alternativo](media:12)` y un plugin de remark resuelve el id contra `media`/`media_variants`, genera `srcset` y dimensiones. Así la purga sabe qué medios referencia el cuerpo, se evita CLS y una URL mal copiada no rompe la imagen.
+
+**Borrado de medios con FKs.** `games` y `articles` declaran FK hacia `media` (`cover_media_id`) con `ON DELETE RESTRICT`. El orden de creación es:
+
+1. `games` y `articles` (sin FK a `media`).
+2. `media` (sin FK a `games` ni `articles`).
+3. `ALTER TABLE` para agregar la FK `cover_media_id` en `games` y `articles`.
+
+### 2.5 `article_revisions`
+
+```sql
+create table article_revisions (
+  id          bigint generated always as identity primary key,
+  article_id  integer not null references articles (id) on delete cascade,
+  version     integer not null,
+  snapshot    jsonb not null,
+  created_at  timestamptz not null default now(),
+  unique (article_id, version)
+);
+
+create index article_revisions_created_idx
+  on article_revisions (article_id, created_at desc);
+```
+
+Se guarda un snapshot por cada escritura desde el panel. Se conservan las últimas 20 por artículo; la retención se aplica en la misma transacción que el nuevo snapshot (`delete ... where version <= $2 - 20`). No hay cron.
+
+### 2.6 `sessions`
+
+```sql
+create table sessions (
+  id            text primary key,          -- SHA-256 hex del token, nunca el token
+  created_at    timestamptz not null default now(),
+  expires_at    timestamptz not null,
+  last_used_at  timestamptz not null default now(),
+  absolute_expires_at timestamptz not null,
+  user_agent    text check (char_length(user_agent) <= 300),
+  ip_hash       text
+);
+
+create index sessions_expires_idx on sessions (expires_at);
+```
+
+`absolute_expires_at` (30 días) impide que la renovación deslizante mantenga una sesión viva para siempre. `last_used_at` se actualiza como máximo una vez cada 5 minutos, no en cada request.
+
+**Purga de sesiones:** un job de baja frecuencia (dueño: `reconcileStorage` o el backup nocturno) borra filas con `expires_at < now()` o `absolute_expires_at < now()`. La purga corre semanalmente junto con la purga de `login_attempts`.
+
+### 2.7 `login_attempts`
+
+```sql
+create table login_attempts (
+  id           bigint generated always as identity primary key,
+  ip_hash      text not null,
+  attempted_at timestamptz not null default now(),
+  success      boolean not null default false
+);
+
+create index login_attempts_ip_idx
+  on login_attempts (ip_hash, attempted_at desc);
+```
+
+Se consulta antes de verificar la contraseña. Purga semanal de filas con más de 7 días (dueño: mismo job que purga `sessions`).
+
+### 2.8 `redirects`
+
+```sql
+create table redirects (
+  id           integer generated always as identity primary key,
+  from_path    text not null unique,
+  to_path      text not null,
+  status_code  smallint not null default 301 check (status_code in (301, 302, 308)),
+  created_at   timestamptz not null default now(),
+  constraint redirects_absolute_paths
+    check (from_path ~ '^/[^/][^ ]*$' and to_path ~ '^/[^/][^ ]*$'),
+  constraint redirects_not_self
+    check (from_path <> to_path)
+);
+
+create trigger redirects_validate
+  before insert or update on redirects
+  for each row execute function validate_redirect();
+```
+
+Se consulta **solo cuando el artículo no existe**, con el mapa cacheado bajo el tag `redirects`. No se consulta en cada request ni en el proxy.
+
+### 2.9 `storage_orphans`
+
+```sql
+create table storage_orphans (
+  id          bigint generated always as identity primary key,
+  storage_key text not null,
+  action      text not null check (action in ('put', 'del')),
+  status      text not null default 'pending' check (status in ('pending', 'repaired', 'orphaned')),
+  created_at  timestamptz not null default now(),
+  repaired_at timestamptz
+);
+
+create index storage_orphans_pending_idx
+  on storage_orphans (status)
+  where status = 'pending';
+```
+
+Registro de compensación para subidas/borrados fallidos entre Blob y Postgres. Si falla el `INSERT` en `media` tras subir objetos, o falla un `del` de Blob, se anota aquí para que un job de baja frecuencia repare o reporte el desajuste.
+
+### 2.10 `cron_runs`
+
+```sql
+create table cron_runs (
+  job_name           text not null primary key,
+  last_success_at    timestamptz,
+  last_run_at        timestamptz not null default now(),
+  last_published_at  timestamptz,
+  last_id            integer,
+  backup_restored_at timestamptz
+);
+
+insert into cron_runs (job_name) values ('revalidate_scheduled') on conflict do nothing;
+insert into cron_runs (job_name) values ('reconcile_storage') on conflict do nothing;
+insert into cron_runs (job_name) values ('purge_sessions') on conflict do nothing;
+insert into cron_runs (job_name) values ('purge_login_attempts') on conflict do nothing;
+insert into cron_runs (job_name) values ('backup_restore') on conflict do nothing;
+```
+
+Cursor de ejecución del job de revalidación programada. Permite recuperar publicaciones pendientes si una ejecución se retrasa o falla.
+
+## 3. Validación Zod
+
+Los esquemas Zod están definidos exclusivamente en `03-validacion-zod.md` (`makeArticleSchema`, `makeGameSchema`, `makeMediaMetadataSchema`). No se duplican aquí.
+
+## 4. Orden de migraciones
+
+Las FK de medios (`games_cover_media_fk`, `articles_cover_media_fk`, `articles_og_media_fk`) deben crearse **después** de la tabla `media` (definida en esta misma sección 2.4). Orden de ejecución:
 
 1. `games` y `articles` (sin FK a `media`).
 2. `media`, `media_variants`, `article_revisions`, `sessions`, `login_attempts`, `redirects`, `storage_orphans`, `cron_runs`.
@@ -350,9 +557,3 @@ Las FK de medios (`games_cover_media_fk`, `articles_cover_media_fk`, `articles_o
 5. Triggers de validación y `version`.
 
 Ejecutar los `ALTER TABLE` antes de crear `media` fallará porque la tabla referenciada no existe.
-
-**Qué permite un borrador**: `title` vacío, `slug` vacío, `body` vacío, sin portada, sin puntuación, sin fecha. Lo único obligatorio es `kind` y `status`. Todo lo demás se exige recién al publicar, mediante los `CHECK` con `status <> 'published' or ...`.
-
-**`previous_status` y `trashed_at`** existen porque "restaurar devuelve el estado anterior" necesita dónde guardarlo. Sin esas columnas, restaurar solo puede adivinar.
-
-**`WHEN` sobre `to_jsonb(old)` menos `updated_at` y `version`** evita dos cosas: que un `UPDATE` que no cambia nada incremente `version`, y que el propio trigger, al escribir `updated_at`, se considere un cambio. Comparar `OLD.*` a secas incluiría esos dos campos de mantenimiento; excluirlos por nombre en JSONB no obliga a reescribir el trigger cuando se agrega una columna.

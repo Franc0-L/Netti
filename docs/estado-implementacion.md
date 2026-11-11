@@ -60,7 +60,7 @@ No usar “funciona”, “seguro”, “rápido” o “listo para producción�
 - El login usa scrypt asíncrono (N=131072, r=8, p=1), límite de concurrencia local, HMAC de IP y backoff progresivo.
 - El upload acepta JPEG, PNG, WebP y AVIF hasta 2 MiB, valida firma y dimensiones, elimina metadatos mediante re-encodeo WebP y crea variantes.
 - `npm run hash:admin` genera por stdin el hash scrypt esperado por `ADMIN_PASSWORD_HASH`; no se debe guardar la contraseña en argumentos de proceso.
-- No se afirma que el esquema desplegado contenga los índices parciales, triggers de versión, FK o constraints descritos en docs/02.1-modelo-tablas.md: las migraciones reproducibles siguen pendientes.
+- No se afirma que el esquema desplegado contenga los índices parciales, triggers de versión, FK o constraints descritos en docs/02-modelo-datos.md: las migraciones reproducibles siguen pendientes.
 
 
 ## Migraciones reproducibles (rama feat/database-migrations)

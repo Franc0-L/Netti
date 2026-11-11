@@ -1,8 +1,118 @@
-# Stack Tecnológico y Arquitectura — Netti (parte 1.2.2)
+# Stack Tecnológico y Arquitectura — Netti
 
-Continuación de `01.2.1-stack-caché-modelo.md`.
+Tecnologías, organización de las piezas y registro de decisiones. Revisado contra las versiones de noviembre de 2026.
 
-## 1.5 Imágenes
+## 1. Stack
+
+| Capa | Tecnología |
+|------|-----------|
+| Framework | Next.js 16.4.5 (App Router, TypeScript estricto, Turbopack) |
+| Estilos | Tailwind CSS v4 con tokens en CSS |
+| Base de datos | Neon (PostgreSQL serverless), plan Free |
+| Acceso a datos | Drizzle ORM sobre `pg` (node-postgres) |
+| Mutaciones | Server Actions |
+| Endpoints HTTP | Route Handlers solo para `upload`, `revalidate`, `reconcile-storage`, `health` y `ready` (`rss.xml` y `sitemap.ts` son operativos de lectura, no mutaciones de negocio) |
+| Imágenes | Vercel Blob + `sharp` (variantes y re-encodeo) |
+| Markdown | `remark` + `remark-gfm` + `rehype` + `rehype-sanitize` |
+| Validación | Zod 4 |
+| Auth | Cookie de sesión propia + tabla `sessions` |
+| Rate limiting | Tabla `login_attempts` en Postgres |
+| Caché | Cache Components (`cacheComponents: true`) |
+| Hosting | Vercel Hobby, región `gru1` |
+| DB región | Neon `sa-east-1` |
+| CI | GitHub Actions: eslint, typecheck, test, build |
+
+### 1.1 Next.js 16
+
+- 16.4.5 es Active LTS; 15.5.29 quedó en Maintenance LTS.
+- `middleware.ts` pasó a llamarse `proxy.ts`.
+- **`next lint` fue eliminado.** `next build` ya no corre ESLint; el script es `eslint .`.
+- **Cache Components es opt-in**: hace falta `cacheComponents: true` en `next.config.ts`. Pasa a ser el modelo por defecto en Next 17.
+- El `proxy.ts` corre en Node. No se usa edge runtime.
+
+### 1.2 Neon
+
+**Por qué Neon y no Supabase**: PostgreSQL puro, sin PostgREST ni RLS que configurar, sin pausa manual del proyecto y sin tarjeta. El branching existe para experimentos, pero los previews usan un proyecto aparte para no compartir cuota.
+
+**Límites del plan Free** (verificar en la consola antes de contratar):
+
+| Recurso | Límite |
+|---------|--------|
+| Cómputo | 100 CU-horas por proyecto al mes |
+| Storage | 1 GB por proyecto |
+| Ramas | 10 |
+| Transferencia | 5 GB |
+| Suspensión por inactividad | 5 minutos |
+| Cómputo mínimo | 0,25 CU |
+| Ventana de restauración | ~6 horas |
+| Historial de restauración | 6 horas, hasta 1 GB de cambios |
+
+Algunos sitios de terceros citan 0,5 GB y 50 CU-horas; la documentación oficial de Neon (noviembre de 2026) confirma **1 GB y 100 CU-horas por proyecto**. El almacenamiento total de la cuenta no debe exceder 20 GB entre todos los proyectos Free. Estos valores se confirman en la consola antes de desplegar.
+
+**El riesgo real**: al agotar las 100 CU-horas, Neon **suspende el cómputo hasta el mes siguiente**. No degrada: se cae. Con 0,25 CU de mínimo, 100 CU-horas equivalen a unas 400 horas despierto, o sea ~55 % del mes.
+
+Por eso el diseño no puede permitir que las visitas públicas despierten la base:
+
+1. Los artículos se prerenderizan. La lectura pública sale de caché o de ISR, no de Postgres.
+2. `cacheLife('max')` y invalidación on-demand al publicar.
+3. El health check público **no** toca la base.
+4. Un slug desconocido (ruta `/resenas/<cualquier-cosa>`) **no** ejecuta `getArticle` contra la base. Primero se consulta `getVisibleArticleSlugs(kind)` (cacheado bajo `kind:<kind>`); si el slug no está en ese índice, se consulta un índice de `redirects` cacheado (bajo el tag `redirects`); si tampoco existe redirect, se responde 404 sin tocar Postgres. Solo si `getVisibleArticleSlugs` confirma que el slug existe, se consulta `getArticle`. Nunca se consulta `redirects` para slugs aleatorios sin pasar primero por el índice de slugs visibles.
+5. `/buscar` con consulta libre **no** consulta Postgres en tiempo real. Se usa un índice estático cacheado (títulos, descripción, etiquetas) buscado en el cliente, normalizando tildes. El full-text de Postgres queda para el panel. Solo los resultados cacheados de búsquedas frecuentes pueden servirse sin tocar la base.
+6. Las previews usan **otro proyecto** de Neon, no ramas del de producción (las ramas comparten la cuota de CU-horas y el tope de 10).
+
+**Driver**: `pg` con un pool chico y `attachDatabasePool` de `@vercel/functions` para liberar conexiones en Fluid compute. `max` se calibra: empezar con **1–3** por instancia y medir, no fijar 5 por intuición. El pooler de Neon también tiene un límite de conexiones, y varias instancias concurrentes multiplican los pools. No se usa `neon-http`: no soporta transacciones interactivas, y publicar un cambio de slug necesita una transacción. `@neondatabase/serverless` queda para edge, que no se usa.
+
+**Dos URLs**: `DATABASE_URL` pooled para la aplicación y `DATABASE_URL_UNPOOLED` para migraciones, `pg_dump` y `CREATE INDEX CONCURRENTLY`.
+
+**Almacén barato para `next_due`**: Edge Config de Vercel o un JSON en Blob, usado para guardar el próximo `published_at` pendiente. El cron lee primero este almacén (sin tocar Neon) y solo consulta la base si hay publicaciones por activar. Con Edge Config se paga por lecturas/escrituras de la API de Vercel; con Blob JSON cada lectura y escritura cuenta como operación (10.000 simples, 2.000 avanzadas al mes en Hobby). Fase 0 mide ambas opciones.
+
+## 2. Caché y publicación
+
+**La diferencia que importa**:
+
+| API | Comportamiento | Dónde |
+|-----|----------------|-------|
+| `revalidateTag(tag, { expire: 0 })` | Expira ya; la próxima request es un miss bloqueante | Route Handlers, cron |
+| `updateTag(tag)` | Expira ya y garantiza lectura de lo escrito | **Solo Server Actions** |
+
+Las mutaciones del panel son Server Actions, así que usan `updateTag`. El autor ve su cambio publicado al volver al sitio, sin esperar la segunda visita.
+
+**Caché: lo que no está garantizado.** `"use cache"` es almacenamiento en memoria. En entornos serverless no es seguro que persista entre invocaciones ni que se comparta entre instancias; `cacheLife("max")` no convierte la caché local en almacenamiento remoto compartido. Para una caché distribuida real se necesita `use cache: remote` con un handler, que tiene coste y latencia asociados.
+
+Por tanto, la frase de `00-vision.md` —"la lectura pública no despierta la base"— no está demostrada solo por usar Cache Components. Se debe:
+
+1. Prerenderizar las páginas públicas que se conozcan durante el build cuando sea viable.
+2. Separar el shell estático de las consultas realmente dinámicas.
+3. Probar explícitamente `use cache` en el despliegue real (Fase 0).
+4. Si el contenido depende de caché compartida en runtime, evaluar `use cache: remote`, estudiando su costo y latencia.
+5. Mantener una alternativa de lectura estática que no dependa de una conexión a Neon para las páginas ya generadas.
+
+Este punto es un bloqueante de la Fase 0: sin esta prueba, no apruebo la arquitectura de producción.
+
+**Invalidación granular**: una función pura `affectedTags(before, after)` devuelve los tags de la entrada, del listado del `kind`, de las etiquetas **viejas y nuevas**, y `home` solo si cambió un campo que se renderiza en la portada (`status`, `published_at`, `featured`, `title`, `description` o `score`). Corregir una tilde en el cuerpo no invalida la portada.
+
+**Inventario de proyecciones.** Un tag por entrada no alcanza si el contenido aparece en varios lugares. La tabla es chica y explícita:
+
+| Proyección | Tags |
+|------------|------|
+| Detalle | `article:<kind>:<slug>`, `kind:<kind>`, `articles` |
+| Listado por colección | `kind:<kind>`, `articles` |
+| Portada | `home` |
+| Etiquetas | `tag:<tag>` (viejas y nuevas) |
+| Cambio de etiquetas | `tags` (invalida el índice de etiquetas visibles) |
+| Ficha de juego | `game:<id>`, `kind:game` |
+| Sitemap y RSS | `articles`, `kind:<kind>` |
+| Redirecciones | `redirects` |
+
+`affectedTags` agrega `redirects` cuando cambia el slug, y `game:<id>` cuando una reseña asociada a una ficha cambia de forma que afecte su listado de reseñas. `affectedTags` es la implementación, no la documentación: la tabla es la fuente. Los tests de integración publican, cambian slug, borran y restauran, y comprueban las siete proyecciones.
+
+**Programados**: `published_at` futuro no se ve porque el predicado público exige `published_at <= now()`. Un job cada 30 minutos llama a un Route Handler protegido que revalida lo que cruzó la hora. Si falla, el artículo aparece en la siguiente revalidación: retraso, no fuga.
+
+**Quién corre ese job**: GitHub Actions es el valor por defecto. Los Cron Jobs de Vercel en Hobby corren como máximo **una vez por día**, y los Schedules —que sí permiten cada 15 minutos— siguen en beta y tienen 5.000 ejecuciones por período. GitHub Actions es gratis, estable y no depende de un producto beta. El endpoint usa `revalidateTag(tag, { expire: 0 })` para forzar un miss bloqueante en la próxima lectura. Si Schedules sale de beta, se migra sin tocar código.
+
+**Cardinalidad de tags**: solo entidades y grupos (`articles`, `kind:review`, `article:review:slug`, `tag:analisis`). Nunca un tag derivado de entrada del usuario (`search:<consulta>`, `article:<id-de-visita>`): crecerían sin límite y el usuario público controlaría qué se invalida.
+
+## 3. Imágenes
 
 `POST /api/upload` con `multipart/form-data`, máximo 2 MB (el cliente redimensiona antes a WebP).
 
@@ -31,7 +141,7 @@ No hay factura sorpresa: **no se cobra el exceso, se bloquea el almacenamiento h
 
 **Costo**: cero. La contrapartida es que el sitio queda atado a Vercel para las imágenes; `lib/storage.ts` aísla `put`/`del` para poder migrar a R2 o a otro proveedor si algún día se justifica.
 
-## 1.6 Autenticación
+## 4. Autenticación
 
 - Sin tabla `users`. Contraseña como hash `scrypt` en `ADMIN_PASSWORD_HASH`, formato `scrypt:131072:8:1:<saltB64>:<hashB64>`. El primer número es **N real** (2^17), no una constante de formato. **Separador `:`, no `$`**: Next expande `$VAR` en los archivos `.env` y corrompería el hash.
 - `crypto.scrypt` **asíncrono** (no `scryptSync`, que bloquea el event loop). Parámetros según OWASP: N=2^17, r=8, p=1, con `maxmem` explícito. Cada verificación consume ~128 MiB: el rate limit por IP se aplica **antes** de derivar, y se limita la concurrencia con un semáforo local. Si en Vercel no entra con holgura, se baja N con el motivo documentado en un ADR, no en silencio.
@@ -48,11 +158,11 @@ No hay factura sorpresa: **no se cobra el exceso, se bloquea el almacenamiento h
 
 **`PREVIEW_ORIGIN_REGEX`**: si se define, debe estar anclado con `^…$` y usar el slug del equipo (por ejemplo `^https://.*-netti-gru1\.vercel\.app$`). No debe existir en producción; el `.env.local` de ejemplo no debe traerlo. El patrón `^https://.*-netti\.vercel\.app$` acepta el proyecto de cualquier tercero llamado `x-netti` y no es seguro.
 
-  **No exigir `Content-Type: application/json` en Server Actions.** Ese header es propio de APIs JSON convencionales y no se aplica de forma universal al protocolo de Server Actions de Next.js; imponerlo podría rechazar peticiones legítimas del panel (por ejemplo, enviadas desde un formulario). Next.js ya incorpora comprobación de `Origin` contra `Host`/`X-Forwarded-Host`. Se mantienen controles de origen para operaciones sensibles y controles de Content-Type específicos en los Route Handlers que realmente reciben JSON.
+**No exigir `Content-Type: application/json` en Server Actions.** Ese header es propio de APIs JSON convencionales y no se aplica de forma universal al protocolo de Server Actions de Next.js; imponerlo podría rechazar peticiones legítimas del panel (por ejemplo, enviadas desde un formulario). Next.js ya incorpora comprobación de `Origin` contra `Host`/`X-Forwarded-Host`. Se mantienen controles de origen para operaciones sensibles y controles de Content-Type específicos en los Route Handlers que realmente reciben JSON.
 
-  `SameSite=Lax` y la comprobación de origen son la defensa; la CSP y el saneado de Markdown son capas distintas, no sustitutos.
+`SameSite=Lax` y la comprobación de origen son la defensa; la CSP y el saneado de Markdown son capas distintas, no sustitutos.
 
-## 1.7 Markdown y salida
+## 5. Markdown y salida
 
 - Pipeline: `remark-parse` → `remark-gfm` → `remark-rehype` → `rehype-sanitize` → `rehype-stringify`.
 - Allowlist explícita; sin `style`, sin `on*`, sin `iframe` genérico.
@@ -63,7 +173,7 @@ No hay factura sorpresa: **no se cobra el exceso, se bloquea el almacenamiento h
 - **RSS**: escapar `]]>` en CDATA, con una función `safeCdata(text)` probada con ese caso. Feed general y por colección.
 - `source_url` se renderiza con `rel="noopener noreferrer nofollow"`. Nunca se hace `fetch` de esa URL desde el servidor.
 
-## 1.8 Seguridad de la respuesta
+## 6. Seguridad de la respuesta
 
 | Cabecera | Valor |
 |----------|-------|
@@ -75,7 +185,7 @@ No hay factura sorpresa: **no se cobra el exceso, se bloquea el almacenamiento h
 
 **Decisión sobre CSP**: nonces obligan a renderizar dinámicamente cada página, lo que choca con ISR y con el ahorro de CU-horas. Se aplica CSP con hashes en lo público y nonces solo en `/admin`. **Estado: Aceptada con Validación: pendiente** — en la Fase 0 hay que comprobar si los scripts inline de Next.js (bootstrap, JSON-LD por página) admiten hashes estáticos o si requieren SRI experimental. Si no es viable, se pasa a nonces en lo público con el costo de CU-horas que conlleva.
 
-### 1.9 Qué se descarta
+## 7. Qué se descarta
 
 - CMS externos y embebidos: limitan la personalización del panel.
 - Contenido en Markdown dentro del repositorio: exige rebuild y no permite escritura inmediata.
@@ -87,7 +197,7 @@ No hay factura sorpresa: **no se cobra el exceso, se bloquea el almacenamiento h
 - Edge runtime.
 - `neon-http` (sin transacciones interactivas).
 
-## 3. Decisiones
+## 8. Decisiones
 
 Cada decisión tiene dos planos: **qué se eligió** y **cuánto está probado**. Las que dependen de infraestructura no verificada llevan `Validación: pendiente` y se confirman en la Fase 0. Presentar una hipótesis como propiedad confirmada es justamente lo que hay que evitar.
 
