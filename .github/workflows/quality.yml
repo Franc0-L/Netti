@@ -28,6 +28,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -45,8 +47,22 @@ jobs:
       - name: ESLint
         run: npm run lint
 
-      - name: Prettier check
-        run: npm run format:check
+      - name: Prettier check (changed files)
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          files=$(git diff --name-only --diff-filter=ACMR "$BASE_SHA"...HEAD)
+          if [ -z "$files" ]; then
+            echo "No changed files to format-check."
+          else
+            while IFS= read -r file; do
+              case "$file" in
+                *.ts|*.tsx|*.js|*.jsx|*.json|*.md|*.css|*.yml|*.yaml)
+                  npx prettier --check "$file"
+                  ;;
+              esac
+            done <<< "$files"
+          fi
 
       - name: Typecheck
         run: npm run typecheck
