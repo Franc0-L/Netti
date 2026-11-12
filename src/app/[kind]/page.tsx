@@ -51,7 +51,7 @@ export default async function CollectionPage({ params }: { params: Promise<{ kin
   return (
     <div className="site-shell">
       <SkipLink />
-      <SiteHeader />
+      <SiteHeader currentPath={articleCollectionPath(kind)} />
       <main id="contenido" tabIndex={-1}>
         <section className="collection-heading">
           <p className="eyebrow">ARCHIVO EDITORIAL</p>

@@ -6,7 +6,7 @@ const baseArticle = z.object({
   slug: z.string().regex(SLUG_RE, 'Solo minúsculas, números y guiones.').or(z.literal('')),
   title: z.string().trim().max(120).default(''),
   description: z.string().trim().max(240).default(''),
-  body: z.string().default(''),
+  body: z.string().max(100_000).default(''),
   author: z.string().trim().max(60).nullable().optional(),
   tags: z
     .array(z.string().trim().min(1).max(30))

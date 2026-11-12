@@ -4,23 +4,23 @@ Tecnologías, organización de las piezas y registro de decisiones. Revisado con
 
 ## 1. Stack
 
-| Capa           | Tecnología                                                                                                                                                              |
-| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Framework      | Next.js 16.4.5 (App Router, TypeScript estricto, Turbopack)                                                                                                             |
-| Estilos        | Tailwind CSS v4 con tokens en CSS                                                                                                                                       |
-| Base de datos  | Neon (PostgreSQL serverless), plan Free                                                                                                                                 |
-| Acceso a datos | Drizzle ORM sobre `pg` (node-postgres)                                                                                                                                  |
-| Mutaciones     | Server Actions                                                                                                                                                          |
-| Endpoints HTTP | Route Handlers solo para `upload`, `revalidate`, `reconcile-storage`, `health` y `ready` (`rss.xml` y `sitemap.ts` son operativos de lectura, no mutaciones de negocio) |
-| Imágenes       | Vercel Blob + `sharp` (variantes y re-encodeo)                                                                                                                          |
-| Markdown       | `remark` + `remark-gfm` + `rehype` + `rehype-sanitize`                                                                                                                  |
-| Validación     | Zod 4                                                                                                                                                                   |
-| Auth           | Cookie de sesión propia + tabla `sessions`                                                                                                                              |
-| Rate limiting  | Tabla `login_attempts` en Postgres                                                                                                                                      |
-| Caché          | Cache Components (`cacheComponents: true`)                                                                                                                              |
-| Hosting        | Vercel Hobby, región `gru1`                                                                                                                                             |
-| DB región      | Neon `sa-east-1`                                                                                                                                                        |
-| CI             | GitHub Actions: eslint, typecheck, test, build                                                                                                                          |
+| Capa           | Tecnología                                                                                                                                              |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Framework      | Next.js 16.4.5 (App Router, TypeScript estricto, Turbopack)                                                                                             |
+| Estilos        | Tailwind CSS v4 con tokens en CSS                                                                                                                       |
+| Base de datos  | Neon (PostgreSQL serverless), plan Free                                                                                                                 |
+| Acceso a datos | Drizzle ORM sobre `pg` (node-postgres)                                                                                                                  |
+| Mutaciones     | Server Actions                                                                                                                                          |
+| Endpoints HTTP | Route Handlers solo para `upload`, `revalidate`, `reconcile-storage`, `health` y `ready` (`sitemap.ts` es operativo de lectura, no mutación de negocio) |
+| Imágenes       | Vercel Blob + `sharp` (variantes y re-encodeo)                                                                                                          |
+| Markdown       | `remark` + `remark-gfm` + `rehype` + `rehype-sanitize`                                                                                                  |
+| Validación     | Zod 4                                                                                                                                                   |
+| Auth           | Cookie de sesión propia + tabla `sessions`                                                                                                              |
+| Rate limiting  | Tabla `login_attempts` en Postgres                                                                                                                      |
+| Caché          | Cache Components (`cacheComponents: true`)                                                                                                              |
+| Hosting        | Vercel Hobby, región `gru1`                                                                                                                             |
+| DB región      | Neon `sa-east-1`                                                                                                                                        |
+| CI             | GitHub Actions: eslint, typecheck, test, build                                                                                                          |
 
 ### 1.1 Next.js 16
 
@@ -54,9 +54,9 @@ Algunos sitios de terceros citan 0,5 GB y 50 CU-horas; la documentación oficial
 Por eso el diseño no puede permitir que las visitas públicas despierten la base:
 
 1. Los artículos se prerenderizan. La lectura pública sale de caché o de ISR, no de Postgres.
-2. `cacheLife('max')` y invalidación on-demand al publicar.
+2. `cacheLife('minutes')` y invalidación on-demand al publicar.
 3. El health check público **no** toca la base.
-4. Un slug desconocido (ruta `/resenas/<cualquier-cosa>`) **no** ejecuta `getArticle` contra la base. Primero se consulta `getVisibleArticleSlugs(kind)` (cacheado bajo `kind:<kind>`); si el slug no está en ese índice, se consulta un índice de `redirects` cacheado (bajo el tag `redirects`); si tampoco existe redirect, se responde 404 sin tocar Postgres. Solo si `getVisibleArticleSlugs` confirma que el slug existe, se consulta `getArticle`. Nunca se consulta `redirects` para slugs aleatorios sin pasar primero por el índice de slugs visibles.
+4. Un slug desconocido (ruta `/resenas/<cualquier-cosa>`) **no** ejecuta `getArticle` contra la base. El proxy consulta el conjunto de slugs visibles de la colección, cacheado 15 s en memoria por instancia. Si el slug no está en ese índice, consulta `redirects` por `from_path` (con caché positiva/negativa de 15 s) antes de responder 404. El presupuesto de 20 confirmaciones por minuto evita que el rastreador repita consultas; al agotarse, el control falla abierto y deja que la página bloqueante decida su propio 404. Solo si el slug existe se consulta `getArticle` en la página. Nunca se consulta `redirects` para rutas aleatorias que ya están en el conjunto visible.
 5. `/buscar` con consulta libre **no** consulta Postgres en tiempo real. Se usa un índice estático cacheado (títulos, descripción, etiquetas) buscado en el cliente, normalizando tildes. El full-text de Postgres queda para el panel. Solo los resultados cacheados de búsquedas frecuentes pueden servirse sin tocar la base.
 6. Las previews usan **otro proyecto** de Neon, no ramas del de producción (las ramas comparten la cuota de CU-horas y el tope de 10).
 
@@ -77,7 +77,7 @@ Por eso el diseño no puede permitir que las visitas públicas despierten la bas
 
 Las mutaciones del panel son Server Actions, así que usan `updateTag`. El autor ve su cambio publicado al volver al sitio, sin esperar la segunda visita.
 
-**Caché: lo que no está garantizado.** `"use cache"` es almacenamiento en memoria. En entornos serverless no es seguro que persista entre invocaciones ni que se comparta entre instancias; `cacheLife("max")` no convierte la caché local en almacenamiento remoto compartido. Para una caché distribuida real se necesita `use cache: remote` con un handler, que tiene coste y latencia asociados.
+**Caché: lo que no está garantizado.** `"use cache"` es almacenamiento en memoria. En entornos serverless no es seguro que persista entre invocaciones ni que se comparta entre instancias; `cacheLife("minutes")` no convierte la caché local en almacenamiento remoto compartido. Para una caché distribuida real se necesita `use cache: remote` con un handler, que tiene coste y latencia asociados.
 
 Por tanto, la frase de `00-vision.md` —"la lectura pública no despierta la base"— no está demostrada solo por usar Cache Components. Se debe:
 
@@ -101,14 +101,14 @@ Este punto es un bloqueante de la Fase 0: sin esta prueba, no apruebo la arquite
 | Etiquetas             | `tag:<tag>` (viejas y nuevas)                      |
 | Cambio de etiquetas   | `tags` (invalida el índice de etiquetas visibles)  |
 | Ficha de juego        | `game:<id>`, `kind:game`                           |
-| Sitemap y RSS         | `articles`, `kind:<kind>`                          |
+| Sitemap               | `articles`, `kind:<kind>`                          |
 | Redirecciones         | `redirects`                                        |
 
-`affectedTags` agrega `redirects` cuando cambia el slug, y `game:<id>` cuando una reseña asociada a una ficha cambia de forma que afecte su listado de reseñas. `affectedTags` es la implementación, no la documentación: la tabla es la fuente. Los tests de integración publican, cambian slug, borran y restauran, y comprueban las siete proyecciones.
+`affectedTags` agrega `game:<id>` cuando una reseña asociada a una ficha cambia de forma que afecte su listado de reseñas. El cambio de slug invalida además el tag `redirects`, y el proxy refresca su propia caché de redirecciones en 15 s. `affectedTags` es la implementación, no la documentación: la tabla es la fuente. Los tests de integración publican, cambian slug, borran y restauran, y comprueban las proyecciones.
 
 **Programados**: `published_at` futuro no se ve porque el predicado público exige `published_at <= now()`. Un job cada 30 minutos llama a un Route Handler protegido que revalida lo que cruzó la hora. Si falla, el artículo aparece en la siguiente revalidación: retraso, no fuga.
 
-**Quién corre ese job**: GitHub Actions es el valor por defecto. Los Cron Jobs de Vercel en Hobby corren como máximo **una vez por día**, y los Schedules —que sí permiten cada 15 minutos— siguen en beta y tienen 5.000 ejecuciones por período. GitHub Actions es gratis, estable y no depende de un producto beta. El endpoint usa `revalidateTag(tag, { expire: 0 })` para forzar un miss bloqueante en la próxima lectura. Si Schedules sale de beta, se migra sin tocar código.
+**Quién corre ese job**: GitHub Actions es el valor por defecto. Los Cron Jobs de Vercel en Hobby corren como máximo **una vez por día**, y los Schedules —que sí permiten cada 15 minutos— siguen en beta y tienen 5.000 ejecuciones por período. GitHub Actions es gratis, estable y no depende de un producto beta. El repositorio define el scheduler en `.github/workflows/scheduled-jobs.yml`: revalidación cada 30 minutos, limpieza diaria y reconciliación diaria. El endpoint usa `revalidateTag(tag, { expire: 0 })` para forzar un miss bloqueante en la próxima lectura. Si Schedules sale de beta, se migra sin tocar código.
 
 **Cardinalidad de tags**: solo entidades y grupos (`articles`, `kind:review`, `article:review:slug`, `tag:analisis`). Nunca un tag derivado de entrada del usuario (`search:<consulta>`, `article:<id-de-visita>`): crecerían sin límite y el usuario público controlaría qué se invalida.
 
@@ -170,7 +170,7 @@ No hay factura sorpresa: **no se cobra el exceso, se bloquea el almacenamiento h
 - **JSON-LD**: escapar `<` como `\u003c` antes de inyectar en `<script type="application/ld+json">`. Un título con `</script>` sería XSS almacenado. El escape vive en una sola función `safeJsonLd(data)`, con tests para `</script><script>alert(1)</script>`; no se repite a mano en cada plantilla.
 - **Tipo por colección**: `Review` para reseñas (con `reviewRating.bestRating: 10`, `author`, `itemReviewed` como `VideoGame`), `NewsArticle` para noticias, `Article` para guías y `VideoGame` para fichas. Todos con `inLanguage: "es"` y `dateModified`. No se promete resultado enriquecido: depende del buscador.
 - **Imágenes**: `srcset` con variantes pregeneradas; `width` y `height` siempre presentes para evitar CLS.
-- **RSS**: escapar `]]>` en CDATA, con una función `safeCdata(text)` probada con ese caso. Feed general y por colección.
+- **RSS**: fuera del alcance de lanzamiento (D-024). Si se agrega, debe escapar `]]>` en CDATA con `safeCdata(text)`, compartir los tags del sitemap y publicar feed general y por colección.
 - `source_url` se renderiza con `rel="noopener noreferrer nofollow"`. Nunca se hace `fetch` de esa URL desde el servidor.
 
 ## 6. Seguridad de la respuesta
@@ -255,11 +255,11 @@ Reemplaza la idea de tablas separadas. Un predicado de visibilidad, un índice F
 
 ### D-014: Server Actions para mutaciones
 
-`updateTag` resuelve la lectura inmediata y la verificación de origen. Route Handlers solo para `upload`, revalidación programada, liveness y readiness. **Aceptada.**
+`updateTag` resuelve la lectura inmediata y la verificación de origen. Route Handlers solo para `upload`, revalidación programada, limpieza, reconciliación, liveness y readiness. **Aceptada.**
 
 ### D-015: Cache Components explícito
 
-`cacheComponents: true`, `cacheLife('max')`, invalidación granular con `affectedTags`. **Aceptada.** `Validación: pendiente` — se mide `x-vercel-cache` en la Fase 0.
+`cacheComponents: true`, `cacheLife('minutes')` e invalidación granular con `affectedTags`. **Aceptada.** `Validación: pendiente` — se mide `x-vercel-cache` en la Fase 0.
 
 ### D-016: `scheduled` derivado
 
@@ -273,9 +273,9 @@ No es un estado: es `published_at` futuro con `status = 'published'`. **Aceptada
 
 Sin Upstash. Una tabla, backoff por IP. **Aceptada.**
 
-### D-019: CSP con hashes en público, nonces en admin
+### D-019: CSP con nonces en admin
 
-**Aceptada.** `Validación: pendiente` — en la Fase 0 hay que comprobar si los scripts inline de Next.js (bootstrap, JSON-LD por página) admiten hashes estáticos o si requieren SRI experimental. Si no es viable, se pasa a nonces en lo público con el costo de CU-horas que conlleva.
+**Aceptada.** Lo público usa `script-src 'self' 'unsafe-inline'` porque el HTML lo genera la aplicación y se sanitiza; `/admin` usa nonce por solicitud y `strict-dynamic`. **Validación: pendiente** — comprobar en Fase 0 si los scripts inline de Next.js admiten hashes estáticos o SRI experimental; si es viable, migrar lo público sin costo de renderizado dinámico.
 
 ### D-020: Costo real declarado
 
@@ -287,7 +287,7 @@ Artículo y revisión en una transacción; invalidación de caché después del 
 
 ### D-022: Revalidación programada fuera de Vercel
 
-GitHub Actions cada 30 minutos contra un endpoint idempotente. Cron Jobs de Vercel (Hobby) no baja de una ejecución diaria; Schedules sigue en beta. **Aceptada.**
+GitHub Actions cada 30 minutos contra un endpoint idempotente. Implementado en `.github/workflows/scheduled-jobs.yml`, que también programa la limpieza y la reconciliación. Cron Jobs de Vercel (Hobby) no baja de una ejecución diaria; Schedules sigue en beta. **Aceptada.**
 
 ### D-023: Los 404 se deciden en el proxy
 
@@ -297,9 +297,15 @@ Con Cache Components, `notFound()` se ejecuta después de que el shell de la res
 - Artículos: conjunto de slugs visibles cacheado 15 s en memoria por instancia y una consulta indexada de confirmación para los slugs desconocidos, con caché negativo de 10 s y un presupuesto de 20 confirmaciones por minuto.
 - El pool del proxy es propio y tiene `max: 1`, para no multiplicar las conexiones de Neon.
 - Ante cualquier error de base de datos el control falla abierto: la página decide y responde 200.
+- Si el presupuesto de confirmaciones se agota, el control también falla abierto; nunca responde 404 por presupuesto.
+- Los slugs anteriores se resuelven contra `redirects` antes del 404: se conserva el código almacenado (301/302/307/308), se valida que el destino sea una ruta interna absoluta y se cachea el resultado 15 s por instancia.
 - El panel responde 307 a `/admin/login` cuando no hay cookie de sesión.
 
 **Aceptada.** Costo: una consulta por instancia y por minuto como máximo, más un hit de caché en memoria por solicitud.
+
+### D-024: SEO de lanzamiento
+
+El sitemap incluye `lastModified` desde `articles.updated_at` y el detalle de artículo emite JSON-LD `Article` serializado con `safeJsonLd`. RSS queda fuera del alcance de lanzamiento: no hay ruta `rss.xml` y la documentación no debe prometerla. **Aceptada.** Revisar la decisión si se agregan suscriptores o sindicación externa.
 
 ### Decisiones diferidas
 

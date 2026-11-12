@@ -10,7 +10,7 @@
 - [ ] `npm run typecheck` pasa sin errores
 - [ ] `npm run lint` pasa sin errores (0 errores, warnings aceptables)
 - [ ] `npm run test` pasa (24/24 tests)
-- [ ] `drizzle-kit push` ejecutado contra la base de producción de Neon
+- [ ] `npm run db:migrate` ejecutado contra la base de producción de Neon
 
 ### 2. Variables de entorno
 
@@ -32,7 +32,7 @@ Variables opcionales: `VERCEL_OIDC_TOKEN`, `BLOB_STORE_ID`, `EDGE_CONFIG_ID`, `I
 ### 3. Base de datos Neon
 
 - [ ] Proyecto creado en región `sa-east-1`
-- [ ] Base de datos `neondb` con tablas migradas (`drizzle-kit push`)
+- [ ] Base de datos `neondb` con tablas migradas (`npm run db:migrate`)
 - [ ] `DATABASE_URL_UNPOOLED` disponible para backups y migraciones
 - [ ] Límite de conexiones monitoreado (máximo 3 por instancia)
 
@@ -45,8 +45,10 @@ Variables opcionales: `VERCEL_OIDC_TOKEN`, `BLOB_STORE_ID`, `EDGE_CONFIG_ID`, `I
 ### 5. Cron
 
 - [ ] Endpoint `/api/cron/cleanup` probado localmente
-- [ ] Programar ejecución cada 30 min en Vercel (Settings → Cron Jobs)
-- [ ] `CRON_SECRET` configurado en Vercel y en el header de autorización
+- [ ] Workflow `.github/workflows/scheduled-jobs.yml` activo en `main`
+- [ ] Secretos de repositorio `NETTI_SITE_URL` y `CRON_SECRET` configurados en GitHub
+- [ ] `CRON_SECRET` coincide con el configurado en Vercel
+- [ ] Primera ejecución manual (`workflow_dispatch`) de los tres jobs verificada en `cron_runs`
 
 ## Crear el proyecto
 
@@ -94,9 +96,11 @@ No ejecutar `db:migrate` automáticamente desde el build de Vercel. No aplicar e
 
 La publicación programada y la ejecución del endpoint de limpieza no deben darse por operativas hasta que exista un mecanismo programador configurado y probado.
 
-## Cron futuro
+## Scheduler
 
-Cuando se decida habilitar un scheduler, revisar primero el plan vigente de Vercel y sus límites para la frecuencia requerida. El endpoint existente es `/api/cron/cleanup` y exige `Authorization: Bearer <CRON_SECRET>`. No se crea una programación en este bloque. Definir frecuencia, zona horaria, reintentos y alertas antes de activarlo.
+El scheduler vive en `.github/workflows/scheduled-jobs.yml` y no en Vercel Cron, porque el plan Hobby limita los cron jobs a una ejecución diaria. El workflow llama a `/api/revalidate` (cada 30 min), `/api/cron/cleanup` (04:17 UTC) y `/api/reconcile-storage` (04:47 UTC) con `Authorization: Bearer <CRON_SECRET>`. Los secretos `NETTI_SITE_URL` y `CRON_SECRET` se configuran en Settings → Secrets and variables → Actions. No configures un segundo scheduler para los mismos jobs.
+
+Antes de darlo por operativo, ejecutá el workflow con `workflow_dispatch` y comprobá `cron_runs.last_run_at` y `last_success_at` para los tres jobs.
 
 ## Rollback
 

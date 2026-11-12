@@ -1,0 +1,82 @@
+name: Scheduled jobs
+
+# Single scheduler for the three operational endpoints.
+#
+# GitHub Actions is the default scheduler documented in
+# docs/01-stack-arquitectura.md (D-016) because Vercel Cron on Hobby runs at
+# most once a day. Do not enable a second scheduler for the same job.
+#
+# Required repository secrets:
+#   NETTI_SITE_URL  Public origin of the deployment, without a trailing slash.
+#   CRON_SECRET     Same value configured in the Vercel project.
+
+on:
+  schedule:
+    - cron: '*/30 * * * *' # revalidate scheduled publications
+    - cron: '17 4 * * *' # purge sessions and login attempts
+    - cron: '47 4 * * *' # reconcile storage and retry orphans
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scheduled-jobs
+  cancel-in-progress: false
+
+jobs:
+  revalidate:
+    name: Revalidate scheduled publications
+    if: github.event.schedule == '*/30 * * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Call POST /api/revalidate
+        env:
+          NETTI_SITE_URL: ${{ secrets.NETTI_SITE_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          : "${NETTI_SITE_URL:?NETTI_SITE_URL repository secret is required}"
+          : "${CRON_SECRET:?CRON_SECRET repository secret is required}"
+          curl --fail-with-body --silent --show-error --max-time 60 \
+            -X POST \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "$NETTI_SITE_URL/api/revalidate"
+
+  cleanup:
+    name: Purge sessions and login attempts
+    if: github.event.schedule == '17 4 * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Call GET /api/cron/cleanup
+        env:
+          NETTI_SITE_URL: ${{ secrets.NETTI_SITE_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          : "${NETTI_SITE_URL:?NETTI_SITE_URL repository secret is required}"
+          : "${CRON_SECRET:?CRON_SECRET repository secret is required}"
+          curl --fail-with-body --silent --show-error --max-time 60 \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "$NETTI_SITE_URL/api/cron/cleanup"
+
+  reconcile:
+    name: Reconcile storage
+    if: github.event.schedule == '47 4 * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Call POST /api/reconcile-storage
+        env:
+          NETTI_SITE_URL: ${{ secrets.NETTI_SITE_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          : "${NETTI_SITE_URL:?NETTI_SITE_URL repository secret is required}"
+          : "${CRON_SECRET:?CRON_SECRET repository secret is required}"
+          curl --fail-with-body --silent --show-error --max-time 120 \
+            -X POST \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "$NETTI_SITE_URL/api/reconcile-storage"

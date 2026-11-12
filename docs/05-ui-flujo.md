@@ -32,7 +32,7 @@ Quicksand auto-hospedada (`public/fonts/`), pesos 300–700. Cuerpo de artículo
 - Header: "Netti." + Reseñas, Noticias, Guías, Juegos, Buscar.
 - Inicio: destacado, últimos por colección, estadísticas cacheadas, "Juego al azar" (cacheado, nunca consulta la base por visita). **Nota:** no puede usar `cacheLife('max')` indefinidamente o siempre devolvería el mismo juego; usar invalidación periódica o elegirlo en el cliente.
 - Detalle: título, meta, cuerpo, etiquetas, puntuación, relacionados.
-- 404 real; si el slug no existe, se consulta el índice de `redirects` cacheado y se responde 308 si existe redirección; si no, 404.
+- 404 real; si el slug no existe, se consulta `redirects` por la ruta anterior y se responde con el código almacenado (`301`, `302`, `307` o `308`) si existe una redirección interna válida; si no, 404.
 
 ## 4. Panel (pantalla completa)
 
@@ -154,21 +154,24 @@ Borra la sesión en el servidor y la cookie. "Cerrar todas las sesiones" invalid
 
 Estado real del código. La sección 1 describe la paleta objetivo del diseño; el repositorio actual usa los tokens `--background`, `--surface`, `--foreground`, `--muted`, `--line`, `--accent` y `--accent-strong` de `src/app/globals.css`, con la tipografía Geist.
 
-| Criterio                        | Implementación                                                                          | Archivo                                 |
-| ------------------------------- | --------------------------------------------------------------------------------------- | --------------------------------------- |
-| 2.4.1 Evitar bloques            | Skip link "Ir al contenido principal" como primer elemento enfocable                    | `src/components/site-chrome.tsx`        |
-| 1.3.1 Información y relaciones  | `<main id="contenido">`, `<header>` y `<footer>` fuera del `main`, landmarks por página | páginas públicas y panel                |
-| 1.4.3 Contraste                 | Texto muted 7.9:1, accent 8.5:1, etiquetas del hero 7.9:1 sobre el fondo                | `src/app/globals.css`                   |
-| 1.4.11 Contraste no textual     | Bordes de inputs y botones con `rgba(218, 202, 245, 0.4)` o más (3:1 o superior)        | `src/app/globals.css`                   |
-| 2.4.7 Foco visible              | Anillo de 2 px en todos los elementos con `:focus-visible`                              | `src/app/globals.css`                   |
-| 2.4.11 Foco no tapado           | `scroll-margin-block` para el encabezado fijo                                           | `src/app/globals.css`                   |
-| 2.5.8 Tamaño del objetivo       | Botones de 40 px, checkbox de 18 px dentro de una fila de 24 px                         | `src/app/globals.css`                   |
-| 3.3.1 Identificación de errores | `aria-invalid` y `aria-describedby` con ids estables por campo                          | `src/components/admin-article-form.tsx` |
-| 4.1.3 Mensajes                  | `role="alert"` para errores y `role="status"` para confirmaciones                       | formulario editorial y login            |
-| 3.1.1 Idioma                    | `<html lang="es">` en todas las páginas                                                 | `src/app/layout.tsx`                    |
-| 2.4.5 / 2.4.6 Títulos           | Un solo `h1` por página y jerarquía de encabezados coherente                            | páginas públicas                        |
-| Tablas                          | `<caption>` visualmente oculto y `scope="col"`                                          | panel editorial                         |
-| Enlaces externos                | Aviso para lectores de pantalla "(se abre en una nueva ventana)"                        | `src/components/markdown-content.tsx`   |
-| 2.3.3 Animaciones               | `prefers-reduced-motion` respetado                                                      | `src/app/globals.css`                   |
+| Criterio                        | Implementación                                                                                                          | Archivo                                 |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| 2.4.1 Evitar bloques            | Skip link "Ir al contenido principal" como primer elemento enfocable                                                    | `src/components/site-chrome.tsx`        |
+| 1.3.1 Información y relaciones  | `<main id="contenido">`, `<header>` y `<footer>` fuera del `main`, landmarks por página                                 | páginas públicas y panel                |
+| 1.4.3 Contraste                 | Texto muted 7.9:1, accent 8.5:1, etiquetas del hero 7.9:1 sobre el fondo                                                | `src/app/globals.css`                   |
+| 1.4.11 Contraste no textual     | Bordes de inputs y botones con `rgba(218, 202, 245, 0.4)` o más (3:1 o superior)                                        | `src/app/globals.css`                   |
+| 2.4.7 Foco visible              | Anillo de 2 px en todos los elementos con `:focus-visible`                                                              | `src/app/globals.css`                   |
+| 2.4.11 Foco no tapado           | `scroll-margin-block` para el encabezado fijo                                                                           | `src/app/globals.css`                   |
+| 2.5.8 Tamaño del objetivo       | Botones de 40 px, checkbox de 18 px dentro de una fila de 24 px; enlaces de navegación con `min-height: 24px` y padding | `src/app/globals.css`                   |
+| 3.2.3 Navegación coherente      | `aria-current="page"` en la sección activa del encabezado                                                               | `src/components/site-chrome.tsx`        |
+| 3.3.1 Identificación de errores | `aria-invalid` y `aria-describedby` con ids estables por campo; el foco va al primer control inválido                   | `src/components/admin-article-form.tsx` |
+| 4.1.3 Mensajes                  | `role="alert"` para errores y `role="status"` para confirmaciones                                                       | formulario editorial y login            |
+| 1.4.4 / 3.3.2 Entrada de datos  | `autocomplete="current-password"` en el login; campos editoriales con etiqueta y `maxLength`                            | login y formulario editorial            |
+| 1.4.3 / 1.4.11 Contraste        | `prefers-contrast: more` refuerza líneas y color muted                                                                  | `src/app/globals.css`                   |
+| 3.1.1 Idioma                    | `<html lang="es">` en todas las páginas                                                                                 | `src/app/layout.tsx`                    |
+| 2.4.5 / 2.4.6 Títulos           | Un solo `h1` por página y jerarquía de encabezados coherente                                                            | páginas públicas                        |
+| Tablas                          | `<caption>` visualmente oculto y `scope="col"`                                                                          | panel editorial                         |
+| Enlaces externos                | Aviso para lectores de pantalla "(se abre en una nueva ventana)"                                                        | `src/components/markdown-content.tsx`   |
+| 2.3.3 Animaciones               | `prefers-reduced-motion` respetado                                                                                      | `src/app/globals.css`                   |
 
 Verificación automática en `npm run test:http`: idioma, `title`, viewport, canonical, skip link antes de la navegación, un único `h1`, imágenes con `alt`, `robots.txt` y `sitemap.xml`. La revisión manual con lector de pantalla y navegación por teclado queda pendiente de un entorno con navegador.

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { createArticle, publishArticle, updateArticle } from '@/app/actions/content';
@@ -125,6 +125,35 @@ export function AdminArticleForm({
   const [message, setMessage] = useState('');
   const [messageTone, setMessageTone] = useState<'error' | 'success'>('success');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
+  const [bodyImageId, setBodyImageId] = useState<number | null>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
+  const focusErrorsRef = useRef(false);
+
+  // Move focus to the first invalid control after a failed save (WCAG 3.3.1).
+  // The flag avoids stealing focus every time the user clears one field error.
+  useEffect(() => {
+    if (!focusErrorsRef.current) return;
+    focusErrorsRef.current = false;
+    formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
+  }, [fieldErrors]);
+
+  function insertBodyImage() {
+    const item = mediaItems.find((candidate) => candidate.id === bodyImageId);
+    if (!item) return;
+    const alt = item.alt?.trim() || `Imagen ${item.id}`;
+    const snippet = `\n\n![${alt}](media:${item.id})\n\n`;
+    const textarea = bodyRef.current;
+    const start = textarea?.selectionStart ?? values.body.length;
+    const end = textarea?.selectionEnd ?? start;
+    change('body', values.body.slice(0, start) + snippet + values.body.slice(end));
+    requestAnimationFrame(() => {
+      if (!textarea) return;
+      textarea.focus();
+      const cursor = start + snippet.length;
+      textarea.setSelectionRange(cursor, cursor);
+    });
+  }
 
   function change<K extends keyof EditorValues>(key: K, value: EditorValues[K]) {
     setValues((current) => ({ ...current, [key]: value }));
@@ -168,6 +197,7 @@ export function AdminArticleForm({
       if (!result.ok) {
         setMessageTone('error');
         setMessage(result.message);
+        focusErrorsRef.current = true;
         setFieldErrors(result.fieldErrors ?? {});
         return null;
       }
@@ -178,6 +208,7 @@ export function AdminArticleForm({
     if (!result.ok) {
       setMessageTone('error');
       setMessage(result.message);
+      focusErrorsRef.current = true;
       setFieldErrors(result.fieldErrors ?? {});
       return null;
     }
@@ -212,6 +243,7 @@ export function AdminArticleForm({
       if (!result.ok) {
         setMessageTone('error');
         setMessage(result.message);
+        focusErrorsRef.current = true;
         setFieldErrors(result.fieldErrors ?? {});
         return;
       }
@@ -282,6 +314,7 @@ export function AdminArticleForm({
 
   return (
     <form
+      ref={formRef}
       className="admin-editor"
       onSubmit={(event) => {
         event.preventDefault();
@@ -358,6 +391,7 @@ export function AdminArticleForm({
           </label>
           <textarea
             id="body"
+            ref={bodyRef}
             className={inputClass + ' admin-body-input'}
             rows={18}
             value={values.body}
@@ -365,6 +399,31 @@ export function AdminArticleForm({
             {...errorProps('body', fieldErrors.body)}
           />
           <FieldErrors field="body" errors={fieldErrors.body} />
+
+          <label className="admin-label" htmlFor="body-image">
+            Insertar imagen en el contenido
+          </label>
+          <select
+            id="body-image"
+            className={inputClass}
+            value={bodyImageId ?? ''}
+            onChange={(e) => setBodyImageId(e.target.value ? Number(e.target.value) : null)}
+          >
+            <option value="">Elegir imagen</option>
+            {mediaItems.map((item) => (
+              <option value={item.id} key={item.id}>
+                #{item.id} · {item.alt || `${item.width}×${item.height}`}
+              </option>
+            ))}
+          </select>
+          <button
+            className="admin-button admin-button-secondary"
+            type="button"
+            onClick={insertBodyImage}
+            disabled={bodyImageId === null}
+          >
+            Insertar referencia
+          </button>
 
           <label className="admin-label" htmlFor="author">
             Autor

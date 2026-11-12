@@ -2,6 +2,7 @@ import { loadEnvConfig } from '@next/env';
 import { spawn, spawnSync } from 'node:child_process';
 import { stat } from 'node:fs/promises';
 import { isAbsolute, resolve } from 'node:path';
+import { Client } from 'pg';
 
 type DatabaseConnection = {
   host: string;
@@ -83,6 +84,41 @@ function assertPostgres18Client(): void {
   }
 }
 
+/**
+ * Writes the marker that blocks storage reconciliation after a restore.
+ *
+ * `reconcile-storage` refuses to delete anything during the seven days that
+ * follow a restore, because the restored database can reference Blob objects
+ * that were created or removed after the dump was taken. The marker is part of
+ * the restore procedure: if it cannot be written, the restore is not considered
+ * protected and the script fails.
+ */
+async function recordRestoreMarker(connection: DatabaseConnection): Promise<void> {
+  const client = new Client({
+    host: connection.host,
+    port: Number(connection.port),
+    user: connection.username,
+    database: connection.database,
+    ...(connection.password ? { password: connection.password } : {}),
+    ssl:
+      connection.sslmode && connection.sslmode !== 'disable'
+        ? { rejectUnauthorized: connection.sslmode.includes('verify') }
+        : undefined,
+  });
+
+  await client.connect();
+  try {
+    await client.query(
+      `insert into cron_runs (job_name, last_run_at, backup_restored_at)
+       values ('backup_restore', now(), now())
+       on conflict (job_name) do update
+       set last_run_at = now(), backup_restored_at = now()`
+    );
+  } finally {
+    await client.end();
+  }
+}
+
 function run(
   command: string,
   args: string[],
@@ -161,7 +197,9 @@ async function main(): Promise<void> {
 
   try {
     await run('pg_restore', args, childEnv);
+    await recordRestoreMarker(connection);
     console.log(`Restauración completada en la base local de prueba "${connection.database}".`);
+    console.log('Marca backup_restored_at registrada: la reconciliación queda bloqueada 7 días.');
   } finally {
     delete childEnv.PGPASSWORD;
   }

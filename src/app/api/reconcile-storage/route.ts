@@ -111,6 +111,7 @@ export async function POST(request: Request) {
       .limit(ORPHAN_BATCH_SIZE);
 
     let repairedOrphans = 0;
+    let failedOrphanDeletes = 0;
     if (pending.length > 0) {
       const keys = pending.map((item) => item.storageKey);
       const [mediaRows, variantRows] = await Promise.all([
@@ -147,6 +148,7 @@ export async function POST(request: Request) {
           repairedOrphans += plan.deleteIds.length;
         } catch {
           // Leave the rows pending so the next run retries the deletion.
+          failedOrphanDeletes = plan.deleteIds.length;
         }
       }
     }
@@ -190,19 +192,30 @@ export async function POST(request: Request) {
       }
     }
 
+    // `last_success_at` only advances when every mandatory stage finished
+    // without failures. A failed Blob deletion keeps the previous success
+    // timestamp so monitoring can tell a degraded run from a healthy one.
+    const failedOperations = failedMedia + failedOrphanDeletes;
+    const successful = failedOperations === 0;
+
     await db
       .insert(cronRuns)
-      .values({ jobName: JOB_NAME, lastRunAt: now, lastSuccessAt: now })
+      .values({
+        jobName: JOB_NAME,
+        lastRunAt: now,
+        ...(successful ? { lastSuccessAt: now } : {}),
+      })
       .onConflictDoUpdate({
         target: cronRuns.jobName,
-        set: { lastRunAt: now, lastSuccessAt: now },
+        set: successful ? { lastRunAt: now, lastSuccessAt: now } : { lastRunAt: now },
       });
 
-    return response(200, {
-      ok: true,
+    return response(successful ? 200 : 500, {
+      ok: successful,
       removedLoginAttempts: removedAttempts.length,
       removedExpiredSessions: removedSessions.length,
       repairedStorageOrphans: repairedOrphans,
+      failedStorageOrphans: failedOrphanDeletes,
       markedMediaScanned: markedMedia.length,
       clearedMarks,
       deletedMedia,

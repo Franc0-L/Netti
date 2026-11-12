@@ -19,7 +19,7 @@ Define el esquema PostgreSQL (Neon), las restricciones que viven en la base, las
 
 ### Por qué una sola tabla `articles`
 
-Cuatro tablas separadas obligan a repetir en cada una: el predicado de visibilidad, el índice de búsqueda, la papelera, el sitemap, el RSS y la validación de slug. Basta olvidar `published_at <= now()` en una consulta para filtrar borradores.
+Cuatro tablas separadas obligan a repetir en cada una: el predicado de visibilidad, el índice de búsqueda, la papelera, el sitemap y la validación de slug. Basta olvidar `published_at <= now()` en una consulta para filtrar borradores.
 
 Con `articles(kind)` hay **un** lugar donde se define qué es visible, **un** índice full-text y **un** namespace de slugs por `kind` (`/resenas/x` y `/guias/x` pueden coexistir). La integridad referencial se conserva con `game_id` nullable y un `CHECK` que lo exige solo cuando `kind = 'review'`.
 
@@ -154,7 +154,7 @@ create table games (
   body             text not null default '',
   developer        text,
   publisher        text,
-  release_date     date,
+  release_date     timestamptz,
   platforms        text[] not null default '{}',
   genres           text[] not null default '{}',
   external_source  text check (external_source in ('rawg', 'igdb', 'manual')),
@@ -192,7 +192,7 @@ create trigger games_set_updated_at
   execute function set_updated_at();
 ```
 
-`release_date` es `date` completa, no solo año: las noticias suelen anunciar lanzamientos futuros y el año solo no alcanza.
+`release_date` es una fecha completa, no solo el año: las noticias suelen anunciar lanzamientos futuros y el año solo no alcanza. El esquema runtime la define como `timestamptz`; la UI muestra solo la fecha.
 
 `games` no tiene `previous_status` ni `trashed_at` en la v1: se borra físicamente (ya protegido por `ON DELETE RESTRICT` si tiene reseñas publicadas).
 
@@ -433,7 +433,7 @@ create table article_revisions (
   id          bigint generated always as identity primary key,
   article_id  integer not null references articles (id) on delete cascade,
   version     integer not null,
-  snapshot    jsonb not null,
+  snapshot    text not null,
   created_at  timestamptz not null default now(),
   unique (article_id, version)
 );
@@ -462,7 +462,7 @@ create index sessions_expires_idx on sessions (expires_at);
 
 `absolute_expires_at` (30 días) impide que la renovación deslizante mantenga una sesión viva para siempre. `last_used_at` se actualiza como máximo una vez cada 5 minutos, no en cada request.
 
-**Purga de sesiones:** un job de baja frecuencia (dueño: `reconcileStorage` o el backup nocturno) borra filas con `expires_at < now()` o `absolute_expires_at < now()`. La purga corre semanalmente junto con la purga de `login_attempts`.
+**Purga de sesiones:** `/api/cron/cleanup` borra a diario (04:17 UTC) las filas con `expires_at < now()` o `absolute_expires_at < now()`. `/api/reconcile-storage` repite la purga como red de seguridad. No hay job semanal separado.
 
 ### 2.7 `login_attempts`
 
@@ -478,7 +478,7 @@ create index login_attempts_ip_idx
   on login_attempts (ip_hash, attempted_at desc);
 ```
 
-Se consulta antes de verificar la contraseña. Purga semanal de filas con más de 7 días (dueño: mismo job que purga `sessions`).
+Se consulta antes de verificar la contraseña. Purga diaria de filas con más de 7 días (dueño: `/api/cron/cleanup`, con repetición en `/api/reconcile-storage`).
 
 ### 2.8 `redirects`
 
@@ -487,7 +487,7 @@ create table redirects (
   id           integer generated always as identity primary key,
   from_path    text not null unique,
   to_path      text not null,
-  status_code  smallint not null default 301 check (status_code in (301, 302, 308)),
+  status_code  integer not null default 308 check (status_code in (301, 302, 307, 308)),
   created_at   timestamptz not null default now(),
   constraint redirects_absolute_paths
     check (from_path ~ '^/[^/][^ ]*$' and to_path ~ '^/[^/][^ ]*$'),
@@ -500,7 +500,7 @@ create trigger redirects_validate
   for each row execute function validate_redirect();
 ```
 
-Se consulta **solo cuando el artículo no existe**, con el mapa cacheado bajo el tag `redirects`. No se consulta en cada request ni en el proxy.
+Se consulta en el proxy **solo cuando el artículo no existe**, con caché en memoria por instancia de 15 s (positiva y negativa). El cambio de slug invalida el tag `redirects`; el proxy refresca su propia caché como máximo en 15 s. No genera una consulta por request: el conjunto de slugs visibles se consulta primero y los destinos se validan con `isSafeRedirectTarget`.
 
 ### 2.9 `storage_orphans`
 
@@ -508,18 +508,18 @@ Se consulta **solo cuando el artículo no existe**, con el mapa cacheado bajo el
 create table storage_orphans (
   id          bigint generated always as identity primary key,
   storage_key text not null,
-  action      text not null check (action in ('put', 'del')),
-  status      text not null default 'pending' check (status in ('pending', 'repaired', 'orphaned')),
+  action      text not null check (action in ('put', 'delete')),
+  status      text not null default 'pending' check (status in ('pending', 'repaired', 'failed')),
   created_at  timestamptz not null default now(),
   repaired_at timestamptz
 );
 
 create index storage_orphans_pending_idx
-  on storage_orphans (status)
+  on storage_orphans (created_at)
   where status = 'pending';
 ```
 
-Registro de compensación para subidas/borrados fallidos entre Blob y Postgres. Si falla el `INSERT` en `media` tras subir objetos, o falla un `del` de Blob, se anota aquí para que un job de baja frecuencia repare o reporte el desajuste.
+Registro de compensación para subidas/borrados fallidos entre Blob y Postgres. Si falla el `INSERT` en `media` tras subir objetos, o falla un borrado en Blob, se anota aquí para que un job de baja frecuencia repare o reporte el desajuste.
 
 ### 2.10 `cron_runs`
 
@@ -532,15 +532,9 @@ create table cron_runs (
   last_id            integer,
   backup_restored_at timestamptz
 );
-
-insert into cron_runs (job_name) values ('revalidate_scheduled') on conflict do nothing;
-insert into cron_runs (job_name) values ('reconcile_storage') on conflict do nothing;
-insert into cron_runs (job_name) values ('purge_sessions') on conflict do nothing;
-insert into cron_runs (job_name) values ('purge_login_attempts') on conflict do nothing;
-insert into cron_runs (job_name) values ('backup_restore') on conflict do nothing;
 ```
 
-Cursor de ejecución del job de revalidación programada. Permite recuperar publicaciones pendientes si una ejecución se retrasa o falla.
+`cron_runs` no se siembra en la migración: cada job inserta su fila con `on conflict` en la primera ejecución. Los nombres en uso son `revalidate_scheduled` (`/api/revalidate`), `cleanup` (`/api/cron/cleanup`), `reconcile_storage` (`/api/reconcile-storage`) y `backup_restore` (marca dejada por `scripts/restore-db.ts`).
 
 ## 3. Validación Zod
 

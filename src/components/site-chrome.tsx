@@ -20,7 +20,7 @@ export function SkipLink({ target = 'contenido' }: { target?: string }) {
   );
 }
 
-export function SiteHeader() {
+export function SiteHeader({ currentPath }: { currentPath?: string }) {
   return (
     <header className="site-header">
       <Link className="wordmark" href="/" aria-label="Netti, inicio">
@@ -28,7 +28,11 @@ export function SiteHeader() {
       </Link>
       <nav aria-label="Navegación principal" className="site-nav">
         {NAV_ITEMS.map((item) => (
-          <Link href={item.href} key={item.href}>
+          <Link
+            href={item.href}
+            key={item.href}
+            aria-current={currentPath === item.href ? 'page' : undefined}
+          >
             {item.label}
           </Link>
         ))}

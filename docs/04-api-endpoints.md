@@ -548,7 +548,7 @@ La clave del objeto es `articles/<uuid>.webp` o `games/<uuid>.webp`: nunca el no
 
 ### 5.2 `POST /api/revalidate`
 
-Lo llama la GitHub Action cada 30 minutos. No lo usa el panel.
+Lo llama `.github/workflows/scheduled-jobs.yml` cada 30 minutos. No lo usa el panel.
 
 ```http
 POST /api/revalidate
@@ -606,7 +606,7 @@ POST /api/reconcile-storage
 Authorization: Bearer $CRON_SECRET
 ```
 
-Se bloquea con `409` si hubo una restauración de backup en los últimos 7 días (`cron_runs.backup_restored_at`). No lo llama el panel ni el público. Es idempotente y acotado en tiempo: si tarda más del presupuesto de la ejecución, se detiene y deja lo pendiente para la próxima corrida.
+Se bloquea con `409` si hubo una restauración de backup en los últimos 7 días (`cron_runs.backup_restored_at`). No lo llama el panel ni el público. Es idempotente y acotado en tiempo: si tarda más del presupuesto de la ejecución, se detiene y deja lo pendiente para la próxima corrida. `last_success_at` solo avanza cuando no hubo fallos de Blob ni borrados pendientes; en caso contrario responde `500` y conserva el éxito anterior, mientras `last_run_at` sí se actualiza.
 
 ## 6. Cabeceras
 
@@ -636,11 +636,14 @@ En `/admin/*` la CSP usa un nonce por solicitud con `'strict-dynamic'`; esas rut
 | Ruta que no coincide con ninguna ruta de la app | `404` de Next.js                          |
 | Colección inexistente (`/no-existe`)            | `404` desde el proxy                      |
 | Slug inexistente o no publicado                 | `404` desde el proxy                      |
+| Slug anterior con redirección registrada        | `301/302/307/308` desde el proxy          |
 | `/admin/*` sin cookie de sesión                 | `307` hacia `/admin/login`                |
 | `/admin/*` con cookie inválida                  | Redirección entregada en el payload (200) |
 
 Motivo: con Cache Components la respuesta empieza a transmitirse antes de que la página resuelva, así que `notFound()` ya no puede cambiar el estado. La decisión se toma en `src/proxy.ts` (ver D-023 en `01-stack-arquitectura.md`).
 
+El proxy resuelve los slugs anteriores contra `redirects` **antes** de responder 404. Conserva el código almacenado (`301`, `302`, `307` o `308`), rechaza destinos que no sean rutas internas absolutas (`isSafeRedirectTarget`) y cachea el resultado 15 s por instancia. Si el presupuesto de confirmaciones por minuto se agota, falla abierto: deja renderizar y la página bloqueante decide su propio 404, de modo que un presupuesto agotado nunca produce un 404 falso.
+
 El 404 del proxy es un documento HTML propio, en español, con el mismo mensaje y la misma paleta que `src/app/not-found.tsx`, e incluye `Cache-Control: no-store`, la CSP pública y `X-Robots-Tag` implícito mediante `<meta name="robots" content="noindex">`.
 
-Verificación: `npm run test:http` comprueba que una ruta inexistente y un slug inexistente devuelven `404` y que `/admin` sin sesión devuelve una redirección.
+Verificación: `npm run test:http` comprueba que una ruta inexistente y un slug inexistente devuelven `404` y que `/admin` sin sesión devuelve una redirección. La unidad `src/lib/public-content-guard.test.ts` cubre la validación de destinos y estados de redirección; la comprobación de redirecciones reales contra la base queda pendiente del entorno con datos.

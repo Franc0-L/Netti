@@ -2,7 +2,7 @@
 
 ## Alcance y límites
 
-Estos scripts operan sobre PostgreSQL mediante las herramientas oficiales de línea de comandos. El backup usa exclusivamente `DATABASE_URL_UNPOOLED`. Los scripts cargan las variables locales desde `.env.local` mediante el cargador de entorno de Next.js. La restauración exige una variable independiente, `NETTI_RESTORE_DATABASE_URL`, y bloquea destinos remotos o bases cuyo nombre no termine en `_test`, `-test`, `_testing` o `-testing`.
+Estos scripts operan sobre PostgreSQL mediante las herramientas oficiales de línea de comandos. El backup usa exclusivamente `DATABASE_URL_UNPOOLED`. Los scripts cargan las variables locales desde `.env.local` mediante el cargador de entorno de Next.js. La restauración exige una variable independiente, `NETTI_RESTORE_DATABASE_URL`, y bloquea destinos que no sean loopback o cuya base no termine en `_test`, `-test`, `_testing` o `-testing`.
 
 La restauración automatizada está limitada deliberadamente a una base PostgreSQL local de pruebas. No existe un modo para restaurar sobre Neon ni producción. El dump no contiene objetos de Vercel Blob.
 
@@ -56,7 +56,15 @@ Remove-Item Env:NETTI_RESTORE_DATABASE_URL
 
 El script ejecuta primero `pg_restore --list`. Solo después valida el destino y restaura con `--clean --if-exists --exit-on-error --single-transaction`. El destino debe estar en loopback y tener sufijo de test; si no cumple ambas condiciones, la restauración se cancela. El usuario PostgreSQL debe tener permisos para crear/modificar los objetos del esquema.
 
-La restauración elimina/recrea objetos existentes dentro de la base destino. No apuntes a `netti_test` si querés conservar sus datos; usala únicamente si aceptás que sea sobrescrita. Al terminar, verificá manualmente las tablas y los datos esperados. Para una prueba completa, arrancá la aplicación contra la base restaurada y comprobá consultas de lectura y acceso al panel.
+Después de una restauración exitosa, el script conecta a la base restaurada y registra `cron_runs.backup_restored_at = now()` con `job_name = 'backup_restore'`. Esa marca bloquea `/api/reconcile-storage` durante siete días. Si la marca no se puede escribir, el script termina con error: la restauración no se considera protegida y no debe habilitarse la reconciliación.
+
+La restauración elimina/recrea objetos existentes dentro de la base destino. No apuntes a `netti_test` si querés conservar sus datos; usala únicamente si aceptás que sea sobrescrita. Al terminar, verificá manualmente las tablas y los datos esperados. Comprobá también la marca:
+
+```sql
+select job_name, backup_restored_at from cron_runs where job_name = 'backup_restore';
+```
+
+Con una marca reciente, `/api/reconcile-storage` debe responder `409`. Para una prueba completa, arrancá la aplicación contra la base restaurada y comprobá consultas de lectura y acceso al panel.
 
 ## Cifrado y custodia
 
@@ -75,7 +83,7 @@ Conservá la clave privada fuera del repositorio y en un gestor seguro. Probá p
 - Una restauración de prueba mensual, en una base local desechable.
 - Retención orientativa: 30 copias diarias y 12 mensuales, ajustada al espacio y a la política real de almacenamiento.
 
-La carpeta local `backups/` no es un destino de recuperación ante pérdida o robo del equipo. Copiá los backups cifrados a un destino independiente con acceso restringido. No se configura en este PR ningún workflow programado ni almacenamiento remoto automático.
+La carpeta local `backups/` no es un destino de recuperación ante pérdida o robo del equipo. Copiá los backups cifrados a un destino independiente con acceso restringido. El backup no se programa todavía; `.github/workflows/scheduled-jobs.yml` cubre revalidación, limpieza y reconciliación, no el dump.
 
 ## Qué cubre y qué no cubre
 
@@ -111,5 +119,7 @@ Resultado verificado:
 | Triggers restaurados                  | 4                                      |
 | Artículos, juegos, medios y variantes | Restaurados con datos e integridad     |
 | Sesiones e intentos de login          | Estructura restaurada, datos excluidos |
+
+La marca `backup_restored_at` se agregó después de ese ensayo. El procedimiento de restauración debe repetirse para comprobar que la marca queda registrada y que la reconciliación responde `409`; hasta entonces, esa parte está implementada pero no validada de punta a punta.
 
 `pg_dump` y `pg_restore` deben ser **18 o posterior** para respaldar un servidor 18; un cliente 17 no puede garantizar el dump de un servidor de versión mayor.

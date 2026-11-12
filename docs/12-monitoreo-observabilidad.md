@@ -30,6 +30,16 @@ Este endpoint exige una sesión administrativa válida. Devuelve contadores agre
 
 Las métricas se consultan en PostgreSQL en cada petición y llevan `Cache-Control: no-store`. No se persisten snapshots ni se añade infraestructura externa de métricas.
 
+## Estado de los jobs programados
+
+`cron_runs` es la fuente para saber si un job corrió y si terminó bien:
+
+- `last_run_at` avanza en cada ejecución, incluso cuando falla.
+- `last_success_at` solo avanza cuando la ejecución terminó sin errores obligatorios. En `reconcile-storage`, un fallo de Blob o un borrado pendiente deja la marca anterior y responde `500`.
+- `backup_restored_at` en `job_name = 'backup_restore'` bloquea la reconciliación durante siete días.
+
+Un `last_run_at` reciente con `last_success_at` viejo indica un job que se ejecuta pero falla de forma persistente.
+
 ## Logging estructurado
 
 La utilidad `src/lib/logger.ts` emite una línea JSON por evento con timestamp ISO, nivel (`info`, `warn`, `error`) y nombre de evento. Está integrada en las Server Actions de autenticación y en los endpoints de readiness y métricas.

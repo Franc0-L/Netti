@@ -153,7 +153,8 @@ El proxy decide los 404 antes de renderizar (ver D-023 en `01-stack-arquitectura
 
 - El conjunto de slugs visibles de cada colección se cachea 15 segundos en memoria.
 - Un slug desconocido se confirma con una consulta indexada y se cachea como ausente durante 10 segundos.
-- Hay un presupuesto de 20 confirmaciones por minuto y por instancia; agotado, el proxy responde 404 sin consultar.
+- Hay un presupuesto de 20 confirmaciones por minuto y por instancia; agotado, el control falla abierto y deja que la página bloqueante decida su propio 404. El presupuesto nunca produce un 404 falso.
+- Los slugs anteriores se resuelven contra `redirects` antes del 404, con caché de 15 s y validación de que el destino sea una ruta interna absoluta (`isSafeRedirectTarget`).
 - Ante un error de base de datos el control falla abierto: la página decide y puede responder 200.
 
 El presupuesto limita el costo del tráfico de rastreadores: como máximo una consulta por minuto y por instancia para la lista completa, más las confirmaciones permitidas. El 404 que devuelve el proxy incluye la CSP pública, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy` y `Cache-Control: no-store`.
@@ -172,6 +173,6 @@ CI (`.github/workflows/quality.yml`) usa Node 24 y `npm ci` (lockfile obligatori
 1. **validate**: tests unitarios, ESLint, Prettier (`--check` sobre todo el repo), typecheck, build de producción y `npm audit --omit=dev --audit-level=high`.
 2. **integration**: PostgreSQL 18 como servicio, `npm run db:migrate`, build, `npm run test:db` (auth, sesiones, rate limiting atómico contra la base real) y `npm run test:http` (CSP, cookies de sesión, origen, cron y límites de subida contra el servidor real).
 
-`npm run test:db` exige una base local o cuyo nombre termine en `_test`/`_testing`, porque borra sesiones e intentos de login mientras ejercita los flujos. `npm run test:http` tiene la misma protección.
+`npm run test:db` exige una base PostgreSQL en loopback (`localhost`, `127.0.0.1` o `::1`), porque inserta y borra fixtures de sesiones e intentos de login mientras ejercita los flujos; un nombre que termine en `_test` no autoriza un host remoto. `npm run test:http` aplica la misma restricción.
 
-Pendiente de integración real (requiere credenciales): subida a Vercel Blob, ejecución del cron programado en Vercel y métricas de Neon en producción.
+Pendiente de integración real (requiere credenciales): subida a Vercel Blob, ejecución del scheduler de GitHub Actions con `NETTI_SITE_URL` y `CRON_SECRET`, y métricas de Neon en producción.

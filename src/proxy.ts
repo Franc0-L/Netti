@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { notFoundHtml } from '@/lib/not-found-response';
-import { isVisibleArticle } from '@/lib/public-content-guard';
+import { isVisibleArticle, resolveRedirect } from '@/lib/public-content-guard';
 import { articleKindFromSegment } from '@/lib/routes';
 
 /*
@@ -101,18 +101,32 @@ function decodeSlug(value: string): string {
   }
 }
 
+function publicHeaders(headers: Headers): void {
+  headers.set('Content-Security-Policy', PUBLIC_CSP);
+  headers.set('X-Content-Type-Options', 'nosniff');
+  headers.set('X-Frame-Options', 'DENY');
+  headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+}
+
 function notFoundResponse(): NextResponse {
-  return new NextResponse(notFoundHtml(), {
-    status: 404,
-    headers: {
-      'Content-Type': 'text/html; charset=utf-8',
-      'Cache-Control': 'no-store, max-age=0',
-      'Content-Security-Policy': PUBLIC_CSP,
-      'X-Content-Type-Options': 'nosniff',
-      'X-Frame-Options': 'DENY',
-      'Referrer-Policy': 'strict-origin-when-cross-origin',
-      'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
-    },
+  const headers = new Headers({
+    'Content-Type': 'text/html; charset=utf-8',
+    'Cache-Control': 'no-store, max-age=0',
+  });
+  publicHeaders(headers);
+  return new NextResponse(notFoundHtml(), { status: 404, headers });
+}
+
+function redirectResponse(
+  request: NextRequest,
+  target: { toPath: string; statusCode: number }
+): NextResponse {
+  const headers = new Headers({ 'Cache-Control': 'no-store, max-age=0' });
+  publicHeaders(headers);
+  return NextResponse.redirect(new URL(target.toPath, request.url), {
+    status: target.statusCode,
+    headers,
   });
 }
 
@@ -126,7 +140,12 @@ export default async function proxy(request: NextRequest) {
       if (!kind) return notFoundResponse();
       if (target.slug) {
         const visible = await isVisibleArticle(kind, decodeSlug(target.slug));
-        if (!visible) return notFoundResponse();
+        if (!visible) {
+          const fromPath = pathname.replace(/\/+$/, '') || '/';
+          const redirect = await resolveRedirect(fromPath);
+          if (redirect) return redirectResponse(request, redirect);
+          return notFoundResponse();
+        }
       }
     }
 

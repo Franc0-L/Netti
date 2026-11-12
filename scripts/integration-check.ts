@@ -10,14 +10,15 @@
  * Required environment:
  *   DATABASE_URL, CRON_SECRET (>= 32 chars)
  *
- * The database must be local or its name must end in _test/_testing: the script
- * deletes sessions and login attempts while exercising the flows.
+ * The database must be local (localhost, 127.0.0.1 or ::1). The script only
+ * inserts and deletes its own fixtures, but a local disposable database is
+ * still required because the migration must be applied.
  */
 import { createHash, randomBytes, scrypt as scryptCallback } from 'node:crypto';
-import { setTimeout as delay } from 'node:timers/promises';
 
 const TEST_PASSWORD = 'integration-password-123456';
 const WRONG_PASSWORD = 'not-the-admin-password';
+const RUN_ID = randomBytes(6).toString('hex');
 
 function deriveScrypt(password: string, salt: Buffer): Promise<Buffer> {
   return new Promise((resolve, reject) => {
@@ -39,11 +40,12 @@ function assertSafeTarget(): void {
   const host = url.hostname.toLowerCase();
   const database = url.pathname.replace(/^\//, '');
   const isLocal = ['localhost', '127.0.0.1', '::1', '[::1]'].includes(host);
-  const isTestNamed = /(?:^|[_-])test(?:ing)?$/i.test(database);
 
-  if (!isLocal && !isTestNamed) {
+  if (!isLocal) {
     throw new Error(
-      `Refusing to run destructive checks against ${host}/${database}. Use a local or *_test database.`
+      `Refusing to run integration checks against ${host}/${database}. ` +
+        'Only a local PostgreSQL instance (localhost, 127.0.0.1 or ::1) is allowed; ' +
+        'a database name ending in _test is not enough.'
     );
   }
 }
@@ -90,9 +92,21 @@ async function main(): Promise<void> {
   await configureEnvironment();
 
   const { db, pool } = await import('../src/db/index');
-  const { sql } = await import('drizzle-orm');
+  const { eq, inArray, sql } = await import('drizzle-orm');
   const auth = await import('../src/lib/auth');
   const { sessions, loginAttempts } = await import('../src/db/schema');
+
+  const attemptIps = new Set<string>();
+  const uniqueIp = (label: string): string => {
+    const ip = `integration-${RUN_ID}-${label}`;
+    attemptIps.add(ip);
+    return ip;
+  };
+  const clearOwnAttempts = async (): Promise<void> => {
+    const hashes = Array.from(attemptIps, (ip) => auth.hashIp(ip));
+    if (hashes.length === 0) return;
+    await db.delete(loginAttempts).where(inArray(loginAttempts.ipHash, hashes));
+  };
 
   const expectedTables = [
     'articles',
@@ -132,12 +146,19 @@ async function main(): Promise<void> {
   });
 
   await check('origin validation accepts the configured origin only', async () => {
-    auth.assertSameOrigin('http://localhost:3000');
+    const configured = process.env.PUBLIC_SITE_URL ?? 'http://localhost:3000';
+    auth.assertSameOrigin(configured);
+
+    const parsed = new URL(configured);
+    const otherPort = parsed.port === '3001' ? '3002' : '3001';
+    const otherOrigin = new URL(parsed.toString());
+    otherOrigin.port = otherPort;
+
     for (const candidate of [
       undefined,
       'https://evil.example',
       'not-a-url',
-      'http://localhost:3001',
+      otherOrigin.toString(),
     ]) {
       let rejected = false;
       try {
@@ -160,46 +181,47 @@ async function main(): Promise<void> {
     );
 
     const now = new Date();
-    await db.delete(sessions);
     await db.insert(sessions).values({
       id: first.sessionId,
       expiresAt: new Date(now.getTime() + 60_000),
       absoluteExpiresAt: new Date(now.getTime() + 3_600_000),
     });
-    const [stored] = await db.select().from(sessions);
+    const [stored] = await db.select().from(sessions).where(eq(sessions.id, first.sessionId));
     expect(stored?.id === first.sessionId, 'session row must use the digest as primary key');
     expect(!JSON.stringify(stored).includes(first.token), 'raw token must never be persisted');
-    await db.delete(sessions);
+    await db.delete(sessions).where(eq(sessions.id, first.sessionId));
   });
 
   await check('expired sessions are distinguishable for cleanup', async () => {
     const now = new Date();
-    await db.delete(sessions);
+    const expiredId = `integration-expired-${RUN_ID}`;
+    const activeId = `integration-active-${RUN_ID}`;
     await db.insert(sessions).values([
       {
-        id: 'integration-expired',
+        id: expiredId,
         expiresAt: new Date(now.getTime() - 60_000),
         absoluteExpiresAt: new Date(now.getTime() + 3_600_000),
       },
       {
-        id: 'integration-active',
+        id: activeId,
         expiresAt: new Date(now.getTime() + 3_600_000),
         absoluteExpiresAt: new Date(now.getTime() + 7_200_000),
       },
     ]);
-    const active = await db.select().from(sessions);
-    expect(active.length === 2, 'expected two session rows');
-    await db.delete(sessions);
+    const active = await db
+      .select()
+      .from(sessions)
+      .where(inArray(sessions.id, [expiredId, activeId]));
+    expect(active.length === 2, 'expected two fixture session rows');
+    await db.delete(sessions).where(inArray(sessions.id, [expiredId, activeId]));
   });
 
   await check('wrong passwords are recorded and locked after five failures', async () => {
-    const ip = `10.0.0.${Math.floor(Math.random() * 200) + 1}`;
-    await db.delete(loginAttempts);
+    const ip = uniqueIp('wrong-password');
 
     const outcomes = [];
     for (let attempt = 0; attempt < 6; attempt += 1) {
       outcomes.push(await auth.attemptLogin(ip, WRONG_PASSWORD));
-      await delay(5);
     }
 
     expect(
@@ -211,8 +233,7 @@ async function main(): Promise<void> {
   });
 
   await check('concurrent attempts cannot exceed the failure limit', async () => {
-    const ip = `10.0.1.${Math.floor(Math.random() * 200) + 1}`;
-    await db.delete(loginAttempts);
+    const ip = uniqueIp('concurrent');
 
     const outcomes = await Promise.all(
       Array.from({ length: 10 }, () => auth.attemptLogin(ip, WRONG_PASSWORD))
@@ -227,18 +248,19 @@ async function main(): Promise<void> {
   });
 
   await check('the correct password is accepted once the window is clear', async () => {
-    await delay(1_000);
-    await db.delete(loginAttempts);
-    const outcome = await auth.attemptLogin('10.0.2.10', TEST_PASSWORD);
+    const ip = uniqueIp('correct-password');
+    const outcome = await auth.attemptLogin(ip, TEST_PASSWORD);
     expect(outcome.allowed, 'a clean window must allow the attempt');
     expect(outcome.valid, 'the correct password must be accepted');
 
-    const rows = await db.select().from(loginAttempts);
+    const rows = await db
+      .select()
+      .from(loginAttempts)
+      .where(eq(loginAttempts.ipHash, auth.hashIp(ip)));
     expect(rows.length === 1 && rows[0]?.success === true, 'the success must be recorded');
   });
 
-  await db.delete(loginAttempts);
-  await db.delete(sessions);
+  await clearOwnAttempts();
   await pool.end();
 
   const failed = results.filter((result) => !result.ok);

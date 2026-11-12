@@ -13,13 +13,20 @@ import { Pool } from 'pg';
  * - The visible slug set of a collection is cached in memory for 15 seconds.
  * - Unknown slugs are confirmed with one indexed query and then negatively
  *   cached for 10 seconds, so crawler traffic does not repeat the same query.
- * - A per-instance budget caps the confirmations per minute.
+ * - A per-instance budget caps the confirmations per minute. When it runs out
+ *   the check fails open: the page renders and decides with its own 404.
+ * - Legacy paths are resolved against the `redirects` table before answering
+ *   404, with a short per-instance cache.
  * - Any database failure fails open: the page renders and decides on its own.
  */
 
 const TTL_MS = 15_000;
 const MISSING_TTL_MS = 10_000;
+const REDIRECT_TTL_MS = 15_000;
 const CONFIRMATION_BUDGET = 20;
+const MAX_REDIRECT_CACHE = 500;
+
+type RedirectResolution = { toPath: string; statusCode: number };
 
 type CollectionState = {
   loadedAt: number;
@@ -28,6 +35,7 @@ type CollectionState = {
 };
 
 const states = new Map<string, CollectionState>();
+const redirectCache = new Map<string, { value: RedirectResolution | null; expiresAt: number }>();
 
 let confirmations = 0;
 let confirmationWindowStart = Date.now();
@@ -75,6 +83,31 @@ async function queryVisibleSlug(kind: string, slug: string): Promise<boolean> {
   return result.rowCount !== 0;
 }
 
+async function queryRedirect(fromPath: string): Promise<RedirectResolution | null> {
+  const result = await getPool().query<{ to_path: string; status_code: number }>(
+    'select to_path, status_code from redirects where from_path = $1 limit 1',
+    [fromPath]
+  );
+  const row = result.rows[0];
+  if (!row) return null;
+  return isSafeRedirectTarget(row.to_path, row.status_code)
+    ? { toPath: row.to_path, statusCode: row.status_code }
+    : null;
+}
+
+/** Defense in depth: the SQL trigger already rejects unsafe targets. */
+export function isSafeRedirectTarget(toPath: string, statusCode: number): boolean {
+  const allowedStatus = [301, 302, 307, 308].includes(statusCode);
+  const safePath =
+    toPath.startsWith('/') &&
+    !toPath.startsWith('//') &&
+    !toPath.includes('\\') &&
+    !toPath.includes('?') &&
+    !toPath.includes('#') &&
+    !/[\u0000-\u001f]/.test(toPath);
+  return allowedStatus && safePath;
+}
+
 function takeConfirmationBudget(): boolean {
   const now = Date.now();
   if (now - confirmationWindowStart > 60_000) {
@@ -98,8 +131,9 @@ function getState(kind: string): CollectionState {
  * Tells whether an article is publicly visible.
  *
  * Returns `true` when the article exists and is already published, `false`
- * when it does not exist. Database failures also return `false` so the proxy
- * answers 404 instead of failing the whole request.
+ * when it does not exist. A database failure or an exhausted confirmation
+ * budget also returns `true` so the page renders and decides its own status
+ * instead of producing a false 404.
  */
 export async function isVisibleArticle(kind: string, slug: string): Promise<boolean> {
   const state = getState(kind);
@@ -126,7 +160,10 @@ export async function isVisibleArticle(kind: string, slug: string): Promise<bool
     state.missing.delete(slug);
   }
 
-  if (!takeConfirmationBudget()) return false;
+  // Fail open when the budget is exhausted. The page is blocking and answers
+  // with a real 404 for missing content; guessing here would hide valid slugs
+  // that are not in the cached set yet.
+  if (!takeConfirmationBudget()) return true;
 
   try {
     const visible = await queryVisibleSlug(kind, slug);
@@ -136,5 +173,33 @@ export async function isVisibleArticle(kind: string, slug: string): Promise<bool
   } catch {
     // Fail open: let the page render and answer on its own.
     return true;
+  }
+}
+
+/**
+ * Resolves a legacy internal path to its redirect target.
+ *
+ * Returns `null` when there is no redirect, when the stored target is not a
+ * safe internal path, when the database fails, or when the confirmation budget
+ * is exhausted. In those cases the page decides with its own response.
+ */
+export async function resolveRedirect(fromPath: string): Promise<RedirectResolution | null> {
+  const now = Date.now();
+  const cached = redirectCache.get(fromPath);
+  if (cached && cached.expiresAt > now) return cached.value;
+
+  if (!takeConfirmationBudget()) return null;
+
+  try {
+    const value = await queryRedirect(fromPath);
+    // Crawler traffic can request many distinct paths; keep the cache bounded.
+    if (redirectCache.size >= MAX_REDIRECT_CACHE) {
+      const oldest = redirectCache.keys().next().value;
+      if (oldest !== undefined) redirectCache.delete(oldest);
+    }
+    redirectCache.set(fromPath, { value, expiresAt: Date.now() + REDIRECT_TTL_MS });
+    return value;
+  } catch {
+    return null;
   }
 }

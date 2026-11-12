@@ -115,6 +115,18 @@ button:focus-visible {
   color: var(--muted);
   font-size: 0.9rem;
 }
+.site-nav a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding-block: 4px;
+}
+.site-nav a[aria-current='page'] {
+  color: var(--foreground);
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 6px;
+}
 .site-nav a:hover,
 .text-link:hover,
 .back-link:hover {
@@ -623,8 +635,9 @@ button:focus-visible {
     min-height: 76px;
   }
   .site-nav {
+    flex-wrap: wrap;
     gap: 14px;
-    font-size: 0.78rem;
+    font-size: 0.85rem;
   }
   .hero {
     min-height: auto;
@@ -707,6 +720,17 @@ button:focus-visible {
     animation-iteration-count: 1 !important;
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+@media (prefers-contrast: more) {
+  :root {
+    --line: rgba(218, 202, 245, 0.45);
+    --muted: #d9d2e6;
+  }
+  a:focus-visible,
+  button:focus-visible {
+    outline-width: 3px;
   }
 }
 

@@ -1,6 +1,6 @@
 'use server';
 import { updateTag } from 'next/cache';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { headers } from 'next/headers';
 import { db } from '@/db/index';
 import { articleRevisions, articles, games, media, redirects } from '@/db/schema';
@@ -74,15 +74,22 @@ async function resolveMediaReferences(
   if (input.ogMediaId) ids.add(input.ogMediaId);
   for (const match of input.body?.matchAll(/media:(\d+)(?!\d)/g) ?? []) ids.add(Number(match[1]));
   const found = new Map<number, { publicUrl: string; pendingDeleteAt: Date | null }>();
-  for (const id of ids) {
-    const [row] = await tx
-      .select({ id: media.id, publicUrl: media.publicUrl, pendingDeleteAt: media.pendingDeleteAt })
+  if (ids.size > 0) {
+    // One round trip for every reference, instead of one query per identifier.
+    const rows = await tx
+      .select({
+        id: media.id,
+        publicUrl: media.publicUrl,
+        pendingDeleteAt: media.pendingDeleteAt,
+      })
       .from(media)
-      .where(eq(media.id, id))
-      .limit(1);
-    if (!row || row.pendingDeleteAt !== null)
-      return { valid: false, coverImageUrl: null, ogImageUrl: null };
-    found.set(row.id, { publicUrl: row.publicUrl, pendingDeleteAt: row.pendingDeleteAt });
+      .where(inArray(media.id, Array.from(ids)));
+    if (rows.length !== ids.size) return { valid: false, coverImageUrl: null, ogImageUrl: null };
+    for (const row of rows) {
+      if (row.pendingDeleteAt !== null)
+        return { valid: false, coverImageUrl: null, ogImageUrl: null };
+      found.set(row.id, { publicUrl: row.publicUrl, pendingDeleteAt: row.pendingDeleteAt });
+    }
   }
   if (input.body) {
     for (const match of input.body.matchAll(/media:(\d+)(?!\d)/g)) {
@@ -305,6 +312,7 @@ export async function updateArticle(args: {
       });
     for (const tag of affectedTags(tagState(outcome.before), tagState(outcome.updated)))
       updateTag(tag);
+    if (outcome.before.slug !== outcome.updated.slug) updateTag('redirects');
     return {
       ok: true,
       data: {

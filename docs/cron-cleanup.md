@@ -29,10 +29,11 @@ Todos requieren `Authorization: Bearer $CRON_SECRET`. La comparación usa `timin
 - Purga sesiones expiradas y intentos con más de 7 días.
 - Reintenta hasta 50 orphans pendientes.
 - Barre hasta 50 medios con `pending_delete_at` vencido (más de 24 h): si ya no están referenciados, borra sus objetos y la fila; si falla Blob, registra un orphan para el próximo intento.
+- Solo actualiza `last_success_at` si no hubo fallos de Blob ni borrados pendientes; un fallo deja `last_run_at` actualizado y responde `500` para que el scheduler lo marque como fallido.
 - No lista el store completo de Blob: esa parte requiere credenciales reales y medición de operaciones.
 
 ## Operación
 
-Los endpoints están implementados pero no se programan desde Vercel en esta fase. No se añade cron a `vercel.json` ni se modifica configuración del proyecto. La programación y prueba con credenciales reales se dejan para el bloque final de integración.
+`.github/workflows/scheduled-jobs.yml` es el único scheduler. Ejecuta revalidación cada 30 minutos, limpieza a las 04:17 UTC y reconciliación a las 04:47 UTC. Requiere los secretos de repositorio `NETTI_SITE_URL` y `CRON_SECRET`; la configuración y la primera ejecución real siguen pendientes de validación en GitHub.
 
 El batch de 25 y `maxDuration` de 10 s limitan el trabajo por invocación en el plan Hobby. Si se acumulan más huérfanos, las siguientes ejecuciones continúan desde los más antiguos.

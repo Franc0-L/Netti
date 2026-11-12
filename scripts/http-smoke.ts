@@ -11,7 +11,7 @@
  *
  * Environment:
  *   SMOKE_BASE_URL  (default http://127.0.0.1:3000)
- *   DATABASE_URL
+ *   DATABASE_URL    (must point to a local PostgreSQL instance)
  *   CRON_SECRET     (must match the running server)
  */
 import { createHash, randomBytes } from 'node:crypto';
@@ -105,8 +105,12 @@ function assertSafeTarget(): void {
   const host = url.hostname.toLowerCase();
   const database = url.pathname.replace(/^\//, '');
   const isLocal = ['localhost', '127.0.0.1', '::1', '[::1]'].includes(host);
-  if (!isLocal && !/(?:^|[_-])test(?:ing)?$/i.test(database)) {
-    throw new Error(`Refusing to run against ${host}/${database}. Use a local or *_test database.`);
+  if (!isLocal) {
+    throw new Error(
+      `Refusing to run HTTP smoke tests against ${host}/${database}. ` +
+        'Only a local PostgreSQL instance (localhost, 127.0.0.1 or ::1) is allowed; ' +
+        'a database name ending in _test is not enough.'
+    );
   }
 }
 
@@ -119,8 +123,9 @@ async function main(): Promise<void> {
 
   const token = randomBytes(32).toString('base64url');
   const sessionId = createHash('sha256').update(token).digest('hex');
+  const expiredSessionId = createHash('sha256').update(`expired-${token}`).digest('hex');
+  const staleAttemptHash = `smoke-old-attempt-${Date.now()}`;
   const now = Date.now();
-  await client.query('delete from sessions');
   await client.query(
     `insert into sessions (id, expires_at, absolute_expires_at) values ($1, $2, $3)`,
     [sessionId, new Date(now + 3_600_000), new Date(now + 7_200_000)]
@@ -283,15 +288,11 @@ async function main(): Promise<void> {
   await check('GET /api/cron/cleanup purges expired sessions and stale attempts', async () => {
     await client.query(
       `insert into sessions (id, expires_at, absolute_expires_at) values ($1, $2, $3)`,
-      [
-        createHash('sha256').update('expired').digest('hex'),
-        new Date(now - 60_000),
-        new Date(now + 60_000),
-      ]
+      [expiredSessionId, new Date(now - 60_000), new Date(now + 60_000)]
     );
     await client.query(
       `insert into login_attempts (ip_hash, success, attempted_at) values ($1, false, $2)`,
-      ['smoke-old-attempt', new Date(now - 10 * 86_400_000)]
+      [staleAttemptHash, new Date(now - 10 * 86_400_000)]
     );
 
     const response = await call('/api/cron/cleanup', { headers: bearer() });
@@ -306,7 +307,7 @@ async function main(): Promise<void> {
     );
 
     const stale = await client.query(`select count(*)::int as total from sessions where id = $1`, [
-      createHash('sha256').update('expired').digest('hex'),
+      expiredSessionId,
     ]);
     expect(stale.rows[0].total === 0, 'expired session must be deleted');
   });
@@ -379,7 +380,10 @@ async function main(): Promise<void> {
     );
   });
 
-  await client.query('delete from sessions');
+  await client.query('delete from sessions where id = any($1::text[])', [
+    [sessionId, expiredSessionId],
+  ]);
+  await client.query('delete from login_attempts where ip_hash = $1', [staleAttemptHash]);
   await client.query("delete from cron_runs where job_name in ('cleanup', 'revalidate_scheduled')");
   await client.end();
 

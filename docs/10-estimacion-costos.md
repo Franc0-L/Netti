@@ -17,13 +17,13 @@ Este documento estima el costo mensual de operar Netti en el plan gratuito de Ve
 
 ### Límites del plan gratuito (a fecha de noviembre 2026)
 
-| Recurso                 | Límite gratuito | Uso estimado Netti                        | Estado    |
-| ----------------------- | --------------- | ----------------------------------------- | --------- |
-| Ancho de banda          | 100 GB/mes      | ~5-10 GB/mes (blog de texto + imágenes)   | ✅ Dentro |
-| Funciones serverless    | 100 GB-h/mes    | ~5-20 GB-h/mes (pocas rutas dinámicas)    | ✅ Dentro |
-| Cron jobs               | Ilimitados      | 1 ejecución cada 30 min (~1,440/mes)      | ✅ Dentro |
-| Dominio personalizado   | 1 dominio       | No aplica (usamos subdominio .vercel.app) | N/A       |
-| Construcciones (builds) | Ilimitadas      | 1-2 por semana (despliegues manuales)     | ✅ Dentro |
+| Recurso                 | Límite gratuito | Uso estimado Netti                               | Estado    |
+| ----------------------- | --------------- | ------------------------------------------------ | --------- |
+| Ancho de banda          | 100 GB/mes      | ~5-10 GB/mes (blog de texto + imágenes)          | ✅ Dentro |
+| Funciones serverless    | 100 GB-h/mes    | ~5-20 GB-h/mes (pocas rutas dinámicas)           | ✅ Dentro |
+| Cron jobs               | Ilimitados      | No se usan: el scheduler corre en GitHub Actions | N/A       |
+| Dominio personalizado   | 1 dominio       | No aplica (usamos subdominio .vercel.app)        | N/A       |
+| Construcciones (builds) | Ilimitadas      | 1-2 por semana (despliegues manuales)            | ✅ Dentro |
 
 ### Costo estimado
 
@@ -37,13 +37,13 @@ Este documento estima el costo mensual de operar Netti en el plan gratuito de Ve
 
 ### Límites del plan gratuito (a fecha de noviembre 2026)
 
-| Recurso                         | Límite gratuito           | Uso estimado Netti                                                 | Estado    |
-| ------------------------------- | ------------------------- | ------------------------------------------------------------------ | --------- |
-| Almacenamiento                  | 3 GB                      | < 100 MB (10 tablas, pocos artículos)                              | ✅ Dentro |
-| CU-horas                        | 3 CU-h/día (~90 CU-h/mes) | < 5 CU-h/mes (lecturas públicas en caché + escrituras ocasionales) | ✅ Dentro |
-| Conexiones concurrentes         | 100                       | 2 por instancia (`DATABASE_POOL_MAX`, 1-10)                        | ✅ Dentro |
-| Proyectos                       | 1                         | 1 proyecto (región `sa-east-1`)                                    | ✅ Dentro |
-| Copias de seguridad automáticas | 7 días                    | Incluido                                                           | ✅ Dentro |
+| Recurso                         | Límite gratuito            | Uso estimado Netti                                                 | Estado    |
+| ------------------------------- | -------------------------- | ------------------------------------------------------------------ | --------- |
+| Almacenamiento                  | 3 GB                       | < 100 MB (10 tablas, pocos artículos)                              | ✅ Dentro |
+| CU-horas                        | 4 CU-h/día (~100 CU-h/mes) | < 5 CU-h/mes (lecturas públicas en caché + escrituras ocasionales) | ✅ Dentro |
+| Conexiones concurrentes         | 100                        | 2 por instancia (`DATABASE_POOL_MAX`, 1-10)                        | ✅ Dentro |
+| Proyectos                       | 1                          | 1 proyecto (región `sa-east-1`)                                    | ✅ Dentro |
+| Copias de seguridad automáticas | 7 días                     | Incluido                                                           | ✅ Dentro |
 
 ### Costo estimado
 
@@ -51,15 +51,16 @@ Este documento estima el costo mensual de operar Netti en el plan gratuito de Ve
 
 ### Desglose de CU-horas
 
-| Actividad                            | Frecuencia  | CU-h estimada por mes |
-| ------------------------------------ | ----------- | --------------------- |
-| Lecturas públicas (caché habilitada) | Miles/mes   | ~1-3 CU-h             |
-| Escrituras editoriales (panel)       | Docenas/mes | ~0.5 CU-h             |
-| Cron de limpieza (cada 30 min)       | ~1,440/mes  | ~1-2 CU-h             |
-| Migraciones y backups                | Mensual     | ~0.5 CU-h             |
-| **Total estimado**                   |             | **~3-6 CU-h/mes**     |
+| Actividad                             | Frecuencia  | CU-h estimada por mes |
+| ------------------------------------- | ----------- | --------------------- |
+| Lecturas públicas (caché habilitada)  | Miles/mes   | ~1-3 CU-h             |
+| Escrituras editoriales (panel)        | Docenas/mes | ~0.5 CU-h             |
+| Revalidación programada (cada 30 min) | ~1,440/mes  | ~1-2 CU-h (a medir)   |
+| Limpieza y reconciliación (diarias)   | ~60/mes     | ~0.1 CU-h             |
+| Migraciones y backups                 | Mensual     | ~0.5 CU-h             |
+| **Total estimado**                    |             | **~3-6 CU-h/mes**     |
 
-Esto representa menos del 10% del límite gratuito de 90 CU-h/mes.
+Esto representa menos del 10% del límite gratuito de 100 CU-h/mes. La cifra de revalidación es una estimación: hay que medirla con el scheduler real porque cada ejecución despierta Neon.
 
 ---
 
@@ -92,11 +93,11 @@ Esto representa menos del 10% del límite gratuito de 90 CU-h/mes.
 
 ## 5. Riesgos de exceso de límites
 
-| Riesgo                        | Probabilidad | Mitigación                                                                  |
-| ----------------------------- | ------------ | --------------------------------------------------------------------------- |
-| Picos de tráfico inesperados  | Baja         | Caché de Vercel + cacheComponents reduce consultas a Neon                   |
-| Subida masiva de imágenes     | Muy baja     | Límite de 2 MB por archivo, validación de MIME y dimensiones                |
-| Cron ejecutándose con errores | Baja         | El endpoint de limpieza es idempotente y bounded (25 objetos por ejecución) |
+| Riesgo                        | Probabilidad | Mitigación                                                                                                                |
+| ----------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------- |
+| Picos de tráfico inesperados  | Baja         | Caché de Vercel + cacheComponents reduce consultas a Neon                                                                 |
+| Subida masiva de imágenes     | Muy baja     | Límite de 2 MB por archivo, validación de MIME y dimensiones                                                              |
+| Cron ejecutándose con errores | Baja         | El endpoint de limpieza es idempotente y bounded (25 objetos por ejecución); `last_success_at` delata fallos persistentes |
 
 ---
 

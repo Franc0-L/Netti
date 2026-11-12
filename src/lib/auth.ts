@@ -50,6 +50,10 @@ function digestToken(token: string): string {
 function digestIp(ip: string): string {
   return createHmac('sha256', env.CRON_SECRET).update(ip).digest('hex');
 }
+/** Exposes the IP digest so integration checks can scope their fixtures. */
+export function hashIp(ip: string): string {
+  return digestIp(ip);
+}
 export function getClientIp(h: Headers): string {
   const raw =
     h.get('x-vercel-forwarded-for') ??

@@ -17,26 +17,26 @@ La acción rechaza con `conflict` si `pending_delete_at` no es nulo. Después in
 **Algoritmo `reconcileStorage()`**, un endpoint protegido con `CRON_SECRET`, acotado en tiempo y reanudable:
 
 0. **Freno de seguridad**: contar cuántas filas se borrarían en el store. Si supera el 10 % de las claves totales, abortar y alertar. Independientemente, si existe una marca `backup_restored_at` en la fila de `cron_runs` con `job_name = 'backup_restore'` con fecha menor a 7 días, abortar y alertar. Nunca borrar masivamente tras un restore de backup.
-1. **Purga de sesiones y intentos de login**: borrar `sessions` con `expires_at < now()` o `absolute_expires_at < now()`, y `login_attempts` con más de 7 días. Dueño del job: `reconcileStorage`, frecuencia semanal.
-2. **Sweep de marcados**: `media` con `pending_delete_at < now() - 24 h`. Re-verificar referencias con regex con borde (`media:1` no debe matchear `media:12`). Si hay referencia, limpiar la marca. Si no, `storage.del(clave + variantes)`; y solo si Blob confirma, borrar las filas. Si falla, registrar en `storage_orphans (action='del', pending)` y dejar la marca.
+1. **Purga de sesiones y intentos de login**: borrar `sessions` con `expires_at < now()` o `absolute_expires_at < now()`, y `login_attempts` con más de 7 días. En el runtime lo hace `/api/cron/cleanup` a diario; `reconcileStorage` repite la purga como red de seguridad.
+2. **Sweep de marcados**: `media` con `pending_delete_at < now() - 24 h`. Re-verificar referencias con regex con borde (`media:1` no debe matchear `media:12`). Si hay referencia, limpiar la marca. Si no, `storage.del(clave + variantes)`; y solo si Blob confirma, borrar las filas. Si falla, registrar en `storage_orphans (action='delete', pending)` y dejar la marca.
 3. **Huérfanos en el store**: `list` de `articles/` y `games/` contra `media.storage_key ∪ media_variants.storage_key`. Borrar lo que no está en DB **y** tenga `uploadedAt < now() - 1 h` (para no pisar subidas en curso); registrarlo como `repaired`.
-4. **Faltantes** (en DB, no en el store): `storage_orphans` con `status='orphaned'` y alerta. No borrar filas solas.
+4. **Faltantes** (en DB, no en el store): diseño con `status='failed'` y alerta. El runtime no implementa esta detección; los registros que no se pueden reparar quedan `pending` para el siguiente intento.
 5. **Reintentos** de `storage_orphans` pendientes: los de `put` se resuelven si la clave ya está en `media`.
 6. **Subidas abandonadas**: `media` de más de 7 días sin referencias → marcar `pending_delete_at`.
-7. `last_success_at` solo si 0–6 terminaron sin excepción. Correrlo dentro del workflow del backup nocturno (misma despertada de Neon).
+7. `last_success_at` solo si 0–6 terminaron sin excepción. El scheduler lo ejecuta a diario (04:47 UTC) en `.github/workflows/scheduled-jobs.yml`.
 
 **Estado de implementación (`src/app/api/reconcile-storage/route.ts`):**
 
-| Paso                               | Estado                                                                  |
-| ---------------------------------- | ----------------------------------------------------------------------- |
-| 0. Freno por `backup_restored_at`  | Implementado (7 días, responde `409`)                                   |
-| 1. Purga de sesiones e intentos    | Implementado (retención de 7 días)                                      |
-| 2. Sweep de `pending_delete_at`    | Implementado (gracia de 24 h, regex con borde, compensación en orphans) |
-| 3. Huérfanos por `list` del store  | Pendiente: requiere credenciales de Blob y medición de operaciones      |
-| 4. Faltantes en el store           | Pendiente: depende del listado                                          |
-| 5. Reintentos de `storage_orphans` | Implementado (lote de 50)                                               |
-| 6. Subidas abandonadas             | Pendiente                                                               |
-| 7. `last_success_at`               | Implementado en `cron_runs`                                             |
+| Paso                               | Estado                                                                     |
+| ---------------------------------- | -------------------------------------------------------------------------- |
+| 0. Freno por `backup_restored_at`  | Implementado (7 días, responde `409`)                                      |
+| 1. Purga de sesiones e intentos    | Implementado (retención de 7 días)                                         |
+| 2. Sweep de `pending_delete_at`    | Implementado (gracia de 24 h, regex con borde, compensación en orphans)    |
+| 3. Huérfanos por `list` del store  | Pendiente: requiere credenciales de Blob y medición de operaciones         |
+| 4. Faltantes en el store           | Pendiente: depende del listado                                             |
+| 5. Reintentos de `storage_orphans` | Implementado (lote de 50)                                                  |
+| 6. Subidas abandonadas             | Pendiente                                                                  |
+| 7. `last_success_at`               | Implementado: solo avanza si no hubo fallos de Blob ni borrados pendientes |
 
 El freno del 10 % sobre claves totales no aplica todavía porque no se listan claves del store.
 
@@ -71,7 +71,7 @@ El freno del 10 % sobre claves totales no aplica todavía porque no se listan cl
 
 **Costo de operaciones de `next_due`**: leer el almacén barato cada 30 minutos suma ~43.200 lecturas al mes (más de 10.000 operaciones simples de Blob o lecturas de Edge Config). Escribir `next_due` cada vez que se publica suma escrituras adicionales. Fase 0 debe medir si Edge Config o Blob JSON es más barato para este uso.
 
-**Señal de restauración de backup**: una operación de restore de backup escrita en Postgres registra `backup_restored_at = now()` en la fila de `cron_runs` con `job_name = 'backup_restore'` inmediatamente después de terminar la restauración y antes de habilitar la reconciliación. El freno de seguridad del paso 0 comprueba: si `backup_restored_at > ahora - 7 días`, aborta la reconciliación.
+**Señal de restauración de backup**: una operación de restore de backup escrita en Postgres registra `backup_restored_at = now()` en la fila de `cron_runs` con `job_name = 'backup_restore'` inmediatamente después de terminar la restauración y antes de habilitar la reconciliación. El freno de seguridad del paso 0 comprueba: si `backup_restored_at > ahora - 7 días`, aborta la reconciliación. **Implementado** en `scripts/restore-db.ts`: si la marca no se puede escribir, el script termina con error y no anuncia la restauración como protegida.
 
 **Si el almacén barato no está disponible**: el cron consulta Neon directamente como fallback, sin usar `next_due`.
 
@@ -80,3 +80,5 @@ El cursor usa la tupla `(published_at, id)` para no omitir filas cuando varias c
 No hace falta lock: dos ejecuciones solapadas revalidan dos veces y es idempotente. No uses `pg_try_advisory_lock` de sesión: el pooler de Neon (modo transacción) lo rompe; solo `xact` es seguro.
 
 **Estado de implementación (`src/app/api/revalidate/route.ts`):** se implementaron los pasos 0, 1, 3–10 y 12. El diseño de `next_due` en Edge Config/Blob (pasos 2 y 11) no está implementado: cada ejecución consulta `cron_runs` y `articles` directamente. Es correcto y reanudable, pero despierta Neon en cada corrida; el almacén barato queda como optimización de CU-horas a medir en Fase 0.
+
+**Scheduler:** `.github/workflows/scheduled-jobs.yml` ejecuta `POST /api/revalidate` cada 30 minutos, `GET /api/cron/cleanup` a las 04:17 UTC y `POST /api/reconcile-storage` a las 04:47 UTC. Requiere los secretos `NETTI_SITE_URL` y `CRON_SECRET` en GitHub. No debe existir un segundo scheduler para los mismos jobs.

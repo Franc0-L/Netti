@@ -1,6 +1,6 @@
 import type { MetadataRoute } from 'next';
 import { connection } from 'next/server';
-import { getVisibleSlugs, type ArticleKind } from '@/lib/content';
+import { getVisibleArticleEntries, type ArticleKind } from '@/lib/content';
 import { articlePath } from '@/lib/routes';
 
 const COLLECTIONS: ArticleKind[] = ['review', 'news', 'guide'];
@@ -22,14 +22,15 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const collections = await Promise.all(
     COLLECTIONS.map(async (kind) => ({
       kind,
-      slugs: await getVisibleSlugs(kind),
+      articles: await getVisibleArticleEntries(kind),
     }))
   );
 
   for (const collection of collections) {
-    for (const slug of collection.slugs) {
+    for (const article of collection.articles) {
       entries.push({
-        url: new URL(articlePath(collection.kind, slug), baseUrl).toString(),
+        url: new URL(articlePath(collection.kind, article.slug), baseUrl).toString(),
+        lastModified: article.updatedAt,
       });
     }
   }

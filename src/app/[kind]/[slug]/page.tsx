@@ -4,8 +4,9 @@ import { notFound } from 'next/navigation';
 import { ContentImage } from '@/components/content-image';
 import { MarkdownContent } from '@/components/markdown-content';
 import { SiteFooter, SiteHeader, SkipLink } from '@/components/site-chrome';
-import { getArticle } from '@/lib/content';
+import { getArticle, getBodyMedia } from '@/lib/content';
 import { articleCollectionPath, articleKindFromSegment, articlePath } from '@/lib/routes';
+import { safeJsonLd } from '@/lib/seo';
 
 /**
  * Blocking route.
@@ -63,18 +64,36 @@ export default async function ArticlePage({ params }: PageProps) {
   const article = await getArticle(kind, slug);
   if (!article) notFound();
 
+  const bodyMedia = await getBodyMedia(article.body);
   const collectionPath = articleCollectionPath(kind);
   const publishedDate = article.publishedAt?.toLocaleDateString('es-AR', {
     day: 'numeric',
     month: 'long',
     year: 'numeric',
   });
+  const siteUrl = process.env.PUBLIC_SITE_URL;
+  const articleUrl = siteUrl ? new URL(articlePath(kind, slug), siteUrl).toString() : undefined;
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'Article',
+    headline: article.title,
+    description: article.seoDescription || article.description || undefined,
+    datePublished: article.publishedAt?.toISOString(),
+    dateModified: article.updatedAt.toISOString(),
+    author: { '@type': 'Person', name: article.author || 'Netti' },
+    image: article.coverImageUrl ? [article.coverImageUrl] : undefined,
+    mainEntityOfPage: articleUrl,
+  };
 
   return (
     <div className="site-shell">
       <SkipLink />
-      <SiteHeader />
+      <SiteHeader currentPath={collectionPath} />
       <main id="contenido" tabIndex={-1}>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: safeJsonLd(jsonLd) }}
+        />
         <article className="article-page">
           <Link href={collectionPath} className="back-link">
             <span aria-hidden="true">←</span> {COLLECTION_TITLES[kind]}
@@ -106,7 +125,7 @@ export default async function ArticlePage({ params }: PageProps) {
               />
             </figure>
           ) : null}
-          <MarkdownContent source={article.body} />
+          <MarkdownContent source={article.body} media={bodyMedia} />
           {kind === 'review' && article.verdict ? (
             <aside className="verdict">
               <p className="eyebrow">VEREDICTO</p>
