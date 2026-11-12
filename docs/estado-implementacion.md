@@ -18,7 +18,7 @@ Este documento separa el diseño objetivo de las capacidades que existen en el r
 | Markdown                   | React Markdown, GFM, sanitización rehype y resolución de `media:<id>` a Blob con variantes                                          | Tests XSS y de resolución de medios aprobados                                             |
 | SEO                        | Metadata base, Open Graph, canonical, robots, sitemap con `lastModified` y JSON-LD `Article`                                        | Comprobado por HTTP: idioma, título, viewport, canonical y sitemap presentes              |
 | Accesibilidad              | Skip link, landmarks, foco visible, `aria-current`, contraste, objetivos de 24 px, errores asociados y aviso a lectores de pantalla | Comprobado por HTTP; falta revisión manual con lector de pantalla y teclado               |
-| Errores HTTP               | 404 real desde el proxy para rutas, colecciones y artículos inexistentes; 307 de `/admin` sin cookie; 308 de slugs anteriores       | Comprobado por HTTP contra el servidor de producción                                      |
+| Errores HTTP               | 404 real desde el proxy para rutas, colecciones y artículos inexistentes; 307 de `/admin` sin cookie; 308 de slugs anteriores       | Comprobado por HTTP contra el servidor local (27/27)                                      |
 | Validación                 | Esquema Zod discriminado; pruebas de publicación, etiquetas y URL                                                                   | Tests aprobados                                                                           |
 | Blob e imágenes            | Upload autenticado de 2 MB con límite real de cuerpo, magic bytes, MIME, Sharp, WebP y variantes 480/960/1600                       | Límite de cuerpo y rechazo de origen probados por HTTP; subida real a Blob pendiente      |
 | Sesiones                   | login/logout/logoutAll con scrypt asíncrono, token opaco, digest en BD, expiración y rate limit atómico por IP                      | Probado contra PostgreSQL real, incluida concurrencia                                     |
@@ -54,13 +54,13 @@ Comandos locales (Node 24.22.2):
 | `npm run typecheck`    | Aprobado                                                |
 | `npm run build`        | Aprobado (Next.js 16.4.5)                               |
 | `npm run test:db`      | 8/8 comprobaciones contra PostgreSQL 18.6               |
-| `npm run test:http`    | 25/25 comprobaciones contra el servidor de producción   |
+| `npm run test:http`    | 27/27 comprobaciones contra el servidor local           |
 | `npm run db:backup`    | Dump custom generado y validado con `pg_restore --list` |
 | `npm run db:restore`   | Restauración completa en base local de prueba           |
 
 `test:db` cubre: creación de las diez tablas, constraints y triggers, validación de origen contra `PUBLIC_SITE_URL`, tokens de sesión (solo se persiste el digest), backoff tras cinco fallos, atomicidad de 10 intentos concurrentes (exactamente 5 permitidos) y aceptación de la contraseña correcta con ventana limpia. Los fixtures usan identificadores e IPs propios de cada ejecución y cada script exige que `DATABASE_URL` apunte a loopback; una base remota se rechaza aunque su nombre termine en `_test`.
 
-`test:http` cubre: liveness, readiness autenticado con DB real, CSP pública compatible con scripts inline, CSP de `/admin` con nonce aplicado a las etiquetas `<script>`, 404 real para rutas y slugs inexistentes, redirección de `/admin` sin sesión, panel accesible con sesión válida, idioma y metadatos (título, viewport, canonical), skip link antes de la navegación, un único `h1` e imágenes con `alt`, `robots.txt` y `sitemap.xml`, rechazo de sesión ausente o falsificada, aceptación de sesión válida, autorización del cron, purga de sesiones/intentos, revalidación de publicación programada, rechazo de origen externo en upload, límite real de cuerpo sin `Content-Length` y rechazo de archivos que no son imagen.
+`test:http` cubre: liveness, readiness autenticado con DB real, CSP pública compatible con scripts inline, CSP de `/admin` con nonce aplicado a las etiquetas `<script>`, 404 real para rutas y slugs inexistentes, redirección permanente 308 de una ruta legacy hacia su artículo actual (con su `Location`), metadatos de Twitter en el artículo (`card`, `title` e `image`), `aria-current` del wordmark en la portada y del enlace de la colección activa, redirección de `/admin` sin sesión, panel accesible con sesión válida, idioma y metadatos (título, viewport, canonical), skip link antes de la navegación, un único `h1` e imágenes con `alt`, `robots.txt` y `sitemap.xml`, rechazo de sesión ausente o falsificada, aceptación de sesión válida, autorización del cron, purga de sesiones/intentos, revalidación de publicación programada, rechazo de origen externo en upload, límite real de cuerpo sin `Content-Length` y rechazo de archivos que no son imagen. Las filas de `cron_runs` que sobrescriben los endpoints programados se fotografían antes y se restauran al terminar, en lugar de borrarse.
 
 ## Pendientes
 
@@ -68,7 +68,7 @@ Comandos locales (Node 24.22.2):
 2. Configurar `NETTI_SITE_URL` y `CRON_SECRET` en GitHub, ejecutar `workflow_dispatch` y comprobar `cron_runs` para los tres jobs programados.
 3. Probar la subida real a Vercel Blob (formatos, EXIF, orientación, variantes, compensación de errores y reconciliación). Requiere credenciales reales.
 4. Repetir el ciclo backup → restore con la marca `backup_restored_at` y comprobar que la reconciliación responde `409`.
-5. Validar en runtime las redirecciones 308 de slugs anteriores y la resolución de imágenes `media:<id>` con datos reales.
+5. Validar en runtime las redirecciones 308 de slugs anteriores en producción (el smoke HTTP ya las cubre contra el servidor local) y la resolución de imágenes `media:<id>` con datos reales.
 6. Validar CSP y flujo del panel en un navegador real, más allá de la comprobación de cabeceras y nonce.
 7. Probar login, renovación, expiración y logout contra un esquema Neon de prueba.
 8. Revisar accesibilidad con lector de pantalla, navegación por teclado y zoom al 200 % sobre un deployment real: la revisión automática por HTTP ya está cubierta.
@@ -96,7 +96,8 @@ Comandos locales (Node 24.22.2):
 - Variables: `drizzle.config.ts` usa `DATABASE_URL_UNPOOLED`; la aplicación usa `DATABASE_URL` con un pool de 2 conexiones por instancia por defecto.
 - El proxy usa un pool propio con `max: 1` para decidir los 404 y resolver redirecciones; ante un error de base de datos o presupuesto agotado falla abierto.
 - Backups con cliente PostgreSQL 18 o posterior y restauración limitada a localhost y bases `*_test`/`*_testing`; la restauración registra `backup_restored_at`.
-- Los scripts `test:db` y `test:http` solo aceptan PostgreSQL en loopback y limitan sus borrados a fixtures propios.
+- Los scripts `test:db` y `test:http` solo aceptan PostgreSQL en loopback y limitan sus borrados a fixtures propios; el smoke HTTP restaura las filas de `cron_runs` que sobrescriben.
+- `requireSession()` no muta cookies por defecto. Solo los contextos que lo permiten (Server Functions y Route Handlers) pasan `clearCookie: true`; en Server Components la cookie caducada únicamente redirige al login.
 
 ## Historial de ramas integradas
 

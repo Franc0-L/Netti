@@ -10,8 +10,9 @@ export default function Error({
   reset: () => void;
 }) {
   useEffect(() => {
-    // Keep diagnostics in the hosting platform logs; never expose internals to readers.
-    console.error('Netti route error', error);
+    // Next.js already reports the error on the server. Only the digest is safe
+    // to log in the browser: the message and the stack can expose internals.
+    if (error.digest) console.error('Netti route error', error.digest);
   }, [error]);
 
   return (

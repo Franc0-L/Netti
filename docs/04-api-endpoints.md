@@ -82,7 +82,9 @@ Borra la fila de `sessions` y la cookie. Idempotente.
 
 ### `logoutAll()`
 
-`TRUNCATE sessions`. Cierra todas las sesiones, incluida la actual.
+`DELETE FROM sessions`. Cierra todas las sesiones, incluida la actual.
+
+Las acciones editoriales y los Route Handlers (`POST /api/upload`, `GET /api/metrics`) validan la sesión con `requireSession({ clearCookie: true })`: al estar en un contexto donde Next.js permite mutar cookies, eliminan la cookie caducada de la respuesta. Los Server Components (`/admin` y `/admin/login`) llaman a `requireSession()` sin esa opción, porque `cookies().delete()` no está permitido durante el render y lanzaría un error que tapa la causa real.
 
 ## 4. Contenido
 
@@ -495,7 +497,7 @@ Validaciones, en orden:
 1. Sesión válida → `401`.
 2. Origen permitido → `403`.
 3. `Content-Length <= 2 MB + margen` → `413` antes de leer el cuerpo. Es una optimización, **no la defensa**: el header puede faltar o mentir.
-4. Leer el `File` y comprobar el **tamaño real** ≤ 2 MB y que el cuerpo total no supere el presupuesto (2 MB + 64 KB de formulario).
+4. Leer el `File` y comprobar el **tamaño real** ≤ 2 MB y que el cuerpo total no supere el presupuesto (2 MB + 128 KiB de formulario).
 5. MIME declarado en la allowlist → `400`.
 6. Magic numbers del contenido real → `400`.
 7. Dimensiones decodificadas y megapíxeles ≤ 20 → `400`.
@@ -646,4 +648,4 @@ El proxy resuelve los slugs anteriores contra `redirects` **antes** de responder
 
 El 404 del proxy es un documento HTML propio, en español, con el mismo mensaje y la misma paleta que `src/app/not-found.tsx`, e incluye `Cache-Control: no-store`, la CSP pública y `X-Robots-Tag` implícito mediante `<meta name="robots" content="noindex">`.
 
-Verificación: `npm run test:http` comprueba que una ruta inexistente y un slug inexistente devuelven `404` y que `/admin` sin sesión devuelve una redirección. La unidad `src/lib/public-content-guard.test.ts` cubre la validación de destinos y estados de redirección; la comprobación de redirecciones reales contra la base queda pendiente del entorno con datos.
+Verificación: `npm run test:http` comprueba que una ruta inexistente y un slug inexistente devuelven `404`, que `/admin` sin sesión devuelve una redirección y que una ruta legacy registrada en `redirects` devuelve `308` con su cabecera `Location` apuntando al artículo actual. La unidad `src/lib/public-content-guard.test.ts` cubre la validación de destinos y estados de redirección.

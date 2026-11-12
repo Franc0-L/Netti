@@ -23,7 +23,12 @@ export function SkipLink({ target = 'contenido' }: { target?: string }) {
 export function SiteHeader({ currentPath }: { currentPath?: string }) {
   return (
     <header className="site-header">
-      <Link className="wordmark" href="/" aria-label="Netti, inicio">
+      <Link
+        className="wordmark"
+        href="/"
+        aria-label="Netti, inicio"
+        aria-current={currentPath === '/' ? 'page' : undefined}
+      >
         NETTI<span>.</span>
       </Link>
       <nav aria-label="Navegación principal" className="site-nav">

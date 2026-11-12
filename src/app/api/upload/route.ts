@@ -55,7 +55,8 @@ export async function POST(request: Request) {
         ? new URL(request.headers.get('referer')!).origin
         : undefined);
     assertSameOrigin(origin);
-    await requireSession();
+    // Route Handler context: an expired cookie can be removed from the response.
+    await requireSession({ clearCookie: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : '';
     return errorResponse(

@@ -75,7 +75,7 @@ Todas las Server Actions de mutación y los endpoints de escritura verifican el 
 
 `assertSameOrigin` valida que el encabezado `Origin` o `Referer` coincida con `PUBLIC_SITE_URL` configurada. Si no coincide, la solicitud se rechaza con `403 Forbidden`.
 
-Además, las rutas de administración (`/admin/*`) requieren sesión válida mediante `requireSession()`, que valida la cookie de sesión contra la tabla `sessions` en la base de datos.
+Además, las rutas de administración (`/admin/*`) requieren sesión válida mediante `requireSession()`, que valida la cookie de sesión contra la tabla `sessions` en la base de datos. `requireSession()` no modifica cookies salvo que se lo pida explícitamente con `clearCookie: true`: Next.js solo permite mutar cookies desde Server Functions y Route Handlers, y borrarla durante el render de un Server Component lanza un error que tapa la causa real. Solo los contextos mutables (Server Actions, `POST /api/upload`, `GET /api/metrics`) limpian la cookie caducada; el panel y el login se limitan a redirigir.
 
 ## 3. Validación de entradas (Zod)
 
@@ -154,7 +154,7 @@ El proxy decide los 404 antes de renderizar (ver D-023 en `01-stack-arquitectura
 - El conjunto de slugs visibles de cada colección se cachea 15 segundos en memoria.
 - Un slug desconocido se confirma con una consulta indexada y se cachea como ausente durante 10 segundos.
 - Hay un presupuesto de 20 confirmaciones por minuto y por instancia; agotado, el control falla abierto y deja que la página bloqueante decida su propio 404. El presupuesto nunca produce un 404 falso.
-- Los slugs anteriores se resuelven contra `redirects` antes del 404, con caché de 15 s y validación de que el destino sea una ruta interna absoluta (`isSafeRedirectTarget`).
+- Los slugs anteriores se resuelven contra `redirects` antes del 404, con caché de 15 s y validación de que el destino sea una ruta interna absoluta (`isSafeRedirectTarget`). La respuesta conserva el código de la fila (301, 302, 307 o 308) y el smoke HTTP comprueba de punta a punta que una ruta legacy devuelve 308 con su `Location`.
 - Ante un error de base de datos el control falla abierto: la página decide y puede responder 200.
 
 El presupuesto limita el costo del tráfico de rastreadores: como máximo una consulta por minuto y por instancia para la lista completa, más las confirmaciones permitidas. El 404 que devuelve el proxy incluye la CSP pública, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy` y `Cache-Control: no-store`.
@@ -171,8 +171,8 @@ El presupuesto limita el costo del tráfico de rastreadores: como máximo una co
 CI (`.github/workflows/quality.yml`) usa Node 24 y `npm ci` (lockfile obligatorio), con dos trabajos:
 
 1. **validate**: tests unitarios, ESLint, Prettier (`--check` sobre todo el repo), typecheck, build de producción y `npm audit --omit=dev --audit-level=high`.
-2. **integration**: PostgreSQL 18 como servicio, `npm run db:migrate`, build, `npm run test:db` (auth, sesiones, rate limiting atómico contra la base real) y `npm run test:http` (CSP, cookies de sesión, origen, cron y límites de subida contra el servidor real).
+2. **integration**: PostgreSQL 18 como servicio, `npm run db:migrate`, build, `npm run test:db` (auth, sesiones, rate limiting atómico contra la base real) y `npm run test:http` (CSP, cookies de sesión, origen, cron, redirección 308 y límites de subida contra el servidor real).
 
-`npm run test:db` exige una base PostgreSQL en loopback (`localhost`, `127.0.0.1` o `::1`), porque inserta y borra fixtures de sesiones e intentos de login mientras ejercita los flujos; un nombre que termine en `_test` no autoriza un host remoto. `npm run test:http` aplica la misma restricción.
+`npm run test:db` exige una base PostgreSQL en loopback (`localhost`, `127.0.0.1` o `::1`), porque inserta y borra fixtures de sesiones e intentos de login mientras ejercita los flujos; un nombre que termine en `_test` no autoriza un host remoto. `npm run test:http` aplica la misma restricción y restaura las filas de `cron_runs` que sobrescribe, en lugar de borrarlas.
 
 Pendiente de integración real (requiere credenciales): subida a Vercel Blob, ejecución del scheduler de GitHub Actions con `NETTI_SITE_URL` y `CRON_SECRET`, y métricas de Neon en producción.

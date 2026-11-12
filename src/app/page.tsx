@@ -97,7 +97,7 @@ export default function Home() {
   return (
     <div className="site-shell" id="top">
       <SkipLink />
-      <SiteHeader />
+      <SiteHeader currentPath="/" />
 
       <main id="contenido" tabIndex={-1}>
         <section className="hero">

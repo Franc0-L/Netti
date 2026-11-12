@@ -11,7 +11,9 @@ export const visibleArticle = (now: Date = new Date()) =>
 
 export const getVisibleSlugs = cache(async (kind: ArticleKind): Promise<string[]> => {
   'use cache';
-  // Until publication/revalidation actions are connected, keep schedule visibility bounded.
+  // Editorial actions invalidate the tag immediately (read-your-own-writes).
+  // The profile is the fallback for scheduled publications, which become
+  // visible without any request: they wait for the revalidate window.
   cacheLife('minutes');
   cacheTag(`kind:${kind}`, 'articles');
 

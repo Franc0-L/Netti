@@ -14,7 +14,7 @@ function response(status: number, body: Record<string, unknown>) {
 
 export async function GET() {
   try {
-    await requireSession();
+    await requireSession({ clearCookie: true });
   } catch {
     return response(401, { ok: false, error: 'Unauthorized' });
   }

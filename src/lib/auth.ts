@@ -124,7 +124,20 @@ export function createSessionToken() {
   const token = randomBytes(32).toString('base64url');
   return { token, sessionId: digestToken(token) };
 }
-export async function requireSession() {
+/**
+ * Options for {@link requireSession}.
+ *
+ * `clearCookie` deletes the session cookie when the session is missing or
+ * expired. It must stay `false` in Server Components: Next.js only allows
+ * mutating cookies from Server Functions and Route Handlers, so calling
+ * `cookies().delete()` while rendering a component throws and masks the real
+ * "Sesión inválida o expirada" error.
+ */
+export type RequireSessionOptions = {
+  clearCookie?: boolean;
+};
+
+export async function requireSession(options: RequireSessionOptions = {}) {
   const store = await cookies();
   const token = store.get('session')?.value;
   if (!token) throw new Error('No hay sesión activa');
@@ -135,7 +148,7 @@ export async function requireSession() {
     try {
       if (session) await db.delete(sessions).where(eq(sessions.id, id));
     } finally {
-      store.delete('session');
+      if (options.clearCookie) store.delete('session');
     }
     throw new Error('Sesión inválida o expirada');
   }
@@ -149,7 +162,7 @@ export async function requireSession() {
       .where(eq(sessions.id, id))
       .returning();
     if (!updated) {
-      store.delete('session');
+      if (options.clearCookie) store.delete('session');
       throw new Error('Sesión inválida o expirada');
     }
     return updated;
@@ -186,7 +199,8 @@ export async function revokeCurrentSession() {
   }
 }
 export async function revokeAllSessions() {
-  await requireSession();
+  // Server Action context: the stale cookie can be removed from the response.
+  await requireSession({ clearCookie: true });
   const store = await cookies();
   try {
     await db.delete(sessions);

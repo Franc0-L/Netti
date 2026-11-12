@@ -26,7 +26,8 @@ async function authorize(): Promise<ActionResult<never> | null> {
   try {
     const h = await headers();
     assertSameOrigin(originOf(h));
-    await requireSession();
+    // Server Action context: an expired cookie can be removed from the response.
+    await requireSession({ clearCookie: true });
     return null;
   } catch (error) {
     const message = error instanceof Error ? error.message : '';

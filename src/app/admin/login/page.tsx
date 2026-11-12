@@ -22,6 +22,8 @@ export default async function AdminLoginPage() {
   await connection();
   let authenticated = false;
   try {
+    // Server Component: cookies cannot be mutated here, so an expired session
+    // only leaves the login form visible.
     await requireSession();
     authenticated = true;
   } catch {

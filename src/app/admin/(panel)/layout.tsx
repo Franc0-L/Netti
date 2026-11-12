@@ -20,6 +20,8 @@ export const instant = false;
 export default async function AdminPanelLayout({ children }: Readonly<{ children: ReactNode }>) {
   await connection();
   try {
+    // Server Component: cookies cannot be mutated here, so an expired session
+    // only redirects to the login page.
     await requireSession();
   } catch {
     redirect('/admin/login');

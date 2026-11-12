@@ -46,7 +46,7 @@ Abrí http://localhost:3000.
 | npm run db:restore   | Restaurar un dump en una base local de prueba                            |
 | npm run hash:admin   | Generar el hash scrypt de la contraseña administrativa                   |
 
-`npm run test:db` y `npm run test:http` solo se ejecutan contra una base local o cuyo nombre termine en `_test`/`_testing`: borran sesiones e intentos de login mientras ejercitan los flujos.
+`npm run test:db` y `npm run test:http` solo se ejecutan contra PostgreSQL en loopback (`localhost`, `127.0.0.1` o `::1`): que la base termine en `_test` no alcanza. Los checks crean y borran sus propias filas y restauran las que sobrescriben (`cron_runs`), así que nunca deben apuntar a una base compartida.
 
 ## Variables de entorno
 
@@ -98,7 +98,7 @@ Las rutas inexistentes responden con un 404 real: el proxy decide antes de rende
 1. **validate**: tests unitarios, ESLint, Prettier (`--check` sobre todo el repo), typecheck, build de producción y `npm audit --omit=dev --audit-level=high`.
 2. **integration**: servicio `postgres:18`, `npm run db:migrate`, build, `npm run test:db` y `npm run test:http` contra el servidor real.
 
-El smoke HTTP cubre también CSP, errores HTTP (404 y redirecciones del panel), metadatos y una base de accesibilidad (skip link, landmarks, un único `h1`, imágenes con `alt`).
+El smoke HTTP cubre también CSP, errores HTTP (404 y la redirección permanente 308 de una ruta legacy hacia su artículo actual), metadatos y una base de accesibilidad (skip link, landmarks, un único `h1`, imágenes con `alt`).
 
 El resultado de esos checks, no la mera existencia del workflow, es la evidencia de que una revisión pasó.
 

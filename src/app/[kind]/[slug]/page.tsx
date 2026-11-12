@@ -53,6 +53,14 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
         ? [{ url: article.coverImageUrl, alt: article.coverAlt || article.title }]
         : undefined,
     },
+    twitter: {
+      card: 'summary_large_image',
+      title: article.seoTitle || article.title,
+      description: article.seoDescription || article.description || undefined,
+      images: article.coverImageUrl
+        ? [{ url: article.coverImageUrl, alt: article.coverAlt || article.title }]
+        : undefined,
+    },
   };
 }
 
