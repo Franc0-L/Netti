@@ -2,7 +2,7 @@
 
 Este documento separa el diseño objetivo de las capacidades que existen en el repositorio. Actualizarlo cuando un cambio se integre o una validación se complete.
 
-Última actualización: 12 de noviembre de 2026, sobre `main` (`c92e694`) con la migración de contenido y diseño del Netti Legacy aplicada en el árbol de trabajo.
+Última actualización: 13 de noviembre de 2026, sobre `main` (`69ee5f1`) con la migración de contenido y diseño del Netti Legacy aplicada y la base de producción en Neon reconciliada con la migración `0002_reconcile_legacy_schema`.
 
 ## Código presente y validado localmente
 
@@ -46,20 +46,21 @@ No usar “funciona”, “seguro”, “rápido” o “listo para producción�
 
 Comandos locales (Node 24.22.2):
 
-| Comprobación              | Resultado                                                                                 |
-| ------------------------- | ----------------------------------------------------------------------------------------- |
-| `npm ci`                  | Instalación limpia desde el lockfile                                                      |
-| `npm audit --omit=dev`    | 0 vulnerabilidades                                                                        |
-| `npm test`                | 37 tests aprobados                                                                        |
-| `npm run lint`            | 0 errores, 0 warnings                                                                     |
-| `npm run format:check`    | Todo el repositorio conforme                                                              |
-| `npm run typecheck`       | Aprobado                                                                                  |
-| `npm run build`           | Aprobado (Next.js 16.4.5)                                                                 |
-| `npm run test:db`         | 10/10 comprobaciones contra PostgreSQL 18.6                                               |
-| `npm run test:migrations` | Baseline + incremental aplicados en base desechable; rareza y subpuntuaciones verificadas |
-| `npm run test:http`       | 32/32 comprobaciones contra el servidor local                                             |
-| `npm run db:backup`       | Dump custom generado y validado con `pg_restore --list`                                   |
-| `npm run db:restore`      | Restauración completa en base local de prueba                                             |
+| Comprobación              | Resultado                                                                                   |
+| ------------------------- | ------------------------------------------------------------------------------------------- |
+| `npm ci`                  | Instalación limpia desde el lockfile                                                        |
+| `npm audit --omit=dev`    | 0 vulnerabilidades                                                                          |
+| `npm test`                | 37 tests aprobados                                                                          |
+| `npm run lint`            | 0 errores, 0 warnings                                                                       |
+| `npm run format:check`    | Todo el repositorio conforme                                                                |
+| `npm run typecheck`       | Aprobado                                                                                    |
+| `npm run build`           | Aprobado (Next.js 16.4.5)                                                                   |
+| `npm run test:db`         | 10/10 comprobaciones contra PostgreSQL 18.6                                                 |
+| `npm run test:migrations` | Baseline + incrementales aplicados en base desechable; rareza y subpuntuaciones verificadas |
+| `npm run test:baseline`   | Flujo completo de baseline (esquema legacy → historial → migrate) sobre base desechable     |
+| `npm run test:http`       | 32/32 comprobaciones contra el servidor local                                               |
+| `npm run db:backup`       | Dump custom generado y validado con `pg_restore --list`                                     |
+| `npm run db:restore`      | Restauración completa en base local de prueba                                               |
 
 `test:db` cubre: creación de las once tablas, constraints y triggers, derivación de la rareza desde el score en todos los umbrales, validación de las subpuntuaciones y del rango de puntuación en la base, validación de origen contra `PUBLIC_SITE_URL`, tokens de sesión (solo se persiste el digest), backoff tras cinco fallos, atomicidad de 10 intentos concurrentes (exactamente 5 permitidos) y aceptación de la contraseña correcta con ventana limpia. Los fixtures usan identificadores e IPs propios de cada ejecución y cada script exige que `DATABASE_URL` apunte a loopback; una base remota se rechaza aunque su nombre termine en `_test`.
 
@@ -102,7 +103,8 @@ Comandos locales (Node 24.22.2):
 - Variables: `drizzle.config.ts` usa `DATABASE_URL_UNPOOLED`; la aplicación usa `DATABASE_URL` con un pool de 2 conexiones por instancia por defecto.
 - El proxy usa un pool propio con `max: 1` para decidir los 404 y resolver redirecciones; ante un error de base de datos o presupuesto agotado falla abierto.
 - Backups con cliente PostgreSQL 18 o posterior y restauración limitada a localhost y bases `*_test`/`*_testing`; la restauración registra `backup_restored_at`.
-- Los scripts `test:db`, `test:migrations` y `test:http` solo aceptan PostgreSQL en loopback y limitan sus borrados a fixtures propios; el smoke HTTP restaura las filas de `cron_runs` que sobrescriben. `test:migrations` crea y destruye su propia base desechable.
+- Los scripts `test:db`, `test:migrations`, `test:baseline` y `test:http` solo aceptan PostgreSQL en loopback y limitan sus borrados a fixtures propios; el smoke HTTP restaura las filas de `cron_runs` que sobrescriben. `test:migrations` y `test:baseline` crean y destruyen sus propias bases desechables.
+- La base de producción en Neon se creó fuera de Drizzle, por lo que su historial se registró con `db:baseline` y se reconcilió con la migración `0002_reconcile_legacy_schema` (idempotente). `test:migrations` cubre las dos rutas: base nueva con las tres migraciones y base legacy con solo la reconciliación.
 - `requireSession()` no muta cookies por defecto. Solo los contextos que lo permiten (Server Functions y Route Handlers) pasan `clearCookie: true`; en Server Components la cookie caducada únicamente redirige al login.
 
 ## Historial de ramas integradas
