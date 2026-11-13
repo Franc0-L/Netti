@@ -298,6 +298,127 @@ async function main(): Promise<void> {
       );
     });
 
+    await check('the navigation renders the legacy pills', async () => {
+      const html = await (await fetch(`${BASE_URL}/`)).text();
+      for (const href of ['/juegos', '/resenas', '/noticias', '/guias']) {
+        expect(
+          new RegExp(`<a[^>]*href="${href}"[^>]*class="nav-pill"`).test(html) ||
+            new RegExp(`<a[^>]*class="nav-pill"[^>]*href="${href}"`).test(html),
+          `the navigation must render a pill for ${href}`
+        );
+      }
+    });
+
+    await check('the footer renders the four columns with contact and social links', async () => {
+      const html = await (await fetch(`${BASE_URL}/`)).text();
+      for (const heading of ['Secciones', 'Legal', 'Contacto']) {
+        expect(html.includes(heading), `the footer must render the ${heading} column`);
+      }
+      expect(html.includes('nettivideojuegos@gmail.com'), 'the footer must show the contact email');
+      for (const href of [
+        'https://www.youtube.com/@NettiVJ',
+        'https://www.instagram.com/nettivideojuegos',
+        'https://www.tiktok.com/@nettivj',
+      ]) {
+        expect(html.includes(href), `the footer must link to ${href}`);
+      }
+      expect(html.includes('/terminos'), 'the footer must link the legal pages');
+      expect(html.includes('/privacidad'), 'the footer must link the privacy page');
+    });
+
+    await check('the public utility routes answer 200 with their own content', async () => {
+      for (const [path, expected] of [
+        ['/juegos', 'BIBLIOTECA'],
+        ['/buscar', 'BUSCADOR'],
+        ['/terminos', 'Términos y condiciones'],
+        ['/privacidad', 'Política de privacidad'],
+      ] as const) {
+        const response = await fetch(`${BASE_URL}${path}`, { redirect: 'manual' });
+        expect(response.status === 200, `${path} must answer 200, received ${response.status}`);
+        const html = await response.text();
+        expect(html.includes(expected), `${path} must render "${expected}"`);
+      }
+    });
+
+    await check('every internal link of the footer answers 200', async () => {
+      const html = await (await fetch(`${BASE_URL}/`)).text();
+      const hrefs = new Set(
+        [...html.matchAll(/<footer[\s\S]*?<\/footer>/g)]
+          .flatMap((block) => [...block[0].matchAll(/href="(\/[^"#?]*)"/g)])
+          .map((match) => match[1])
+      );
+      expect(hrefs.size > 0, 'the footer must render internal links');
+      for (const href of hrefs) {
+        const response = await fetch(`${BASE_URL}${href}`, { redirect: 'manual' });
+        expect(response.status === 200, `${href} must answer 200, received ${response.status}`);
+      }
+    });
+
+    await check('the home page renders the central search and the library level', async () => {
+      const html = await (await fetch(`${BASE_URL}/`)).text();
+      expect(html.includes('¿Qué estás buscando?'), 'the search box must show its placeholder');
+      expect(html.includes('role="search"'), 'the search box must be exposed as a search form');
+      expect(html.includes('Nivel de biblioteca'), 'the library level must be rendered');
+      expect(html.includes('role="progressbar"'), 'the library level must expose a progress bar');
+    });
+
+    await check('the section chips keep the legacy colors', async () => {
+      const html = await (await fetch(`${BASE_URL}/resenas`)).text();
+      for (const tone of ['cyan', 'gold', 'red', 'green']) {
+        expect(
+          html.includes(`data-tone="${tone}"`),
+          `a chip with the ${tone} tone must be rendered`
+        );
+      }
+    });
+
+    await check(
+      'a published review shows its rarity badge and the top stories sidebar',
+      async () => {
+        const stamp = Date.now();
+        const gameSlug = `smoke-game-${stamp}`;
+        const reviewSlug = `smoke-review-${stamp}`;
+
+        try {
+          await client.query(
+            `insert into games (slug, title, description, status, cover_image_url, platforms, genres)
+           values ($1, 'Smoke game', 'Smoke test', 'published', '/probe-cover.webp', '{PC}', '{RPG}')`,
+            [gameSlug]
+          );
+          const game = await client.query(`select id from games where slug = $1`, [gameSlug]);
+          await client.query(
+            `insert into articles
+             (kind, slug, title, description, body, status, published_at, game_id, score, score_reason, verdict, score_details)
+           values ('review', $1, 'Smoke review', 'Smoke test', 'Body for the smoke test.', 'published', $2, $3, 95,
+                   'Justificación suficientemente larga para la reseña de prueba.',
+                   'Un veredicto de prueba con longitud suficiente.', '{"story":9,"gameplay":8,"visual":10}'::jsonb)`,
+            [reviewSlug, new Date(now - 60_000), game.rows[0].id]
+          );
+
+          // Invalidate the cached collection so the fixture is rendered.
+          await call('/api/revalidate', { method: 'POST', headers: bearer() });
+
+          const html = await (await fetch(`${BASE_URL}/resenas`)).text();
+          expect(html.includes('data-rarity="mythic"'), 'the badge must expose the rarity band');
+          expect(html.includes('Mítica'), 'the badge must show the rarity label');
+          expect(
+            html.includes('Historias principales'),
+            'the collection must render the top stories'
+          );
+          expect(!html.includes('/10</span>'), 'the score must not use the old 1-10 scale');
+          expect(html.includes('95'), 'the score must be rendered with the 0-100 scale');
+
+          const article = await (await fetch(`${BASE_URL}/resenas/${reviewSlug}`)).text();
+          expect(article.includes('Apartado visual'), 'the review must render the score breakdown');
+          expect(article.includes('10 / 10'), 'the breakdown must show the sub-scores');
+        } finally {
+          await client.query('delete from articles where slug = $1', [reviewSlug]);
+          await client.query('delete from games where slug = $1', [gameSlug]);
+          await call('/api/revalidate', { method: 'POST', headers: bearer() });
+        }
+      }
+    );
+
     await check('public pages expose language, title and viewport metadata', async () => {
       const html = await (await fetch(`${BASE_URL}/`)).text();
       expect(html.includes('<html lang="es"'), 'the document language must be declared');

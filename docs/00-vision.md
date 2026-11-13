@@ -36,7 +36,7 @@ Blog editorial de videojuegos en español, de un solo autor, con reseñas (puntu
 - **La lectura pública no despierta la base.** Es un **objetivo de Fase 0**, no una garantía ya probada: `use cache` no asegura persistencia compartida entre instancias serverless. Se verifica con `x-vercel-cache` y consumo de CU-h antes de considerar la arquitectura lista para producción.
 - **La base impone lo que puede imponer.** `CHECK`, índices parciales y claves foráneas, además de Zod.
 - **Backups obligatorios** desde la Fase 3, con restauración probada.
-- **Morado** (`#a78bfa`, `#c9bbff`, `#5b21b6`) en sitio y panel.
+- **Morado** (`#b79aff`, `#d1bdff`) en sitio y panel. Decisión cerrada: no se cambia.
 - **Panel a pantalla completa**, vista previa como acción aparte.
 - **Decisiones difíciles de revertir**: un ADR corto en el momento. El resto se decide programando; no se documenta antes de existir.
 

@@ -58,3 +58,38 @@ test('requires review-specific fields before publication', () => {
     assert.ok(fields.includes('verdict'));
   }
 });
+
+test('accepts a score from 0 to 100 and rejects anything outside', () => {
+  const review = {
+    kind: 'review',
+    status: 'draft',
+    slug: '',
+    scoreReason: 'Justificación suficientemente larga de la reseña.',
+    verdict: 'Un veredicto razonable.',
+  };
+
+  assert.equal(schema.safeParse({ ...review, score: 0 }).success, true);
+  assert.equal(schema.safeParse({ ...review, score: 100 }).success, true);
+  assert.equal(schema.safeParse({ ...review, score: 101 }).success, false);
+  assert.equal(schema.safeParse({ ...review, score: -1 }).success, false);
+});
+
+test('accepts the editorial breakdown and rejects unknown dimensions', () => {
+  const review = {
+    kind: 'review',
+    status: 'draft',
+    slug: '',
+    score: 80,
+    scoreReason: 'Justificación suficientemente larga de la reseña.',
+    verdict: 'Un veredicto razonable.',
+  };
+
+  assert.equal(
+    schema.safeParse({ ...review, scoreDetails: { story: 8, gameplay: 9, visual: 7 } }).success,
+    true
+  );
+  assert.equal(schema.safeParse({ ...review, scoreDetails: { story: 11 } }).success, false);
+  assert.equal(schema.safeParse({ ...review, scoreDetails: { story: 0 } }).success, false);
+  assert.equal(schema.safeParse({ ...review, scoreDetails: { pace: 8 } }).success, false);
+  assert.equal(schema.safeParse({ ...review, scoreDetails: {} }).success, false);
+});

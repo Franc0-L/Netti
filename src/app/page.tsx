@@ -1,8 +1,10 @@
 import { Suspense } from 'react';
 import Link from 'next/link';
 import { connection } from 'next/server';
+import { SearchForm } from '@/components/search-form';
+import { SectionChips } from '@/components/section-chips';
 import { SiteFooter, SiteHeader, SkipLink } from '@/components/site-chrome';
-import { getVisibleArticles, type ArticleKind } from '@/lib/content';
+import { getLibraryProgress, getVisibleArticles, type ArticleKind } from '@/lib/content';
 import { articlePath } from '@/lib/routes';
 
 const sections: Array<{
@@ -93,6 +95,58 @@ function LatestFallback() {
   );
 }
 
+/** "Nivel de biblioteca": how many published games already have a review. */
+async function LibraryLevel() {
+  await connection();
+  const { total, reviewed, progress } = await getLibraryProgress();
+  const missing = total - reviewed;
+  const note =
+    total === 0
+      ? 'La biblioteca está esperando su primer juego.'
+      : progress >= 100
+        ? 'Logro desbloqueado: set completo de reseñas.'
+        : missing === 1
+          ? 'Falta reseñar 1 juego para desbloquear el logro «Set completo».'
+          : `Faltan reseñar ${missing} juegos para desbloquear el logro «Set completo».`;
+
+  return (
+    <section className="library-level" aria-label="Progreso de la biblioteca">
+      <div className="library-level-head">
+        <p className="library-level-title">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M8 3h8v6a4 4 0 0 1-8 0V3Z" />
+            <path d="M8 4H5v2a3 3 0 0 0 3 3M16 4h3v2a3 3 0 0 1-3 3" />
+            <path d="M12 13v3M9 20h6M10 16h4l1 4H9l1-4Z" />
+          </svg>
+          Nivel de biblioteca
+        </p>
+        <p className="library-level-value">
+          <strong>{reviewed}</strong>/{total} reseñados
+        </p>
+      </div>
+      <div
+        className="library-level-bar"
+        role="progressbar"
+        aria-label="Juegos con reseña"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={progress}
+      >
+        <span style={{ width: `${progress}%` }} />
+      </div>
+      <p className="library-level-note">{note}</p>
+    </section>
+  );
+}
+
 export default function Home() {
   return (
     <div className="site-shell" id="top">
@@ -111,6 +165,9 @@ export default function Home() {
             <p className="hero-description">
               Reseñas, noticias y guías para entender lo que jugamos. Menos ruido. Más contexto.
             </p>
+            <div className="hero-search">
+              <SearchForm id="hero-search" />
+            </div>
             <Link className="primary-link" href="/resenas">
               Explorar reseñas <span aria-hidden="true">↗</span>
             </Link>
@@ -144,6 +201,14 @@ export default function Home() {
             </Link>
           ))}
         </section>
+
+        <div className="home-chips">
+          <SectionChips />
+        </div>
+
+        <Suspense fallback={<div className="library-level library-level-skeleton" />}>
+          <LibraryLevel />
+        </Suspense>
 
         <section className="latest-section">
           <div className="section-heading">

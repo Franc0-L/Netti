@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ContentImage } from '@/components/content-image';
 import { MarkdownContent } from '@/components/markdown-content';
+import { ScoreBreakdown } from '@/components/score-breakdown';
 import { SiteFooter, SiteHeader, SkipLink } from '@/components/site-chrome';
 import { getArticle, getBodyMedia } from '@/lib/content';
 import { articleCollectionPath, articleKindFromSegment, articlePath } from '@/lib/routes';
@@ -117,11 +118,15 @@ export default async function ArticlePage({ params }: PageProps) {
                   <time dateTime={article.publishedAt?.toISOString()}>{publishedDate}</time>
                 </span>
               ) : null}
-              {kind === 'review' && article.score !== null ? (
-                <strong>{article.score}/10</strong>
-              ) : null}
             </div>
           </header>
+          {kind === 'review' && article.score !== null ? (
+            <ScoreBreakdown
+              score={article.score}
+              rarity={article.rarity}
+              details={article.scoreDetails ?? null}
+            />
+          ) : null}
           {article.coverImageUrl ? (
             <figure className="article-cover">
               <ContentImage

@@ -4,13 +4,14 @@ import {
   foreignKey,
   index,
   integer,
+  jsonb,
   pgTable,
   serial,
   text,
   timestamp,
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
-import { sql } from 'drizzle-orm';
+import { relations, sql } from 'drizzle-orm';
 
 export const media = pgTable(
   'media',
@@ -96,6 +97,36 @@ export const games = pgTable(
   ]
 );
 
+/** Editorial score dimensions, each one from 1 to 10. */
+export const SCORE_DETAIL_KEYS = ['story', 'gameplay', 'visual'] as const;
+export type ScoreDetailKey = (typeof SCORE_DETAIL_KEYS)[number];
+export type ScoreDetails = Partial<Record<ScoreDetailKey, number>>;
+
+/**
+ * Rarity bands derived from the score.
+ *
+ * The bands live in the database: the thresholds, the labels and the color
+ * token are data, not UI code. `articles.rarity_key` is filled by the
+ * `articles_set_rarity` trigger, so the public site never decides which tier a
+ * score belongs to.
+ */
+export const scoreRarities = pgTable(
+  'score_rarities',
+  {
+    key: text('key').primaryKey(),
+    label: text('label').notNull().unique(),
+    colorToken: text('color_token').notNull(),
+    minScore: integer('min_score').notNull(),
+    maxScore: integer('max_score').notNull(),
+    position: integer('position').notNull().unique(),
+  },
+  (t) => [
+    check('score_rarities_min_score_valid', sql`${t.minScore} between 0 and 100`),
+    check('score_rarities_max_score_valid', sql`${t.maxScore} between 0 and 100`),
+    check('score_rarities_range_valid', sql`${t.minScore} <= ${t.maxScore}`),
+  ]
+);
+
 export const articles = pgTable(
   'articles',
   {
@@ -120,6 +151,8 @@ export const articles = pgTable(
     version: integer('version').notNull().default(1),
     gameId: integer('game_id'),
     score: integer('score'),
+    scoreDetails: jsonb('score_details').$type<ScoreDetails>(),
+    rarityKey: text('rarity_key'),
     scoreReason: text('score_reason'),
     verdict: text('verdict'),
     category: text('category'),
@@ -168,11 +201,16 @@ export const articles = pgTable(
     ),
     check(
       'articles_review_fields_only',
-      sql`${t.kind} = 'review' or (${t.gameId} is null and ${t.score} is null and ${t.scoreReason} is null and ${t.verdict} is null)`
+      sql`${t.kind} = 'review' or (${t.gameId} is null and ${t.score} is null and ${t.scoreDetails} is null and ${t.rarityKey} is null and ${t.scoreReason} is null and ${t.verdict} is null)`
+    ),
+    check('articles_score_valid', sql`${t.score} is null or ${t.score} between 0 and 100`),
+    check(
+      'articles_score_details_valid',
+      sql`${t.scoreDetails} is null or article_score_details_valid(${t.scoreDetails})`
     ),
     check(
       'articles_review_complete',
-      sql`${t.kind} <> 'review' or ${t.status} <> 'published' or (${t.gameId} is not null and ${t.score} is not null and ${t.score} between 1 and 10 and char_length(btrim(coalesce(${t.scoreReason}, ''))) >= 20 and char_length(btrim(coalesce(${t.verdict}, ''))) >= 10)`
+      sql`${t.kind} <> 'review' or ${t.status} <> 'published' or (${t.gameId} is not null and ${t.score} is not null and ${t.score} between 0 and 100 and char_length(btrim(coalesce(${t.scoreReason}, ''))) >= 20 and char_length(btrim(coalesce(${t.verdict}, ''))) >= 10)`
     ),
     check(
       'articles_news_fields_only',
@@ -182,6 +220,11 @@ export const articles = pgTable(
       'articles_news_category_len',
       sql`${t.category} is null or char_length(${t.category}) <= 40`
     ),
+    foreignKey({
+      name: 'articles_rarity_fk',
+      columns: [t.rarityKey],
+      foreignColumns: [scoreRarities.key],
+    }).onDelete('restrict'),
     foreignKey({
       name: 'articles_game_fk',
       columns: [t.gameId],
@@ -208,10 +251,18 @@ export const articles = pgTable(
       .where(sql`${t.featured} and ${t.status} = 'published'`),
     index('articles_tags_idx').using('gin', t.tags),
     index('articles_game_idx').on(t.gameId),
+    index('articles_rarity_idx').on(t.rarityKey),
     index('articles_cover_media_idx').on(t.coverMediaId),
     index('articles_og_media_idx').on(t.ogMediaId),
   ]
 );
+
+export const articlesRelations = relations(articles, ({ one }) => ({
+  rarity: one(scoreRarities, {
+    fields: [articles.rarityKey],
+    references: [scoreRarities.key],
+  }),
+}));
 
 export const mediaVariants = pgTable(
   'media_variants',

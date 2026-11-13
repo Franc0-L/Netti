@@ -8,6 +8,7 @@ Define el esquema PostgreSQL (Neon), las restricciones que viven en la base, las
 | ------------------- | ----------------------------------------------------------------- |
 | `games`             | Catálogo de juegos (entidad propia, referenciada por las reseñas) |
 | `articles`          | Reseñas, noticias y guías. Una tabla con `kind`, no tres          |
+| `score_rarities`    | Bandas de rareza derivadas de la puntuación (umbrales y color)    |
 | `media`             | Imágenes subidas, con dimensiones y variantes                     |
 | `media_variants`    | Variantes pregeneradas (480/960/1600 px) de cada medio            |
 | `article_revisions` | Snapshots por guardado, para deshacer                             |
@@ -222,7 +223,9 @@ create table articles (
 
   -- Reseñas
   game_id          integer references games (id) on delete restrict,
-  score            smallint check (score between 1 and 10),
+  score            smallint check (score between 0 and 100),
+  score_details    jsonb,         -- { story, gameplay, visual }, cada uno de 1 a 10
+  rarity_key       text references score_rarities (key) on delete restrict,
   score_reason     text,
   verdict          text,
 
@@ -268,12 +271,17 @@ create table articles (
   -- Campos por tipo
   constraint articles_review_fields_only
     check (kind = 'review' or (game_id is null and score is null
+           and score_details is null and rarity_key is null
            and score_reason is null and verdict is null)),
+  constraint articles_score_valid
+    check (score is null or score between 0 and 100),
+  constraint articles_score_details_valid
+    check (score_details is null or article_score_details_valid(score_details)),
   constraint articles_review_complete
     check (kind <> 'review' or status <> 'published' or (
       game_id is not null
       and score is not null
-      and score between 1 and 10
+      and score between 0 and 100
       and char_length(btrim(coalesce(score_reason, ''))) >= 20
       and char_length(btrim(coalesce(verdict, ''))) >= 10
     )),
@@ -323,6 +331,97 @@ create trigger articles_set_updated_at
 `WHEN` sobre `to_jsonb(old)` menos `updated_at` y `version` evita dos cosas: que un `UPDATE` que no cambia nada incremente `version`, y que el propio trigger, al escribir `updated_at`, se considere un cambio.
 
 **Qué permite un borrador**: `title` vacío, `slug` vacío, `body` vacío, sin portada, sin puntuación, sin fecha. Lo único obligatorio es `kind` y `status`. Todo lo demás se exige recién al publicar, mediante los `CHECK` con `status <> 'published' or ...`.
+
+### 2.2.1 `score_rarities`
+
+La rareza es un dato, no una decisión de la interfaz: los umbrales, la etiqueta y el color viven en la base y `articles.rarity_key` se calcula con un trigger.
+
+```sql
+create table score_rarities (
+  key          text primary key,
+  label        text not null unique,
+  color_token  text not null,
+  min_score    integer not null check (min_score between 0 and 100),
+  max_score    integer not null check (max_score between 0 and 100),
+  position     integer not null unique,
+  constraint score_rarities_range_valid check (min_score <= max_score)
+);
+
+insert into score_rarities (key, label, color_token, min_score, max_score, position) values
+  ('mythic',    'Mítica',     'gold',     90, 100, 1),
+  ('legendary', 'Legendaria', 'red',      80,  89, 2),
+  ('epic',      'Épica',      'accent',   60,  79, 3),
+  ('rare',      'Rara',       'cyan',     40,  59, 4),
+  ('uncommon',  'Poco común', 'green',    20,  39, 5),
+  ('common',    'Común',      'neutral',   0,  19, 6);
+
+create or replace function articles_set_rarity()
+returns trigger
+language plpgsql
+as $$
+declare
+  rarity_key text;
+begin
+  if new.score is null then
+    new.rarity_key := null;
+    return new;
+  end if;
+  select sr.key into rarity_key
+    from score_rarities sr
+   where new.score between sr.min_score and sr.max_score
+   order by sr.min_score desc
+   limit 1;
+  if rarity_key is null then
+    raise exception 'No hay rareza definida para la puntuación %', new.score
+      using errcode = '23514';
+  end if;
+  new.rarity_key := rarity_key;
+  return new;
+end;
+$$;
+
+create trigger articles_set_rarity
+  before insert or update on articles
+  for each row execute function articles_set_rarity();
+```
+
+El trigger corre antes de los `CHECK`, así que la columna derivada nunca contradice las restricciones. Si el score no cae en ninguna banda, la escritura se rechaza: una reseña con puntuación siempre tiene rareza.
+
+`color_token` apunta a un token de CSS (`--gold`, `--red`, `--accent`, `--cyan`, `--green`, `--neutral`). La interfaz lee la fila y no decide ni el nombre ni el color.
+
+### 2.2.2 Subpuntuaciones
+
+`score_details` guarda el desglose editorial (`story`, `gameplay`, `visual`, cada uno de 1 a 10). Se valida en la base con una función `IMMUTABLE`, porque un `CHECK` no admite subconsultas:
+
+```sql
+create or replace function article_score_details_valid(details jsonb)
+returns boolean
+language plpgsql
+immutable
+as $$
+declare
+  detail_key   text;
+  detail_value jsonb;
+  detail_count integer := 0;
+begin
+  if details is null then return true; end if;
+  if jsonb_typeof(details) <> 'object' then return false; end if;
+  for detail_key in select jsonb_object_keys(details) loop
+    if detail_key not in ('story', 'gameplay', 'visual') then return false; end if;
+    detail_value := details -> detail_key;
+    if jsonb_typeof(detail_value) <> 'number' then return false; end if;
+    if (detail_value #>> '{}')::numeric <> trunc((detail_value #>> '{}')::numeric) then return false; end if;
+    if (detail_value #>> '{}')::numeric < 1 or (detail_value #>> '{}')::numeric > 10 then return false; end if;
+    detail_count := detail_count + 1;
+  end loop;
+  return detail_count > 0;
+exception when others then
+  return false;
+end;
+$$;
+```
+
+El contrato es el mismo en las dos capas: objeto estricto, sin claves desconocidas, con al menos una dimensión informada y todas dentro de 1 a 10.
 
 ### 2.3 Búsqueda full-text
 
@@ -540,7 +639,30 @@ create table cron_runs (
 
 Los esquemas Zod están definidos exclusivamente en `03-validacion-zod.md` (`makeArticleSchema`, `makeGameSchema`, `makeMediaMetadataSchema`). No se duplican aquí.
 
-## 4. Orden de migraciones
+Para las reseñas, el esquema vigente es:
+
+- `score`: entero entre 0 y 100.
+- `scoreDetails`: objeto estricto con `story`, `gameplay` y `visual`, cada uno entero entre 1 y 10; se acepta cualquier subconjunto no vacío y se rechaza cualquier clave desconocida.
+- `scoreReason`: obligatorio para publicar, mínimo 20 caracteres.
+- `verdict`: obligatorio para publicar, mínimo 10 caracteres.
+
+La rareza no se valida en Zod: no la escribe la aplicación. La calcula el trigger a partir del score.
+
+## 4. Mapeo desde el Netti Legacy
+
+El legacy guarda el contenido en archivos y usa contratos distintos. La migración de contenido existente **no** es automática: se documenta el mapeo para que cada entrada se cargue con criterio editorial.
+
+| Legacy                             | Nuevo                                                 | Criterio                                                                                                                         |
+| ---------------------------------- | ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `reviews.game` (string con nombre) | `articles.game_id` (FK numérica) + `games`            | La ficha se crea **antes** que la reseña. El nombre del legacy se usa para buscar o crear `games.slug`; no se guarda texto libre |
+| `games.releaseYear` (número)       | `games.release_date` (timestamp con zona horaria)     | Se mapea al primer día del año en UTC (`YYYY-01-01`). Si el legacy aporta la fecha completa, se usa tal cual                     |
+| `reviews.score` (1-100)            | `articles.score` (0-100)                              | Se conserva el valor; la rareza la deriva el trigger                                                                             |
+| `reviews.scoreDetails` (1-10)      | `articles.score_details` (JSONB)                      | Se conserva el objeto tal cual                                                                                                   |
+| `reviews.tags` (lista fija de 13)  | `articles.tags` (texto libre, máx. 5, ≤30 caracteres) | Se filtran por el límite del nuevo contrato; las etiquetas que no entran se descartan                                            |
+
+Las etiquetas del legacy se conservan libres: el panel no valida contra una lista fija.
+
+## 5. Orden de migraciones
 
 Las FK de medios (`games_cover_media_fk`, `articles_cover_media_fk`, `articles_og_media_fk`) deben crearse **después** de la tabla `media` (definida en esta misma sección 2.4). Orden de ejecución:
 
@@ -551,3 +673,5 @@ Las FK de medios (`games_cover_media_fk`, `articles_cover_media_fk`, `articles_o
 5. Triggers de validación y `version`.
 
 Ejecutar los `ALTER TABLE` antes de crear `media` fallará porque la tabla referenciada no existe.
+
+La rareza y las subpuntuaciones llegan después, en una migración incremental sobre el baseline (`0001_score_rarity.sql`): crea `score_rarities`, agrega `articles.score_details` y `articles.rarity_key`, reemplaza las dos restricciones de reseña por sus versiones 0-100 y agrega el trigger `articles_set_rarity`. La migración no borra tablas ni datos: solo reemplaza esas dos restricciones, que vuelven a crearse en el mismo archivo.

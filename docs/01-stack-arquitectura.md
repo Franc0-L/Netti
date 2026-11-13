@@ -227,7 +227,7 @@ Sidebar + formulario, vista previa en modal con la plantilla real. **Aceptada.**
 
 ### D-007: Paleta morada
 
-`#a78bfa`, `#c9bbff`, `#5b21b6`. **Aceptada.**
+`#b79aff` (acento), `#d1bdff` (acento fuerte), `#171020` (texto sobre morado). **Aceptada** y cerrada: el cliente confirmó que la paleta de este proyecto es la correcta y que no se modifica. Los valores del diseño anterior (`#a78bfa`, `#c9bbff`, `#5b21b6`) quedan solo como antecedente del Netti Legacy.
 
 ### D-008: Sin comentarios ni cuentas
 

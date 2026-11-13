@@ -7,6 +7,7 @@
     "typecheck": "tsc --noEmit",
     "test": "tsx --test src/lib/*.test.ts src/components/*.test.tsx",
     "test:db": "node --conditions=react-server --import tsx scripts/integration-check.ts",
+    "test:migrations": "tsx scripts/migration-check.ts",
     "test:http": "tsx scripts/http-smoke.ts",
     "build": "next build",
     "start": "next start",

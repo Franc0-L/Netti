@@ -2,6 +2,13 @@ import { z } from 'zod';
 
 const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
+/** Editorial score dimensions, each one from 1 to 10. */
+const scoreDetailsShape = z.strictObject({
+  story: z.number().int().min(1).max(10).optional(),
+  gameplay: z.number().int().min(1).max(10).optional(),
+  visual: z.number().int().min(1).max(10).optional(),
+});
+
 const baseArticle = z.object({
   slug: z.string().regex(SLUG_RE, 'Solo minúsculas, números y guiones.').or(z.literal('')),
   title: z.string().trim().max(120).default(''),
@@ -38,7 +45,14 @@ const baseArticle = z.object({
 const reviewShape = baseArticle.extend({
   kind: z.literal('review'),
   gameId: z.number().int().positive().nullable().optional(),
-  score: z.number().int().min(1).max(10).nullable().optional(),
+  score: z.number().int().min(0).max(100).nullable().optional(),
+  scoreDetails: scoreDetailsShape
+    .refine(
+      (details) => Object.values(details).some((value) => value !== undefined),
+      'Completá al menos una nota.'
+    )
+    .nullable()
+    .optional(),
   scoreReason: z.string().trim().max(2000).nullable().optional(),
   verdict: z.string().trim().max(500).nullable().optional(),
 });

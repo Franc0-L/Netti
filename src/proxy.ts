@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import type { ArticleKind } from '@/lib/content';
 import { notFoundHtml } from '@/lib/not-found-response';
 import { isVisibleArticle, resolveRedirect } from '@/lib/public-content-guard';
 import { articleKindFromSegment } from '@/lib/routes';
@@ -75,22 +76,34 @@ const RESERVED_SEGMENTS = new Set([
   'favicon.ico',
 ]);
 
-type PublicContentTarget = { kind: string; slug?: string };
+/**
+ * Public routes answered by the App Router.
+ *
+ * The catch-all `[kind]` segment would render them with a 200 and the
+ * not-found view, so the proxy must let them through instead of turning them
+ * into a 404.
+ */
+const APP_ROUTER_ROUTES = new Set(['juegos', 'buscar', 'terminos', 'privacidad']);
+
+type PublicContentTarget = { kind: ArticleKind | null; slug?: string };
 
 /**
  * Identifies public content paths that the App Router would answer with a
  * streamed 200 when the content does not exist.
  *
  * Only one or two segment paths are considered: collections and articles.
- * Anything else is either a reserved route or a path without a matching route,
- * which Next.js already answers with a 404.
+ * Anything else is either a reserved route, a route of the App Router
+ * (`/juegos`, `/buscar`, `/terminos`, `/privacidad`) or a path without a
+ * matching route, which Next.js already answers with a 404.
  */
 function publicContentTarget(pathname: string): PublicContentTarget | null {
   const segments = pathname.split('/').filter(Boolean);
   if (segments.length === 0 || segments.length > 2) return null;
   if (RESERVED_SEGMENTS.has(segments[0])) return null;
   if (segments[0].includes('.')) return null;
-  return segments.length === 1 ? { kind: segments[0] } : { kind: segments[0], slug: segments[1] };
+  if (APP_ROUTER_ROUTES.has(segments[0])) return null;
+  const kind = articleKindFromSegment(segments[0]);
+  return segments.length === 1 ? { kind } : { kind, slug: segments[1] };
 }
 
 function decodeSlug(value: string): string {
@@ -136,7 +149,7 @@ export default async function proxy(request: NextRequest) {
   if (!pathname.startsWith('/admin')) {
     const target = publicContentTarget(pathname);
     if (target) {
-      const kind = articleKindFromSegment(target.kind);
+      const kind = target.kind;
       if (!kind) return notFoundResponse();
       if (target.slug) {
         const visible = await isVisibleArticle(kind, decodeSlug(target.slug));

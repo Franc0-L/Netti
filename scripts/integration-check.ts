@@ -92,9 +92,9 @@ async function main(): Promise<void> {
   await configureEnvironment();
 
   const { db, pool } = await import('../src/db/index');
-  const { eq, inArray, sql } = await import('drizzle-orm');
+  const { eq, inArray, like, sql } = await import('drizzle-orm');
   const auth = await import('../src/lib/auth');
-  const { sessions, loginAttempts } = await import('../src/db/schema');
+  const { articles, loginAttempts, sessions } = await import('../src/db/schema');
 
   const attemptIps = new Set<string>();
   const uniqueIp = (label: string): string => {
@@ -117,6 +117,7 @@ async function main(): Promise<void> {
     'media',
     'media_variants',
     'redirects',
+    'score_rarities',
     'sessions',
     'storage_orphans',
   ];
@@ -136,13 +137,97 @@ async function main(): Promise<void> {
     const triggers = await db.execute<{ count: string }>(
       sql`select count(*)::text as count from pg_trigger where not tgisinternal`
     );
-    expect(Number(triggers.rows[0]?.count) >= 4, 'expected at least 4 triggers');
+    expect(Number(triggers.rows[0]?.count) >= 5, 'expected at least 5 triggers');
 
     const checks = await db.execute<{ count: string }>(
       sql`select count(*)::text as count from pg_constraint
           where contype = 'c' and connamespace = 'public'::regnamespace`
     );
-    expect(Number(checks.rows[0]?.count) >= 38, 'expected the check constraints from the baseline');
+    expect(Number(checks.rows[0]?.count) >= 43, 'expected the check constraints from the baseline');
+  });
+
+  await check('the rarity band is derived from the score', async () => {
+    const slug = `integration-rarity-${RUN_ID}`;
+    const bands: Array<[number, string]> = [
+      [0, 'common'],
+      [19, 'common'],
+      [20, 'uncommon'],
+      [40, 'rare'],
+      [60, 'epic'],
+      [80, 'legendary'],
+      [90, 'mythic'],
+      [100, 'mythic'],
+    ];
+    try {
+      for (const [score, expected] of bands) {
+        const [row] = await db
+          .insert(articles)
+          .values({
+            kind: 'review',
+            slug: `${slug}-${score}`,
+            title: 'Prueba de rareza',
+            body: 'Cuerpo de prueba para la rareza derivada.',
+            score,
+            status: 'draft',
+          })
+          .returning({ rarityKey: articles.rarityKey });
+        expect(row?.rarityKey === expected, `score ${score} should be ${expected}`);
+      }
+    } finally {
+      await db.delete(articles).where(like(articles.slug, `${slug}%`));
+    }
+  });
+
+  await check('the database validates the editorial breakdown', async () => {
+    const slug = `integration-details-${RUN_ID}`;
+    try {
+      const [stored] = await db
+        .insert(articles)
+        .values({
+          kind: 'review',
+          slug: `${slug}-ok`,
+          title: 'Prueba de subpuntuaciones',
+          body: 'Cuerpo de prueba para las subpuntuaciones.',
+          score: 80,
+          scoreDetails: { story: 8, gameplay: 9, visual: 7 },
+          status: 'draft',
+        })
+        .returning({ id: articles.id });
+      expect(stored?.id !== undefined, 'valid sub-scores must be stored');
+
+      let rejected = false;
+      try {
+        await db.insert(articles).values({
+          kind: 'review',
+          slug: `${slug}-bad`,
+          title: 'Prueba de subpuntuaciones',
+          body: 'Cuerpo de prueba para las subpuntuaciones.',
+          score: 80,
+          scoreDetails: { story: 42 },
+          status: 'draft',
+        });
+      } catch {
+        rejected = true;
+      }
+      expect(rejected, 'a sub-score outside 1-10 must be rejected');
+
+      let outOfRange = false;
+      try {
+        await db.insert(articles).values({
+          kind: 'review',
+          slug: `${slug}-range`,
+          title: 'Prueba de subpuntuaciones',
+          body: 'Cuerpo de prueba para las subpuntuaciones.',
+          score: 101,
+          status: 'draft',
+        });
+      } catch {
+        outOfRange = true;
+      }
+      expect(outOfRange, 'a score outside 0-100 must be rejected');
+    } finally {
+      await db.delete(articles).where(like(articles.slug, `${slug}%`));
+    }
   });
 
   await check('origin validation accepts the configured origin only', async () => {

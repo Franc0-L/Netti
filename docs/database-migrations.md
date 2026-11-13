@@ -20,24 +20,37 @@ DATABASE_URL_UNPOOLED=postgresql://user:pass@host:5432/db npm run db:migrate
 
 The baseline is versioned and registered in Drizzle's journal.
 
+## Incremental 0001 — score and rarity
+
+`0001_score_rarity.sql` extends the baseline without dropping tables or data:
+
+- Creates `score_rarities` (key, label, color token, score range, position) and seeds the six bands: Mítica ≥90, Legendaria ≥80, Épica ≥60, Rara ≥40, Poco común ≥20, Común <20.
+- Adds `articles.score_details` (JSONB) and `articles.rarity_key` (FK to `score_rarities`, `ON DELETE RESTRICT`) with the index `articles_rarity_idx`.
+- Replaces `articles_review_fields_only` and `articles_review_complete` with their 0-100 versions, and adds `articles_score_valid` and `articles_score_details_valid`.
+- Adds the immutable function `article_score_details_valid(jsonb)` and the trigger `articles_set_rarity`, which derives the rarity band from the score on every insert and update.
+
+The migration only drops the two review constraints it immediately recreates; the test suite asserts that no table, schema, type or index is dropped.
+
 ## Verified application (PostgreSQL 18.6)
 
-The baseline was applied to an empty PostgreSQL 18.6 database on 11 November 2026 with `npm run db:migrate` and the following catalog was verified:
+The migrations were applied to an empty PostgreSQL 18.6 database on 12 November 2026 with `npm run db:migrate` and the following catalog was verified:
 
-| Check                          | Result        |
-| ------------------------------ | ------------- |
-| Tables in `public`             | 10            |
-| Indexes                        | 34            |
-| Constraints (all types)        | 122           |
-| Check constraints              | 38            |
-| Triggers (non-internal)        | 4             |
-| `drizzle.__drizzle_migrations` | 1 applied row |
+| Check                          | Result         |
+| ------------------------------ | -------------- |
+| Tables in `public`             | 11             |
+| Indexes                        | 38             |
+| Constraints (all types)        | 137            |
+| Check constraints              | 43             |
+| Triggers (non-internal)        | 5              |
+| `drizzle.__drizzle_migrations` | 2 applied rows |
 
-Tables: `articles`, `article_revisions`, `cron_runs`, `games`, `login_attempts`, `media`, `media_variants`, `redirects`, `sessions`, `storage_orphans`.
+Tables: `articles`, `article_revisions`, `cron_runs`, `games`, `login_attempts`, `media`, `media_variants`, `redirects`, `score_rarities`, `sessions`, `storage_orphans`.
 
-Triggers: `articles_set_updated_at`, `articles_validate_tags`, `games_set_updated_at`, `redirects_validate`.
+Triggers: `articles_set_rarity`, `articles_set_updated_at`, `articles_validate_tags`, `games_set_updated_at`, `redirects_validate`.
 
 The check constraints also reject incomplete reviews and invalid publication states at the database level, not only in Zod.
+
+`npm run test:migrations` applies both migrations to a disposable database, verifies the catalog, checks the rarity derivation on every band boundary and confirms that invalid sub-scores and out-of-range scores are rejected. The database is created and dropped by the script.
 
 CI repeats this procedure in the `integration` job (`postgres:18` service) before running `npm run test:db` and `npm run test:http`.
 

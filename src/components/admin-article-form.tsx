@@ -32,6 +32,9 @@ type EditorValues = {
   ogMediaId: number | null;
   gameId: number | null;
   score: string;
+  scoreStory: string;
+  scoreGameplay: string;
+  scoreVisual: string;
   scoreReason: string;
   verdict: string;
   category: string;
@@ -99,6 +102,9 @@ const defaultValues: EditorValues = {
   ogMediaId: null,
   gameId: null,
   score: '',
+  scoreStory: '',
+  scoreGameplay: '',
+  scoreVisual: '',
   scoreReason: '',
   verdict: '',
   category: '',
@@ -160,6 +166,24 @@ export function AdminArticleForm({
     setFieldErrors((current) => ({ ...current, [key]: [] }));
   }
 
+  /** Builds the editorial breakdown from the three sub-scores (1-10 each). */
+  function buildScoreDetails(): Record<string, number> | null {
+    const details: Record<string, number> = {};
+    const entries = [
+      ['story', values.scoreStory],
+      ['gameplay', values.scoreGameplay],
+      ['visual', values.scoreVisual],
+    ] as const;
+    for (const [key, raw] of entries) {
+      const trimmed = raw.trim();
+      if (!trimmed) continue;
+      const parsed = Number(trimmed);
+      if (!Number.isFinite(parsed)) continue;
+      details[key] = parsed;
+    }
+    return Object.keys(details).length > 0 ? details : null;
+  }
+
   function payload(status: ArticleStatus) {
     return {
       ...values,
@@ -169,6 +193,7 @@ export function AdminArticleForm({
         .map((tag) => tag.trim())
         .filter(Boolean),
       score: values.kind === 'review' && values.score ? Number(values.score) : null,
+      scoreDetails: values.kind === 'review' ? buildScoreDetails() : null,
       gameId: values.kind === 'review' ? values.gameId : null,
       scoreReason: values.kind === 'review' ? values.scoreReason || null : null,
       verdict: values.kind === 'review' ? values.verdict || null : null,
@@ -571,19 +596,71 @@ export function AdminArticleForm({
                 ))}
               </select>
               <label className="admin-label" htmlFor="score">
-                Puntuación
+                Puntuación (0-100)
               </label>
               <input
                 id="score"
                 className={inputClass}
                 type="number"
-                min={1}
-                max={10}
+                min={0}
+                max={100}
+                step={1}
                 value={values.score}
                 onChange={(e) => change('score', e.target.value)}
                 {...errorProps('score', fieldErrors.score)}
               />
               <FieldErrors field="score" errors={fieldErrors.score} />
+              <label className="admin-label" htmlFor="score-story">
+                Historia (1-10)
+              </label>
+              <input
+                id="score-story"
+                className={inputClass}
+                type="number"
+                min={1}
+                max={10}
+                step={1}
+                value={values.scoreStory}
+                onChange={(e) => change('scoreStory', e.target.value)}
+                {...errorProps('scoreDetails.story', fieldErrors['scoreDetails.story'])}
+              />
+              <FieldErrors field="scoreDetails.story" errors={fieldErrors['scoreDetails.story']} />
+              <label className="admin-label" htmlFor="score-gameplay">
+                Jugabilidad (1-10)
+              </label>
+              <input
+                id="score-gameplay"
+                className={inputClass}
+                type="number"
+                min={1}
+                max={10}
+                step={1}
+                value={values.scoreGameplay}
+                onChange={(e) => change('scoreGameplay', e.target.value)}
+                {...errorProps('scoreDetails.gameplay', fieldErrors['scoreDetails.gameplay'])}
+              />
+              <FieldErrors
+                field="scoreDetails.gameplay"
+                errors={fieldErrors['scoreDetails.gameplay']}
+              />
+              <label className="admin-label" htmlFor="score-visual">
+                Apartado visual (1-10)
+              </label>
+              <input
+                id="score-visual"
+                className={inputClass}
+                type="number"
+                min={1}
+                max={10}
+                step={1}
+                value={values.scoreVisual}
+                onChange={(e) => change('scoreVisual', e.target.value)}
+                {...errorProps('scoreDetails.visual', fieldErrors['scoreDetails.visual'])}
+              />
+              <FieldErrors
+                field="scoreDetails.visual"
+                errors={fieldErrors['scoreDetails.visual']}
+              />
               <label className="admin-label" htmlFor="score-reason">
                 Justificación
               </label>

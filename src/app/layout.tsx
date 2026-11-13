@@ -44,11 +44,20 @@ export const metadata: Metadata = {
     title: 'Netti — Videojuegos, con criterio',
     description: 'Reseñas, noticias y guías de videojuegos. Análisis y contexto, sin ruido.',
     url: '/',
+    images: [
+      {
+        url: '/images/logo-netti.png',
+        width: 1000,
+        height: 1000,
+        alt: 'Netti.',
+      },
+    ],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'Netti — Videojuegos, con criterio',
     description: 'Reseñas, noticias y guías de videojuegos. Análisis y contexto, sin ruido.',
+    images: ['/images/logo-netti.png'],
   },
 };
 

@@ -14,9 +14,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const baseUrl = new URL(siteUrl);
   const entries: MetadataRoute.Sitemap = [
     { url: baseUrl.toString() },
+    { url: new URL('/juegos', baseUrl).toString() },
     { url: new URL('/resenas', baseUrl).toString() },
     { url: new URL('/noticias', baseUrl).toString() },
     { url: new URL('/guias', baseUrl).toString() },
+    { url: new URL('/buscar', baseUrl).toString() },
+    { url: new URL('/terminos', baseUrl).toString() },
+    { url: new URL('/privacidad', baseUrl).toString() },
   ];
 
   const collections = await Promise.all(

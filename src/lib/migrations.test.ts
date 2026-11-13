@@ -54,3 +54,36 @@ test('baseline does not drop existing data', () => {
   const sql = readFileSync(join(root, '0000_initial_schema.sql'), 'utf8');
   assert.doesNotMatch(sql, /\bDROP\s+(TABLE|SCHEMA|TYPE|INDEX)\b/i);
 });
+
+test('the score and rarity migration extends the baseline without dropping data', () => {
+  const sql = readFileSync(join(root, '0001_score_rarity.sql'), 'utf8');
+  for (const item of [
+    'CREATE TABLE "score_rarities"',
+    'ALTER TABLE "articles" ADD COLUMN "score_details" jsonb',
+    'ALTER TABLE "articles" ADD COLUMN "rarity_key" text',
+    'articles_rarity_fk',
+    'articles_score_valid',
+    'articles_score_details_valid',
+    'article_score_details_valid',
+    'articles_set_rarity',
+  ])
+    assert.ok(sql.includes(item), item + ' missing');
+  // The baseline is kept intact: the migration only extends it.
+  assert.doesNotMatch(sql, /\bDROP\s+(TABLE|SCHEMA|TYPE|INDEX)\b/i);
+  // Only the two review constraints are replaced, and they are added back.
+  const dropped = [...sql.matchAll(/DROP CONSTRAINT "([^"]+)"/g)].map((match) => match[1]);
+  assert.deepEqual(dropped.sort(), ['articles_review_complete', 'articles_review_fields_only']);
+  for (const constraint of dropped) {
+    assert.ok(
+      sql.includes(`ADD CONSTRAINT "${constraint}"`),
+      `${constraint} must be recreated by the same migration`
+    );
+  }
+});
+
+test('the score migration keeps the legacy review constraints and the 0-100 range', () => {
+  const sql = readFileSync(join(root, '0001_score_rarity.sql'), 'utf8');
+  assert.ok(sql.includes('"score" between 0 AND 100'));
+  assert.ok(sql.includes('"kind" = \'review\' OR'));
+  assert.ok(sql.includes('char_length(btrim(coalesce("score_reason",\'\'))) >= 20'));
+});
