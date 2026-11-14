@@ -31,7 +31,7 @@ npm run test:http        # contra next start en 127.0.0.1
 
 `next build` ya no corre ESLint: si no se agrega `npm run lint`, un error de lint llega a producción. `npm run test:all` encadena las cuatro suites de integración locales; no se usa en CI porque cada job necesita su propia base y su propio servidor.
 
-Además del workflow de calidad, `codeql.yml` analiza el código en cada PR y una vez por semana, y `dependabot.yml` abre PRs semanales de npm y de las GitHub Actions. `.husky/pre-commit` formatea y linta solo los archivos tocados (`lint-staged`).
+Además del workflow de calidad, `codeql.yml` analiza el código en cada PR y una vez por semana, y `dependabot.yml` abre PRs semanales de npm y de las GitHub Actions. No hay hook de pre-commit en el repositorio: la validación completa la hace la CI en cada push y pull request.
 
 ## 2. Entorno
 

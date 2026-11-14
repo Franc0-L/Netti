@@ -107,7 +107,7 @@ Las rutas inexistentes responden con un 404 real: el proxy decide antes de rende
 1. **validate**: tests unitarios, ESLint, Prettier (`--check` sobre todo el repo), typecheck, build de producción y `npm audit --omit=dev --audit-level=high`.
 2. **integration**: servicio `postgres:18`, `npm run test:migrations`, `npm run test:baseline`, `npm run db:migrate`, build, `npm run test:db` y `npm run test:http` contra el servidor real.
 
-Además, `codeql.yml` analiza el código en cada pull request y una vez por semana, `dependabot.yml` abre PRs semanales de dependencias y `.husky/pre-commit` formatea y linta los archivos tocados.
+Además, `codeql.yml` analiza el código en cada pull request y una vez por semana, y `dependabot.yml` abre PRs semanales de dependencias. No hay hooks de pre-commit: la validación vive en la CI.
 
 El smoke HTTP cubre también CSP (incluido `frame-src` para los reproductores de video), errores HTTP (404 y la redirección permanente 308 de una ruta legacy hacia su artículo actual), metadatos, catálogo y ficha de juego y una base de accesibilidad (skip link, landmarks, un único `h1`, imágenes con `alt`).
 

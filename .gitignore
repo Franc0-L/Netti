@@ -38,10 +38,6 @@ yarn-error.log*
 # vercel
 .vercel
 
-# husky hooks: the pre-commit hook is versioned, the local state is not
-.husky/*
-!.husky/pre-commit
-
 # typescript
 *.tsbuildinfo
 next-env.d.ts

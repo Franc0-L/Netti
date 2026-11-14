@@ -23,6 +23,16 @@ updates:
         update-types:
           - minor
           - patch
+    ignore:
+      # Major upgrades are a deliberate decision, not an automatic one: they
+      # need a review of the breaking changes and a migration on its own
+      # branch. Dependabot keeps proposing the minors and the patches.
+      - dependency-name: 'typescript'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'eslint'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'drizzle-kit'
+        update-types: ['version-update:semver-major']
     labels:
       - dependencies
     commit-message:

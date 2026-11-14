@@ -192,7 +192,7 @@ El mismo commit se vigila además con:
 
 - `codeql.yml`: análisis estático de JavaScript/TypeScript en cada push a `main` y cada pull request, más una ejecución semanal.
 - `dependabot.yml`: actualizaciones semanales de npm y de las GitHub Actions, agrupadas para no inundar de PRs.
-- `.husky/pre-commit`: `lint-staged` formatea y linta solo los archivos tocados, con `HUSKY=0` en CI para no interferir.
+- La validación continua no usa hooks locales: `quality.yml` y `codeql.yml` corren en GitHub, en cada push a `main` y en cada pull request. El repositorio no versiona hooks de pre-commit, así que la puerta de calidad es la CI y no la máquina de cada editor.
 
 `npm run test:db` exige una base PostgreSQL en loopback (`localhost`, `127.0.0.1` o `::1`), porque inserta y borra fixtures de sesiones e intentos de login mientras ejercita los flujos; un nombre que termine en `_test` no autoriza un host remoto. `npm run test:http` aplica la misma restricción y restaura las filas de `cron_runs` que sobrescribe, en lugar de borrarlas. `test:migrations` y `test:baseline` crean y destruyen sus propias bases desechables, con un nombre que incluye un UUID.
 

@@ -27,8 +27,7 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
-    "format:check": "prettier --check .",
-    "prepare": "husky"
+    "format:check": "prettier --check ."
   },
   "dependencies": {
     "@vercel/blob": "^2.8.2",
@@ -56,16 +55,10 @@
     "eslint": "^9.39.1",
     "eslint-config-next": "16.4.5",
     "eslint-plugin-prettier": "^5.5.4",
-    "husky": "^9.1.7",
-    "lint-staged": "^16.2.6",
     "prettier": "^3.6.2",
     "tailwindcss": "^4",
     "tsx": "^4.20.6",
     "typescript": "^5"
-  },
-  "lint-staged": {
-    "*.{ts,tsx,js,jsx,json,md}": "prettier --write",
-    "*.{ts,tsx}": "eslint --fix"
   },
   "overrides": {
     "@vercel/cli-config": {

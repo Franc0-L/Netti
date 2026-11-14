@@ -17,7 +17,6 @@ env:
   ADMIN_PASSWORD_HASH: ci-placeholder-not-a-real-password-hash
   BLOB_READ_WRITE_TOKEN: ci-placeholder
   CRON_SECRET: ci-placeholder-secret-with-more-than-32-characters
-  HUSKY: '0'
 
 jobs:
   validate:
