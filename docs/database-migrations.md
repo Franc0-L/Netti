@@ -41,7 +41,24 @@ The migration only drops the two review constraints it immediately recreates; th
 - Creates `score_rarities`, `articles.score_details` and `articles.rarity_key` with their constraints, so the file also replaces the work of 0001 on a legacy database.
 - Deletes the duplicated `article_revisions` rows that legacy databases stored for the same `(article_id, version)` before the version trigger existed. The newest snapshot of each version is kept, because that is the state the article ended in.
 
-`npm run test:migrations` exercises two paths against disposable databases: a fresh database that receives every migration in order, and a legacy database (`scripts/fixtures/legacy-schema.sql`) that receives only 0002. Both must end with the same catalog, the same derived rarities and the same rejections.
+`npm run test:migrations` exercises two paths against disposable databases: a fresh database that receives every migration in order, and a legacy database (`scripts/fixtures/legacy-schema.sql`) that receives only 0002 and the migrations that came after. Both must end with the same catalog, the same derived rarities and the same rejections.
+
+## Incremental 0003 — editorial extras, gallery and game tags
+
+`0003_editorial_gallery_and_game_tags.sql` adds the editorial fields that the panel edits:
+
+- Creates `article_gallery` (`article_id`, `media_id`, `position` from 0 to 19) with both foreign keys, a unique pair per article and position, and the index used to list a gallery in order.
+- Adds `articles.pros` and `articles.cons` (`text[]`, at most five items of at most 200 characters), validated by the immutable function `article_bullet_list_valid` because a `CHECK` cannot hold a subquery.
+- Adds `articles.video_url` and `articles.video_title`, with the URL restricted to `http(s)` and both columns required together.
+- Adds `games.tags` (`text[]`, GIN-indexed) and `games.featured`, plus the GIN indexes that the catalog filters and the related-article queries use.
+
+## Incremental 0004 — game trash
+
+`0004_games_trash_support.sql` gives the game lifecycle the same reversible trash that articles already had:
+
+- Adds `games.previous_status` and `games.trashed_at`.
+- Replaces `games_status_valid` so it accepts `'trashed'`.
+- Requires a trashed game to carry `trashed_at` and the status it had before, so restoring never has to guess.
 
 ## Baseline of a database created outside Drizzle
 
@@ -64,34 +81,36 @@ npm run db:backup
 
 ## Drizzle snapshots
 
-The migration SQL is written by hand, so `src/db/migrations/meta/` only carries the snapshot of the latest state (`0002_snapshot.json`). Without it, `npm run db:generate` would diff against nothing and emit a migration that recreates every table. With it, the command reports "No schema changes" when `src/db/schema.ts` and the database agree. When a migration changes the schema, regenerate the snapshot in the same commit.
+The migration SQL is written by hand, so `src/db/migrations/meta/` carries the snapshot of the latest state (`0004_snapshot.json`, with `0003_snapshot.json` kept for reference). Without it, `npm run db:generate` would diff against nothing and emit a migration that recreates every table. With it, the command reports "No schema changes" when `src/db/schema.ts` and the database agree. When a migration changes the schema, regenerate the snapshot in the same commit.
 
 ## Verified application (PostgreSQL 18.6)
 
-The migrations were applied to an empty PostgreSQL 18.6 database on 12 November 2026 with `npm run db:migrate` and the following catalog was verified:
+The migrations were applied to an empty PostgreSQL 18.6 database on 12 November 2026 and, after 0003 and 0004, re-verified on 14 November 2026 with `npm run db:migrate`:
 
 | Check                          | Result         |
 | ------------------------------ | -------------- |
-| Tables in `public`             | 11             |
-| Indexes                        | 38             |
-| Constraints (all types)        | 137            |
-| Check constraints              | 43             |
+| Tables in `public`             | 12             |
+| Indexes                        | 49             |
+| Foreign keys                   | 9              |
+| Check constraints              | 54             |
 | Triggers (non-internal)        | 5              |
-| `drizzle.__drizzle_migrations` | 2 applied rows |
+| `drizzle.__drizzle_migrations` | 5 applied rows |
 
-Tables: `articles`, `article_revisions`, `cron_runs`, `games`, `login_attempts`, `media`, `media_variants`, `redirects`, `score_rarities`, `sessions`, `storage_orphans`.
+Tables: `article_gallery`, `article_revisions`, `articles`, `cron_runs`, `games`, `login_attempts`, `media`, `media_variants`, `redirects`, `score_rarities`, `sessions`, `storage_orphans`.
 
 Triggers: `articles_set_rarity`, `articles_set_updated_at`, `articles_validate_tags`, `games_set_updated_at`, `redirects_validate`.
 
 The check constraints also reject incomplete reviews and invalid publication states at the database level, not only in Zod.
 
-`npm run test:migrations` applies both migrations to a disposable database, verifies the catalog, checks the rarity derivation on every band boundary and confirms that invalid sub-scores and out-of-range scores are rejected. The database is created and dropped by the script.
+`npm run test:migrations` applies every migration to a disposable database, verifies the catalog, checks the rarity derivation on every band boundary and confirms that invalid sub-scores, out-of-range scores, oversized bullet lists and an incomplete trashed game are rejected. The database is created and dropped by the script.
 
 CI repeats this procedure in the `integration` job (`postgres:18` service) before running `npm run test:db` and `npm run test:http`.
 
 ## Production instance
 
-The Neon database (`neondb`) was created outside Drizzle: it carried the ten tables without checks, foreign keys, triggers, functions or secondary indexes, and without a migration history. On 13 November 2026 it was backed up with `npm run db:backup`, baselined for 0000 and 0001, and reconciled with 0002 through `npm run db:migrate`. The catalog now matches the local one: 11 tables, 38 indexes, 7 foreign keys, 43 check constraints, 5 triggers, 6 rarities and 3 rows in `drizzle.__drizzle_migrations`. A score of 93 derives `mythic` and a score of 120 is rejected.
+The Neon database (`neondb`) was created outside Drizzle: it carried the ten tables without checks, foreign keys, triggers, functions or secondary indexes, and without a migration history. On 13 November 2026 it was backed up with `npm run db:backup`, baselined for 0000 and 0001, and reconciled with 0002 through `npm run db:migrate`. That left it with 11 tables, 38 indexes, 7 foreign keys, 43 check constraints, 5 triggers, 6 rarities and 3 rows in `drizzle.__drizzle_migrations`.
+
+**Pending**: 0003 and 0004 exist only in the repository. Production stays at 0002 until a fresh backup is taken and the migration is approved; the panel and the game sheets expect the new columns, so the deployment must not happen before the migration.
 
 ## Runtime schema is the source of truth
 

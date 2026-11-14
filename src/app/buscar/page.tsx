@@ -7,6 +7,7 @@ import { SectionChips } from '@/components/section-chips';
 import { SiteFooter, SiteHeader, SkipLink } from '@/components/site-chrome';
 import { searchArticles, type ArticleKind } from '@/lib/content';
 import { articlePath } from '@/lib/routes';
+import { firstParamText } from '@/lib/search-params';
 
 export const metadata: Metadata = {
   title: 'Buscar',
@@ -27,15 +28,30 @@ const KIND_LABELS: Record<ArticleKind, string> = {
   guide: 'Guía',
 };
 
+const PAGE_SIZE = 20;
+
 export default async function SearchPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{ q?: string | string[]; pagina?: string | string[] }>;
 }) {
   await connection();
   const params = await searchParams;
-  const query = (params.q ?? '').trim().slice(0, 80);
-  const results = query ? await searchArticles(query) : [];
+  // A repeated parameter arrives as an array: reading it directly would throw.
+  const query = firstParamText(params.q, 80);
+  const requestedPage = Number.parseInt(firstParamText(params.pagina, 8), 10);
+  const page = Number.isSafeInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+
+  const { results, total } = query
+    ? await searchArticles(query, PAGE_SIZE, (page - 1) * PAGE_SIZE)
+    : { results: [], total: 0 };
+  const totalPages = Math.max(Math.ceil(total / PAGE_SIZE), 1);
+  const pageLink = (target: number) => {
+    const next = new URLSearchParams();
+    next.set('q', query);
+    if (target > 1) next.set('pagina', String(target));
+    return `/buscar?${next.toString()}`;
+  };
 
   return (
     <div className="site-shell">
@@ -53,9 +69,9 @@ export default async function SearchPage({
         <SectionChips />
         {query ? (
           <p className="search-summary" role="status">
-            {results.length === 0
+            {total === 0
               ? `Sin resultados para “${query}”.`
-              : `${results.length} ${results.length === 1 ? 'resultado' : 'resultados'} para “${query}”.`}
+              : `${total} ${total === 1 ? 'resultado' : 'resultados'} para “${query}”.`}
           </p>
         ) : null}
         {results.length > 0 ? (
@@ -97,6 +113,23 @@ export default async function SearchPage({
               </article>
             ))}
           </section>
+        ) : null}
+        {query && totalPages > 1 ? (
+          <nav className="pagination" aria-label="Páginas de resultados">
+            {page > 1 ? (
+              <Link className="pagination-link" href={pageLink(page - 1)} rel="prev">
+                <span aria-hidden="true">←</span> Anteriores
+              </Link>
+            ) : null}
+            <span className="pagination-status">
+              Página {page} de {totalPages}
+            </span>
+            {page < totalPages ? (
+              <Link className="pagination-link" href={pageLink(page + 1)} rel="next">
+                Siguientes <span aria-hidden="true">→</span>
+              </Link>
+            ) : null}
+          </nav>
         ) : null}
       </main>
       <SiteFooter />

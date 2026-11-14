@@ -12,7 +12,6 @@ import {
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
 import { relations, sql } from 'drizzle-orm';
-
 export const media = pgTable(
   'media',
   {
@@ -40,6 +39,10 @@ export const media = pgTable(
       sql`${t.rights} = 'own' or char_length(btrim(coalesce(${t.credit}, ''))) > 0`
     ),
     check('media_source_url_valid', sql`${t.sourceUrl} is null or ${t.sourceUrl} ~* '^https?://'`),
+    // The cleanup job scans the media waiting to be deleted.
+    index('media_pending_delete_idx')
+      .on(t.pendingDeleteAt)
+      .where(sql`${t.pendingDeleteAt} is not null`),
   ]
 );
 
@@ -56,9 +59,13 @@ export const games = pgTable(
     releaseDate: timestamp('release_date', { withTimezone: true }),
     platforms: text('platforms').array().notNull().default([]),
     genres: text('genres').array().notNull().default([]),
+    tags: text('tags').array().notNull().default([]),
+    featured: boolean('featured').notNull().default(false),
     externalSource: text('external_source'),
     externalId: text('external_id'),
     status: text('status').notNull().default('draft'),
+    previousStatus: text('previous_status'),
+    trashedAt: timestamp('trashed_at', { withTimezone: true }),
     coverImageUrl: text('cover_image_url'),
     coverAlt: text('cover_alt'),
     coverMediaId: integer('cover_media_id'),
@@ -78,7 +85,19 @@ export const games = pgTable(
       'games_external_source_and_id_together',
       sql`(${t.externalSource} is null and ${t.externalId} is null) or (${t.externalSource} is not null and ${t.externalId} is not null)`
     ),
-    check('games_status_valid', sql`${t.status} in ('draft', 'published')`),
+    check('games_status_valid', sql`${t.status} in ('draft', 'published', 'trashed')`),
+    check(
+      'games_previous_status_valid',
+      sql`${t.previousStatus} is null or ${t.previousStatus} in ('draft', 'published')`
+    ),
+    check(
+      'games_trashed_requires_date',
+      sql`${t.status} <> 'trashed' or ${t.trashedAt} is not null`
+    ),
+    check(
+      'games_trashed_requires_previous',
+      sql`${t.status} <> 'trashed' or ${t.previousStatus} is not null`
+    ),
     check(
       'games_published_requires_cover',
       sql`${t.status} <> 'published' or ${t.coverImageUrl} is not null`
@@ -94,6 +113,15 @@ export const games = pgTable(
       .where(sql`${t.externalId} is not null`),
     index('games_platforms_idx').using('gin', t.platforms),
     index('games_genres_idx').using('gin', t.genres),
+    index('games_tags_idx').using('gin', t.tags),
+    // The public catalog reads the published games ordered by creation date.
+    index('games_published_idx')
+      .on(t.createdAt, t.id)
+      .where(sql`${t.status} = 'published'`),
+    index('games_featured_idx')
+      .on(t.createdAt, t.id)
+      .where(sql`${t.featured} and ${t.status} = 'published'`),
+    index('games_release_date_idx').on(t.releaseDate),
   ]
 );
 
@@ -139,6 +167,10 @@ export const articles = pgTable(
     publishedAt: timestamp('published_at', { withTimezone: true }),
     author: text('author'),
     tags: text('tags').array().notNull().default([]),
+    pros: text('pros').array().notNull().default([]),
+    cons: text('cons').array().notNull().default([]),
+    videoUrl: text('video_url'),
+    videoTitle: text('video_title'),
     coverImageUrl: text('cover_image_url'),
     coverAlt: text('cover_alt'),
     coverMediaId: integer('cover_media_id'),
@@ -220,6 +252,19 @@ export const articles = pgTable(
       'articles_news_category_len',
       sql`${t.category} is null or char_length(${t.category}) <= 40`
     ),
+    check('articles_pros_limit', sql`cardinality(${t.pros}) <= 5`),
+    check('articles_cons_limit', sql`cardinality(${t.cons}) <= 5`),
+    check('articles_pros_items_valid', sql`article_bullet_list_valid(${t.pros})`),
+    check('articles_cons_items_valid', sql`article_bullet_list_valid(${t.cons})`),
+    check('articles_video_url_valid', sql`${t.videoUrl} is null or ${t.videoUrl} ~* '^https?://'`),
+    check(
+      'articles_video_title_len',
+      sql`${t.videoTitle} is null or char_length(${t.videoTitle}) <= 200`
+    ),
+    check(
+      'articles_video_together',
+      sql`(${t.videoUrl} is null and ${t.videoTitle} is null) or (${t.videoUrl} is not null and ${t.videoTitle} is not null)`
+    ),
     foreignKey({
       name: 'articles_rarity_fk',
       columns: [t.rarityKey],
@@ -249,6 +294,15 @@ export const articles = pgTable(
     index('articles_featured_idx')
       .on(t.publishedAt)
       .where(sql`${t.featured} and ${t.status} = 'published'`),
+    // The scheduled activation job reads the pending publications globally,
+    // without filtering by kind.
+    index('articles_pending_activation_idx')
+      .on(t.publishedAt, t.id)
+      .where(sql`${t.status} = 'published'`),
+    // The category chips of the news collection filter by category.
+    index('articles_category_idx')
+      .on(t.category, t.publishedAt)
+      .where(sql`${t.kind} = 'news' and ${t.status} = 'published'`),
     index('articles_tags_idx').using('gin', t.tags),
     index('articles_game_idx').on(t.gameId),
     index('articles_rarity_idx').on(t.rarityKey),
@@ -257,12 +311,41 @@ export const articles = pgTable(
   ]
 );
 
-export const articlesRelations = relations(articles, ({ one }) => ({
+export const articlesRelations = relations(articles, ({ one, many }) => ({
   rarity: one(scoreRarities, {
     fields: [articles.rarityKey],
     references: [scoreRarities.key],
   }),
+  gallery: many(articleGallery),
 }));
+
+/**
+ * Structured gallery of an article.
+ *
+ * The images keep their own order, so the gallery is not a list of markdown
+ * references: the panel can reorder it and the public page renders it as a
+ * gallery with its lightbox.
+ */
+export const articleGallery = pgTable(
+  'article_gallery',
+  {
+    id: serial('id').primaryKey(),
+    articleId: integer('article_id')
+      .notNull()
+      .references(() => articles.id, { onDelete: 'cascade' }),
+    mediaId: integer('media_id')
+      .notNull()
+      .references(() => media.id, { onDelete: 'restrict' }),
+    position: integer('position').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check('article_gallery_position_valid', sql`${t.position} between 0 and 19`),
+    uniqueIndex('article_gallery_article_position_unique').on(t.articleId, t.position),
+    uniqueIndex('article_gallery_article_media_unique').on(t.articleId, t.mediaId),
+    index('article_gallery_media_id_idx').on(t.mediaId),
+  ]
+);
 
 export const mediaVariants = pgTable(
   'media_variants',

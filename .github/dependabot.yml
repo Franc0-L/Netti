@@ -1,0 +1,39 @@
+version: 2
+
+# Dependency updates open pull requests; the quality gates decide whether they
+# can be merged. Nothing is updated automatically in production.
+updates:
+  - package-ecosystem: npm
+    directory: '/'
+    schedule:
+      interval: weekly
+      day: monday
+      time: '05:00'
+      timezone: America/Argentina/Buenos_Aires
+    open-pull-requests-limit: 5
+    groups:
+      # Next.js and React are released together: keeping them in one group
+      # avoids pull requests that only bump one of the two.
+      next:
+        patterns:
+          - 'next'
+          - 'react'
+          - 'react-dom'
+          - 'eslint-config-next'
+        update-types:
+          - minor
+          - patch
+    labels:
+      - dependencies
+    commit-message:
+      prefix: 'chore(deps)'
+
+  - package-ecosystem: github-actions
+    directory: '/'
+    schedule:
+      interval: monthly
+    labels:
+      - dependencies
+      - github-actions
+    commit-message:
+      prefix: 'ci'

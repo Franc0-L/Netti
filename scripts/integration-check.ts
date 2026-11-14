@@ -15,6 +15,9 @@
  * still required because the migration must be applied.
  */
 import { createHash, randomBytes, scrypt as scryptCallback } from 'node:crypto';
+import { assertLocalDatabaseUrl, loadEnvFiles } from './load-env.js';
+
+loadEnvFiles(['.env']);
 
 const TEST_PASSWORD = 'integration-password-123456';
 const WRONG_PASSWORD = 'not-the-admin-password';
@@ -36,16 +39,13 @@ function assertSafeTarget(): void {
   const raw = process.env.DATABASE_URL;
   if (!raw) throw new Error('DATABASE_URL is required for integration checks.');
 
-  const url = new URL(raw);
-  const host = url.hostname.toLowerCase();
+  const url = assertLocalDatabaseUrl(raw);
   const database = url.pathname.replace(/^\//, '');
-  const isLocal = ['localhost', '127.0.0.1', '::1', '[::1]'].includes(host);
 
-  if (!isLocal) {
+  if (!database.toLowerCase().includes('test')) {
     throw new Error(
-      `Refusing to run integration checks against ${host}/${database}. ` +
-        'Only a local PostgreSQL instance (localhost, 127.0.0.1 or ::1) is allowed; ' +
-        'a database name ending in _test is not enough.'
+      `Refusing to run integration checks against ${url.hostname}/${database}. ` +
+        'The database name must contain "test": the checks write and purge data.'
     );
   }
 }
@@ -92,9 +92,9 @@ async function main(): Promise<void> {
   await configureEnvironment();
 
   const { db, pool } = await import('../src/db/index');
-  const { eq, inArray, like, sql } = await import('drizzle-orm');
+  const { and, arrayContains, arrayOverlaps, eq, inArray, like, sql } = await import('drizzle-orm');
   const auth = await import('../src/lib/auth');
-  const { articles, loginAttempts, sessions } = await import('../src/db/schema');
+  const { articles, games, loginAttempts, sessions } = await import('../src/db/schema');
 
   const attemptIps = new Set<string>();
   const uniqueIp = (label: string): string => {
@@ -110,6 +110,7 @@ async function main(): Promise<void> {
 
   const expectedTables = [
     'articles',
+    'article_gallery',
     'article_revisions',
     'cron_runs',
     'games',
@@ -122,7 +123,7 @@ async function main(): Promise<void> {
     'storage_orphans',
   ];
 
-  await check('baseline migration created the ten runtime tables', async () => {
+  await check('baseline migration created the twelve runtime tables', async () => {
     const rows = await db.execute<{ tablename: string }>(
       sql`select tablename from pg_tables where schemaname = 'public' order by 1`
     );
@@ -226,6 +227,73 @@ async function main(): Promise<void> {
       }
       expect(outOfRange, 'a score outside 0-100 must be rejected');
     } finally {
+      await db.delete(articles).where(like(articles.slug, `${slug}%`));
+    }
+  });
+
+  await check('the game catalog filters and trash rules work', async () => {
+    const slug = `integration-game-${RUN_ID}`;
+    try {
+      const [game] = await db
+        .insert(games)
+        .values({
+          slug,
+          title: 'Juego de prueba',
+          description: '',
+          status: 'published',
+          coverImageUrl: 'https://example.com/cover.webp',
+          coverAlt: 'Portada de prueba',
+          platforms: ['PC', 'PlayStation 5'],
+          genres: ['RPG'],
+          tags: ['indie', 'narrativo'],
+          releaseDate: new Date('2024-05-01T00:00:00.000Z'),
+        })
+        .returning({ id: games.id });
+      expect(game?.id !== undefined, 'a published game with a cover must be stored');
+
+      const matching = await db
+        .select({ id: games.id })
+        .from(games)
+        .where(and(eq(games.id, game.id), arrayContains(games.platforms, ['PC'])));
+      expect(matching.length === 1, 'the platform filter must match');
+
+      const missing = await db
+        .select({ id: games.id })
+        .from(games)
+        .where(and(eq(games.id, game.id), arrayContains(games.platforms, ['Switch'])));
+      expect(missing.length === 0, 'a platform that is not present must not match');
+
+      const [tagged] = await db
+        .insert(articles)
+        .values({
+          kind: 'news',
+          slug: `${slug}-tags`,
+          title: 'Noticia de prueba',
+          body: 'Cuerpo de prueba para las etiquetas.',
+          tags: ['indie'],
+          status: 'draft',
+        })
+        .returning({ id: articles.id });
+      const overlapping = await db
+        .select({ id: articles.id })
+        .from(articles)
+        .where(and(eq(articles.id, tagged.id), arrayOverlaps(articles.tags, ['indie'])));
+      expect(overlapping.length === 1, 'the related-articles tag overlap must match');
+
+      await db
+        .update(games)
+        .set({ status: 'trashed', previousStatus: 'published', trashedAt: new Date() })
+        .where(eq(games.id, game.id));
+
+      let rejected = false;
+      try {
+        await db.update(games).set({ trashedAt: null }).where(eq(games.id, game.id));
+      } catch {
+        rejected = true;
+      }
+      expect(rejected, 'a trashed game without a date must be rejected');
+    } finally {
+      await db.delete(games).where(like(games.slug, `${slug}%`));
       await db.delete(articles).where(like(articles.slug, `${slug}%`));
     }
   });

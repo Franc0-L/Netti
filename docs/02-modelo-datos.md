@@ -8,6 +8,7 @@ Define el esquema PostgreSQL (Neon), las restricciones que viven en la base, las
 | ------------------- | ----------------------------------------------------------------- |
 | `games`             | Catálogo de juegos (entidad propia, referenciada por las reseñas) |
 | `articles`          | Reseñas, noticias y guías. Una tabla con `kind`, no tres          |
+| `article_gallery`   | Galería ordenada de imágenes de un artículo                       |
 | `score_rarities`    | Bandas de rareza derivadas de la puntuación (umbrales y color)    |
 | `media`             | Imágenes subidas, con dimensiones y variantes                     |
 | `media_variants`    | Variantes pregeneradas (480/960/1600 px) de cada medio            |
@@ -22,7 +23,7 @@ Define el esquema PostgreSQL (Neon), las restricciones que viven en la base, las
 
 Cuatro tablas separadas obligan a repetir en cada una: el predicado de visibilidad, el índice de búsqueda, la papelera, el sitemap y la validación de slug. Basta olvidar `published_at <= now()` en una consulta para filtrar borradores.
 
-Con `articles(kind)` hay **un** lugar donde se define qué es visible, **un** índice full-text y **un** namespace de slugs por `kind` (`/resenas/x` y `/guias/x` pueden coexistir). La integridad referencial se conserva con `game_id` nullable y un `CHECK` que lo exige solo cuando `kind = 'review'`.
+Con `articles(kind)` hay **un** lugar donde se define qué es visible, **un** predicado de visibilidad y **un** namespace de slugs por `kind` (`/resenas/x` y `/guias/x` pueden coexistir). La integridad referencial se conserva con `game_id` nullable y un `CHECK` que lo exige solo cuando `kind = 'review'`.
 
 `games` queda aparte porque es una entidad de catálogo, no un artículo, y la comparten varias reseñas.
 
@@ -158,12 +159,16 @@ create table games (
   release_date     timestamptz,
   platforms        text[] not null default '{}',
   genres           text[] not null default '{}',
+  tags             text[] not null default '{}',
+  featured         boolean not null default false,
   external_source  text check (external_source in ('rawg', 'igdb', 'manual')),
   external_id      text,
   constraint games_external_source_and_id_together
     check (external_source is null and external_id is null
            or external_source is not null and external_id is not null),
   status           content_status not null default 'draft',
+  previous_status  content_status,
+  trashed_at       timestamptz,
   cover_image_url  text,        -- URL pública derivada de cover_media_id; caché derivado
   cover_alt        text,
   cover_media_id   integer,     -- FK agregada con ALTER TABLE tras crear media
@@ -172,15 +177,17 @@ create table games (
   version          integer not null default 1,
   constraint games_published_requires_cover
     check (status <> 'published' or cover_image_url is not null),
-  constraint games_not_trashed
-    check (status <> 'trashed')
+  constraint games_trashed_requires_date
+    check (status <> 'trashed' or trashed_at is not null),
+  constraint games_trashed_requires_previous
+    check (status <> 'trashed' or previous_status is not null)
 );
 
 create unique index games_external_idx
   on games (external_source, external_id)
   where external_id is not null;
 
-create index games_tags_idx on games using gin (platforms, genres);
+create index games_tags_idx on games using gin (platforms, genres, tags);
 
 create trigger games_set_updated_at
   before update on games
@@ -195,7 +202,7 @@ create trigger games_set_updated_at
 
 `release_date` es una fecha completa, no solo el año: las noticias suelen anunciar lanzamientos futuros y el año solo no alcanza. El esquema runtime la define como `timestamptz`; la UI muestra solo la fecha.
 
-`games` no tiene `previous_status` ni `trashed_at` en la v1: se borra físicamente (ya protegido por `ON DELETE RESTRICT` si tiene reseñas publicadas).
+`games` tiene papelera reversible: `previous_status` y `trashed_at` permiten restaurar la ficha al estado que tenía. Despublicar o enviar a papelera se rechaza en la aplicación si la ficha tiene reseñas publicadas, porque quedarían apuntando a un juego oculto. La columna `tags` (con índice GIN propio) y `featured` llegaron con la migración `0003`; la papelera, con `0004`.
 
 ### 2.2 `articles`
 
@@ -233,6 +240,12 @@ create table articles (
   category         text,
   source_name      text,
   source_url       text,
+
+  -- Formato editorial
+  pros             text[] not null default '{}',
+  cons             text[] not null default '{}',
+  video_url        text,
+  video_title      text,
 
   -- SEO
   seo_title        text,
@@ -288,7 +301,24 @@ create table articles (
   constraint articles_news_fields_only
     check (kind = 'news' or (category is null and source_name is null and source_url is null)),
   constraint articles_news_category_len
-    check (category is null or char_length(category) <= 40)
+    check (category is null or char_length(category) <= 40),
+
+  -- Listas y video (migración 0003)
+  constraint articles_pros_limit
+    check (cardinality(pros) <= 5),
+  constraint articles_cons_limit
+    check (cardinality(cons) <= 5),
+  constraint articles_pros_items_valid
+    check (article_bullet_list_valid(pros)),
+  constraint articles_cons_items_valid
+    check (article_bullet_list_valid(cons)),
+  constraint articles_video_url_valid
+    check (video_url is null or video_url ~* '^https?://'),
+  constraint articles_video_title_len
+    check (video_title is null or char_length(video_title) <= 200),
+  constraint articles_video_together
+    check ((video_url is null and video_title is null)
+        or (video_url is not null and video_title is not null))
 );
 
 create unique index articles_kind_slug_active
@@ -332,7 +362,25 @@ create trigger articles_set_updated_at
 
 **Qué permite un borrador**: `title` vacío, `slug` vacío, `body` vacío, sin portada, sin puntuación, sin fecha. Lo único obligatorio es `kind` y `status`. Todo lo demás se exige recién al publicar, mediante los `CHECK` con `status <> 'published' or ...`.
 
-### 2.2.1 `score_rarities`
+### 2.2.1 `article_gallery`
+
+```sql
+create table article_gallery (
+  id          integer generated always as identity primary key,
+  article_id  integer not null references articles (id) on delete cascade,
+  media_id    integer not null references media (id) on delete restrict,
+  position    integer not null check (position between 0 and 19),
+  created_at  timestamptz not null default now(),
+  constraint article_gallery_article_position_unique unique (article_id, position),
+  constraint article_gallery_article_media_unique unique (article_id, media_id)
+);
+
+create index article_gallery_media_id_idx on article_gallery (media_id);
+```
+
+La galería es una tabla propia y no una lista de referencias `media:<id>` dentro del Markdown: el panel puede reordenarla, y la posición es un dato del esquema. `media_id` usa `ON DELETE RESTRICT` para que un medio en uso no se pueda borrar por error. `article_id` usa `CASCADE` porque la galería no sobrevive al artículo.
+
+### 2.2.2 `score_rarities`
 
 La rareza es un dato, no una decisión de la interfaz: los umbrales, la etiqueta y el color viven en la base y `articles.rarity_key` se calcula con un trigger.
 
@@ -389,7 +437,7 @@ El trigger corre antes de los `CHECK`, así que la columna derivada nunca contra
 
 `color_token` apunta a un token de CSS (`--gold`, `--red`, `--accent`, `--cyan`, `--green`, `--neutral`). La interfaz lee la fila y no decide ni el nombre ni el color.
 
-### 2.2.2 Subpuntuaciones
+### 2.2.3 Subpuntuaciones
 
 `score_details` guarda el desglose editorial (`story`, `gameplay`, `visual`, cada uno de 1 a 10). Se valida en la base con una función `IMMUTABLE`, porque un `CHECK` no admite subconsultas:
 
@@ -423,35 +471,17 @@ $$;
 
 El contrato es el mismo en las dos capas: objeto estricto, sin claves desconocidas, con al menos una dimensión informada y todas dentro de 1 a 10.
 
-### 2.3 Búsqueda full-text
+### 2.3 Búsqueda
+
+**No hay columna `search_vector` ni índices de trigramas en el esquema vigente.** La búsqueda se resuelve en dos capas:
+
+- **Pública** (`/buscar`): un índice estático cacheado en memoria con títulos, descripciones y etiquetas de los artículos visibles, buscado en el cliente y normalizando tildes. La arquitectura exige que `/buscar` no consulte Postgres en tiempo real, así que no hay consulta ni FTS en esa ruta.
+- **Panel**: `ILIKE` sobre el título, con los comodines `%`, `_` y `\` escapados (`escapeLike`), sobre un `select` paginado.
+
+El diseño original de full-text (`unaccent`, `es_unaccent`, `search_vector` generado y `pg_trgm` para el autocompletado de juegos) queda documentado aquí como opción, no como estado. Si alguna vez se implementa, el autocompletado de juegos necesita trigramas: `tsvector` no sirve para prefijos de dos letras.
 
 ```sql
-create extension if not exists unaccent;
-create extension if not exists pg_trgm;
-
-create text search configuration es_unaccent (copy = spanish);
-
-alter text search configuration es_unaccent
-  alter mapping for hword, hword_part, word
-  with unaccent, spanish_stem;
-
-alter table articles add column search_vector tsvector
-  generated always as (
-    setweight(to_tsvector('es_unaccent'::regconfig, coalesce(title, '')), 'A') ||
-    setweight(to_tsvector('es_unaccent'::regconfig, coalesce(description, '')), 'B') ||
-    setweight(to_tsvector('es_unaccent'::regconfig, coalesce(body, '')), 'C')
-  ) stored;
-
-create index articles_search_idx on articles using gin (search_vector);
-```
-
-- **`unaccent`**: sin él, "resena" no encuentra "reseña", y en LATAM se busca sin tildes.
-- **`setweight`**: el título pesa más que el cuerpo, así los resultados relevantes suben.
-- **`::regconfig` literal**: `to_tsvector(text, text)` es `STABLE` y no se puede usar en una columna generada; la versión con `regconfig` sí es `IMMUTABLE`.
-- Consulta: `websearch_to_tsquery('es_unaccent', $1)`, que tolera frases entre comillas y `OR` sin romper con entrada arbitraria.
-- Autocompletado de juegos: `pg_trgm` con `gin (title gin_trgm_ops)` y `similarity()`. `tsvector` no sirve para prefijos de dos letras.
-
-```sql
+-- No aplicado. Referencia del diseño original:
 create index games_title_trgm_idx on games using gin (title gin_trgm_ops);
 ```
 
@@ -675,3 +705,11 @@ Las FK de medios (`games_cover_media_fk`, `articles_cover_media_fk`, `articles_o
 Ejecutar los `ALTER TABLE` antes de crear `media` fallará porque la tabla referenciada no existe.
 
 La rareza y las subpuntuaciones llegan después, en una migración incremental sobre el baseline (`0001_score_rarity.sql`): crea `score_rarities`, agrega `articles.score_details` y `articles.rarity_key`, reemplaza las dos restricciones de reseña por sus versiones 0-100 y agrega el trigger `articles_set_rarity`. La migración no borra tablas ni datos: solo reemplaza esas dos restricciones, que vuelven a crearse en el mismo archivo.
+
+Después vinieron:
+
+- `0002_reconcile_legacy_schema.sql`: reconciliación idempotente de la base de producción, creada fuera de Drizzle.
+- `0003_editorial_gallery_and_game_tags.sql`: `article_gallery`, `articles.pros`, `articles.cons`, `articles.video_url`, `articles.video_title`, `games.tags` y `games.featured`, con la función inmutable `article_bullet_list_valid`.
+- `0004_games_trash_support.sql`: `games.previous_status`, `games.trashed_at` y el reemplazo de `games_status_valid` para admitir `'trashed'`.
+
+El detalle de cada archivo y el catálogo verificado están en `database-migrations.md`.

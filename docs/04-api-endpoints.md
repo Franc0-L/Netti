@@ -98,7 +98,7 @@ await db.transaction(async (tx) => {
     .update(articles)
     .set(values)
     .where(and(eq(articles.id, id), eq(articles.version, version)))
-    .returning(); // fila completa (sin search_vector)
+    .returning(); // fila completa
 
   if (!row) throw new StaleVersion();
 
@@ -283,122 +283,71 @@ Cada reintento es un `UPDATE`; el que gana es el que la base acepta. El resultad
 
 Invalidación: `article:<kind>:<slug-original>`, `article:<kind>:<slug-definitivo>`, `kind:<kind>`, `articles`, `home` si el estado restaurado es publicado o destacado, `redirects`.
 
-### `purgeArticle({ id, version, confirmSlug })`
+### `restoreRevision({ articleId, revisionId })`
 
-Borrado definitivo. Exige `status = 'trashed'` y escribir el slug para confirmar.
-
-```ts
-async function purgeArticle(args: {
-  id: number;
-  version: number;
-  confirmSlug: string;
-}): Promise<ActionResult<{ version: number }>>;
-```
-
-**Orden mark-and-sweep** (Postgres y Blob no comparten transacción):
-
-1. En una transacción: recolectar los ids de medios que solo referencia este artículo o juego (comprobando `cover_media_id` y `og_media_id` en `articles`, `cover_media_id` en `games`, referencias `media:<id>` en `articles.body` y `games.body`, y descartando `media_variants.media_id` que es una FK interna con borrado en cascada, no una referencia externa). Borrar la fila del artículo o juego (la FK `ON DELETE RESTRICT` protege `media` si aún se usa como `cover_media_id`/`og_media_id`), y recién entonces marcar `pending_delete_at` en los medios huérfanos (las revisiones caen por `ON DELETE CASCADE`).
-2. Fuera de la transacción: borrar en Blob el objeto y sus variantes.
-3. Solo si Blob confirma: borrar las filas de `media` y `media_variants`.
-
-Si el paso 2 falla, la fila queda marcada y un barrido de baja frecuencia reintenta. Nunca se borra el objeto antes de confirmar la base: eso deja referencias rotas que no se pueden reparar. Las imágenes referenciadas por otro artículo no se marcan.
-
-Invalidación: `article:<kind>:<slug>`, `kind:<kind>`, `articles`, `home` si estaba publicado o destacado, `tag:<t>` para cada etiqueta previa, `redirects` (borra las que apuntan a este artículo).
-
-**`next_due`**: tras el `COMMIT`, recalcular el próximo `published_at` pendiente y escribirlo en el almacén barato (Edge Config / Blob JSON) para que el cron no despierte Neon innecesariamente. Las acciones que deben mantenerlo actualizado son: `createArticle`, `publishArticle`, `unpublishArticle`, `trashArticle`, `restoreArticle`, `updateArticle` (si cambia `published_at`) y la eliminación definitiva de artículos programados. Escribir `next_due` conservador (por ejemplo `now`) antes del `COMMIT` y corregirlo después; si el write al almacén barato falla, el cron corre de más, no de menos, y consulta Neon directamente como fallback seguro.
-
-### `revalidateArticle({ id })`
-
-Revalida un artículo específico desde el panel (runbook de monitoreo). Lee el artículo y revalida sus tags.
+Restaura una versión anterior. Es una escritura normal: copia el contenido del snapshot sobre el artículo y deja que el trigger incremente `version` y registre una revisión nueva. Nada se borra, así que restaurar una versión equivocada se deshace restaurando la anterior.
 
 ```ts
-async function revalidateArticle(args: { id: number }): Promise<ActionResult<{ tags: string[] }>>;
+async function restoreRevision(args: {
+  articleId: number;
+  revisionId: number;
+}): Promise<ActionResult<{ id: number; version: number }>>;
 ```
 
-### `searchGames({ q, limit })`
+Solo restaura contenido: título, descripción, cuerpo, etiquetas, portada, Open Graph, SEO, pros y contras, video, galería, campos de reseña o noticia y autor. **No** restaura `slug`, `status`, `publishedAt`, `featured` ni `kind`: esos campos son del ciclo de vida y tienen sus propias acciones.
 
-Lectura para el autocompletado. Usa `pg_trgm`, no `tsvector` (los prefijos de dos letras no funcionan con full-text).
+### Borrado definitivo
 
-```ts
-export type GameSuggestion = {
-  id: number;
-  slug: string;
-  title: string;
-  status: ContentStatus;
-};
-export async function searchGames(args: {
-  q: string;
-  limit?: number;
-}): Promise<ActionResult<GameSuggestion[]>>;
-```
-
-- `q` recortada, mínimo 2 caracteres, `limit` 8 por defecto y 20 máximo, escapando `%`, `_` y `\`.
-- Incluye borradores (la UI los marca).
-- `publishArticle` de una reseña exige `games.status = 'published'`, o la ficha enlazada daría 404.
+El panel no ofrece borrado definitivo: la papelera es reversible y los medios se eliminan con un barrido aparte (`pending_delete_at` + `/api/cron/cleanup`). Un borrado físico de artículos queda como tarea de mantenimiento, fuera del alcance del lanzamiento.
 
 ## 5. CRUD de juegos
 
-Todas con `requireSession()` + `assertSameOrigin()`.
+Todas con la autorización compartida de `src/app/actions/_shared.ts` (`requireSession()` + `assertSameOrigin()`).
 
 ```ts
 export async function createGame(
   input: GameInput
-): Promise<ActionResult<{ id: number; version: number; slug: string }>>;
+): Promise<ActionResult<{ id: number; slug: string }>>;
 export async function updateGame(args: {
   id: number;
-  version: number;
   input: GameInput;
-}): Promise<ActionResult<{ version: number; slug: string }>>;
-export async function deleteGame(args: {
+}): Promise<ActionResult<{ slug: string; status: 'draft' | 'published' | 'trashed' }>>;
+export async function publishGame(args: {
   id: number;
-  version: number;
-}): Promise<ActionResult<undefined>>;
-export async function getGame(
-  id: number
-): Promise<ActionResult<{ game: GameRecord; version: number }>>;
-export async function listGames(args?: {
-  q?: string;
-  status?: 'draft' | 'published';
-  limit?: number;
-  cursor?: number;
-}): Promise<ActionResult<{ items: GameListItem[]; nextCursor: number | null }>>;
+}): Promise<ActionResult<{ status: 'published' }>>;
+export async function unpublishGame(args: {
+  id: number;
+}): Promise<ActionResult<{ status: 'draft' }>>;
+export async function trashGame(args: { id: number }): Promise<ActionResult<{ status: 'trashed' }>>;
+export async function restoreGame(args: {
+  id: number;
+}): Promise<ActionResult<{ status: 'draft' | 'published' }>>;
 ```
 
 **Reglas:**
 
-- **Conflictos**: slug duplicado (`games_slug_key`) → `conflict` con `fieldErrors.slug`. `deleteGame` con reseñas asociadas (`23503`) → `conflict` "Tiene reseñas asociadas".
-- **Cambio de slug** de una ficha publicada: misma regla que artículos (borrar redirección de la ruta nueva, insertar la vieja), con `gamePath(slug)` en `lib/routes.ts`.
-- **Invalidación**: `game:<id>`, `kind:game`, y las reseñas asociadas (`select kind, slug from articles where game_id = $1` → `article:review:<slug>` y `kind:review`), porque la reseña muestra título y portada del juego.
-- `updateGame` sí acepta `status` en el input (no hay programación ni "guardar no publica" en juegos).
+- **Slug duplicado** (`games_slug_key`) → `conflict` con `fieldErrors.slug`.
+- **Portada**: `coverMediaId` debe existir y no estar marcado para eliminación. Si se elige una portada, `coverAlt` es obligatorio (la ficha se muestra con ella).
+- **Publicar** exige título, slug, bajada, cuerpo y portada; la base lo impone con `games_published_requires_*`.
+- **Despublicar y enviar a papelera** se rechazan si el juego tiene reseñas publicadas: esas reseñas quedarían apuntando a una ficha oculta. Hay que despublicar las reseñas primero.
+- **Papelera**: guarda `previous_status` y `trashed_at`; restaurar vuelve al estado anterior. El slug queda libre mientras está en la papelera.
+- **Invalidación**: `games`, `game:<slug>` y, cuando el cambio afecta a una reseña, `game:<id>` para que las reseñas de la ficha se refresquen.
 
 ## 6. Búsqueda del panel
 
+No hay una Server Action de búsqueda: el escritorio y la lista de juegos son Server Components que filtran en el servidor.
+
 ```ts
-export type ArticleListItem = {
-  id: number;
-  kind: ArticleKind;
-  slug: string;
-  title: string;
-  status: ContentStatus;
-  publishedAt: string | null;
-  scheduled: boolean;
-  featured: boolean;
-  updatedAt: string;
-  version: number;
-};
-export async function searchArticles(args: {
-  q?: string;
-  kind?: ArticleKind;
-  status?: ContentStatus;
-  limit?: number;
-  cursor?: number;
-}): Promise<ActionResult<{ items: ArticleListItem[]; nextCursor: number | null }>>;
+// src/app/admin/(panel)/page.tsx y games/page.tsx
+const search = firstParamText(query.q, 80);
+const where = search ? ilike(articles.title, `%${escapeLike(search)}%`) : undefined;
 ```
 
-- Sin `q`: `order by id desc`, `where id < cursor`, `limit` 30 por defecto y 100 máximo.
-- Con `q`: `search_vector @@ websearch_to_tsquery('es_unaccent', q)` ordenado por `ts_rank_cd desc, id desc` y `nextCursor: null` (un cursor numérico no sirve para ranking).
-- Sin `status`, excluye `trashed`.
-- `/buscar` con consulta libre usa el índice estático cacheado (títulos, descripción, etiquetas) buscado en el cliente, normalizando tildes. El full-text de Postgres queda para el panel.
+- `searchParams` puede traer un array (`?q=a&q=b`); `firstParamText` toma el primer valor, recorta y acota la longitud. Sin eso, un `trim()` sobre un array producía un 500.
+- Los comodines `%`, `_` y `\` se escapan con `escapeLike`: buscar `100%` no devuelve todos los títulos.
+- Filtros disponibles: `q` (título), `tipo` (solo artículos), `estado` (`draft`, `published`, `trashed`) y `pagina`. Los valores desconocidos se ignoran.
+- Sin `estado`, la lista incluye los tres estados: la papelera se ve y se puede restaurar desde ahí.
+- Lo que se busca es el título, no el cuerpo: el cuerpo es Markdown y no se indexa para el panel. `/buscar` público usa el índice estático cacheado (títulos, descripción y etiquetas), no PostgreSQL.
 
 ## 7. Revisiones
 
@@ -407,69 +356,48 @@ Una revisión por cada escritura efectiva sobre `articles` (si el trigger no sub
 | Operación                                                                                   |       ¿Snapshot?        |
 | ------------------------------------------------------------------------------------------- | :---------------------: |
 | Crear (v1), guardar cambios, publicar, despublicar, papelera, restaurar, restaurar revisión |           Sí            |
-| Purgar                                                                                      | No (caen por `CASCADE`) |
+| Borrado definitivo (no implementado)                                                        | No (caen por `CASCADE`) |
 
-Snapshot = fila completa de `RETURNING *` sin `search_vector`. Retención inline, en la misma transacción: `delete from article_revisions where article_id = $1 and version <= $2 - 20`. Sin cron.
+Snapshot = fila completa de `RETURNING *`. La retención se aplica en la misma transacción: se conservan las 20 versiones más nuevas y se borran las anteriores (`REVISION_RETENTION` en `src/lib/revisions.ts`, aplicado por `pruneRevisions`). Sin cron.
 
 ```ts
-export async function listRevisions(args: {
-  articleId: number;
-}): Promise<ActionResult<Array<{ version: number; createdAt: string }>>>;
-export async function getRevision(args: {
-  articleId: number;
-  version: number;
-}): Promise<ActionResult<{ snapshot: unknown }>>;
 export async function restoreRevision(args: {
-  id: number;
-  version: number;
-  revisionVersion: number;
-}): Promise<ActionResult<{ version: number }>>;
+  articleId: number;
+  revisionId: number;
+}): Promise<ActionResult<{ id: number; version: number }>>;
 ```
 
-`restoreRevision` restaura solo contenido (título, descripción, cuerpo, etiquetas, portada, og, SEO, campos de reseña/noticia, autor). **No** restaura `slug`, `status`, `publishedAt`, `featured` ni `kind`. Pasa por Zod.
+El panel lista las revisiones con una consulta directa (`version`, `createdAt`), no con una acción. `restoreRevision` restaura solo contenido (título, descripción, cuerpo, etiquetas, portada, og, SEO, pros y contras, video, galería, campos de reseña/noticia y autor). **No** restaura `slug`, `status`, `publishedAt`, `featured` ni `kind`. Pasa por Zod.
+
+La constante vive fuera de `content.ts` porque un archivo `'use server'` solo puede exportar funciones asíncronas; el build falla si se exporta un valor.
 
 ## 8. Metadatos y biblioteca de imágenes
 
 ```ts
-export type MediaListItem = {
+export async function updateMedia(args: {
   id: number;
-  publicUrl: string;
-  width: number;
-  height: number;
-  alt: string | null;
-  rights: 'own' | 'press' | 'third_party';
-  createdAt: string;
-  referenced: boolean;
-};
-export async function listMedia(args?: {
-  limit?: number;
-  cursor?: number;
-  unusedOnly?: boolean;
-}): Promise<ActionResult<{ items: MediaListItem[]; nextCursor: number | null }>>;
-export async function deleteMedia(args: { mediaId: number }): Promise<ActionResult<undefined>>;
+  input: {
+    alt: string | null;
+    credit: string | null;
+    rights: 'own' | 'press' | 'third_party';
+    sourceUrl: string | null;
+  };
+}): Promise<ActionResult<{ id: number }>>;
+export async function markMediaForDeletion(args: {
+  id: number;
+}): Promise<ActionResult<{ id: number; pendingDeleteAt: string }>>;
+export async function restoreMedia(args: { id: number }): Promise<ActionResult<{ id: number }>>;
 ```
 
-- `deleteMedia` devuelve `conflict` si el medio está referenciado (portada, OG o `media:<id>` en algún cuerpo). Si no está referenciado, marca `pending_delete_at`.
-
-### `updateMediaMetadata({ mediaId, alt, credit, rights, sourceUrl })`
-
-Actualiza metadatos de una imagen ya subida. Rechaza con `conflict` si `pending_delete_at` no es nulo. Invalida los artículos que usan el medio: `cover_media_id = $1 OR og_media_id = $1 OR body ~ ('media:' || $1 || '([^0-9]|$)')`, más juegos con esa portada.
-
-```ts
-export async function updateMediaMetadata(args: {
-  mediaId: number;
-  alt: string;
-  credit?: string | null;
-  rights: 'own' | 'press' | 'third_party';
-  sourceUrl?: string | null;
-}): Promise<ActionResult<{ mediaId: number }>>;
-```
-
+- `updateMedia` rechaza con `conflict` si el medio está marcado para eliminación: hay que restaurarlo primero.
+- `markMediaForDeletion` devuelve `conflict` si el medio todavía se usa. La detección vive en `src/lib/media-references.ts` (`isMediaReferenced`) y cubre portada, Open Graph, galería y referencias `media:<id>` en cuerpos de artículos y juegos. La misma función la usa `/api/reconcile-storage`, así que el panel y el barrido no pueden discrepar.
+- Marcar no borra: escribe `pending_delete_at`, el objeto se borra tras la ventana de gracia y solo si nada lo referencia. `restoreMedia` limpia la marca y es idempotente.
+- Invalidación: `media`, `articles`, `games` y `home`, porque el `alt` y el crédito se muestran en listados y en metadatos.
 - `media.alt` es el alt base del medio en la biblioteca. `articles.cover_alt` (y `games.cover_alt`) es una sobreescritura opcional solo cuando el medio se usa como portada de ese artículo/juego.
 
-## 6. Route Handlers
+## 9. Route Handlers
 
-### 5.1 `POST /api/upload`
+### 9.1 `POST /api/upload`
 
 Es el único lugar donde el navegador manda bytes.
 
@@ -478,19 +406,9 @@ POST /api/upload
 Content-Type: multipart/form-data
 
 file=<binario>
-kind=review            # uno de: review, news, guide, game. Determina el prefijo de la clave (articles/ o games/)
 ```
 
-El parámetro `kind` acepta exactamente cuatro valores:
-
-| `kind`   | Prefijo de clave en Blob | Uso             |
-| -------- | ------------------------ | --------------- |
-| `review` | `articles/`              | Reseña de juego |
-| `news`   | `articles/`              | Noticia         |
-| `guide`  | `articles/`              | Guía            |
-| `game`   | `games/`                 | Ficha de juego  |
-
-El servidor valida una whitelist estricta y resuelve el prefijo internamente. El cliente no puede enviar un prefijo de almacenamiento arbitrario.
+El formulario lleva solo el archivo. El panel usa el mismo endpoint para artículos y juegos; la clave del objeto no depende del tipo de contenido.
 
 Validaciones, en orden:
 
@@ -498,9 +416,9 @@ Validaciones, en orden:
 2. Origen permitido → `403`.
 3. `Content-Length <= 2 MB + margen` → `413` antes de leer el cuerpo. Es una optimización, **no la defensa**: el header puede faltar o mentir.
 4. Leer el `File` y comprobar el **tamaño real** ≤ 2 MB y que el cuerpo total no supere el presupuesto (2 MB + 128 KiB de formulario).
-5. MIME declarado en la allowlist → `400`.
-6. Magic numbers del contenido real → `400`.
-7. Dimensiones decodificadas y megapíxeles ≤ 20 → `400`.
+5. MIME declarado en la allowlist → `415`.
+6. Magic numbers del contenido real → `415`.
+7. Dimensiones decodificadas y megapíxeles ≤ 20 → `422`.
 8. `sharp`: re-encodeo a WebP, lado mayor ≤ 2560 px, sin EXIF.
 9. Variantes 480 / 960 / 1600 px, solo si son menores al ancho de la imagen fuente (una imagen de 800 px no genera variantes de 960 ni 1600).
 
@@ -509,46 +427,39 @@ La respuesta:
 ```json
 {
   "ok": true,
-  "media": {
-    "id": 12,
-    "url": "https://ce0rcu23vrrdzqap.public.blob.vercel-storage.com/articles/8f3c1a2e.webp",
+  "data": {
+    "mediaId": 12,
+    "publicUrl": "https://ce0rcu23vrrdzqap.public.blob.vercel-storage.com/8f3c1a2e/original.webp",
     "width": 1600,
     "height": 900,
     "bytes": 184320,
+    "contentType": "image/webp",
     "variants": [
-      {
-        "width": 480,
-        "url": "https://ce0rcu23vrrdzqap.public.blob.vercel-storage.com/articles/8f3c1a2e-480.webp"
-      },
-      {
-        "width": 960,
-        "url": "https://ce0rcu23vrrdzqap.public.blob.vercel-storage.com/articles/8f3c1a2e-960.webp"
-      },
-      {
-        "width": 1600,
-        "url": "https://ce0rcu23vrrdzqap.public.blob.vercel-storage.com/articles/8f3c1a2e-1600.webp"
-      }
+      { "width": 480, "url": "…/8f3c1a2e/480.webp", "bytes": 21456 },
+      { "width": 960, "url": "…/8f3c1a2e/960.webp", "bytes": 68210 },
+      { "width": 1600, "url": "…/8f3c1a2e/1600.webp", "bytes": 184320 }
     ]
   }
 }
 ```
 
-| Código | Cuerpo                                                            |
-| ------ | ----------------------------------------------------------------- |
-| 400    | `{ "error": "Formato no admitido. Usá JPEG, PNG, WebP o AVIF." }` |
-| 400    | `{ "error": "El archivo no coincide con su tipo declarado." }`    |
-| 400    | `{ "error": "Las imágenes animadas no están soportadas." }`       |
-| 400    | `{ "error": "La imagen supera el tamaño de píxeles permitido." }` |
-| 413    | `{ "error": "La imagen no puede superar los 2 MB." }`             |
-| 500    | `{ "error": "No se pudo guardar la imagen." }`                    |
+| Código | Cuerpo                                                        |
+| ------ | ------------------------------------------------------------- |
+| 400    | `{ "error": "Falta el archivo de imagen." }`                  |
+| 400    | `{ "error": "Formulario inválido." }`                         |
+| 415    | `{ "error": "Formato no permitido o MIME incorrecto. …" }`    |
+| 422    | `{ "error": "La imagen supera las dimensiones permitidas." }` |
+| 422    | `{ "error": "No se pudo decodificar la imagen." }`            |
+| 413    | `{ "error": "La imagen debe pesar como máximo 2 MB." }`       |
+| 500    | `{ "error": "No se pudo guardar la imagen." }`                |
 
 La subida pasa por `@vercel/blob` (`put`) desde el servidor. El token se resuelve con OIDC en Vercel; en desarrollo local se usa `BLOB_READ_WRITE_TOKEN`.
 
-La clave del objeto es `articles/<uuid>.webp` o `games/<uuid>.webp`: nunca el nombre original ni el slug. Se guarda con `cacheControlMaxAge: 31536000` (caché larga; el contenido nunca cambia porque la clave lleva UUID).
+La clave del objeto es `<uuid>/original.webp` y `<uuid>/<ancho>.webp`: nunca el nombre original ni el slug. Se guarda con `cacheControlMaxAge: 31536000` (caché larga; el contenido nunca cambia porque la clave lleva UUID).
 
-**Compensación de subida.** Si falla el `INSERT` en `media` tras subir a Blob, se intenta borrar los objetos de Blob y se registra la clave en un mecanismo de reconciliación para limpieza posterior. No hay transacción distribuida.
+**Compensación de subida.** Si falla el `INSERT` en `media` tras subir a Blob, se intenta borrar los objetos de Blob y, si también falla, se registran en `storage_orphans` para la reconciliación posterior. No hay transacción distribuida.
 
-### 5.2 `POST /api/revalidate`
+### 9.2 `POST /api/revalidate`
 
 Lo llama `.github/workflows/scheduled-jobs.yml` cada 30 minutos. No lo usa el panel.
 
@@ -569,7 +480,7 @@ Authorization: Bearer $CRON_SECRET
 
 Si `CRON_SECRET` falta o no coincide: `401`. El endpoint agrupa los tags afectados y llama a `revalidateTag(tag, { expire: 0 })` para forzar un miss en la próxima lectura. Usa un cursor `(published_at, id)` persistido en `cron_runs`, así que es idempotente y reanudable: si hay más de 200 artículos pendientes devuelve `more: true` para la siguiente corrida.
 
-### 5.3 `GET /api/health` y `GET /api/ready`
+### 9.3 `GET /api/health` y `GET /api/ready`
 
 Son dos comprobaciones distintas y no intercambiables.
 
@@ -599,7 +510,7 @@ No consulta la base ni Blob: un health que toca Neon la despierta y consume CU-h
 
 `status` es `ok`, `degraded` (algún componente omitido, por ejemplo Blob sin token) o `unhealthy` (`503`, algún componente falló).
 
-### 5.4 `POST /api/reconcile-storage`
+### 9.4 `POST /api/reconcile-storage`
 
 Endpoint protegido con `CRON_SECRET` que ejecuta la parte segura de la reconciliación basada en la base: purga sesiones expiradas e intentos viejos, reintenta orphans registrados y barre medios marcados para borrar tras el período de gracia. No lista el store completo de Blob.
 
@@ -610,7 +521,7 @@ Authorization: Bearer $CRON_SECRET
 
 Se bloquea con `409` si hubo una restauración de backup en los últimos 7 días (`cron_runs.backup_restored_at`). No lo llama el panel ni el público. Es idempotente y acotado en tiempo: si tarda más del presupuesto de la ejecución, se detiene y deja lo pendiente para la próxima corrida. `last_success_at` solo avanza cuando no hubo fallos de Blob ni borrados pendientes; en caso contrario responde `500` y conserva el éxito anterior, mientras `last_run_at` sí se actualiza.
 
-## 6. Cabeceras
+## 10. Cabeceras
 
 En `/api/*`:
 
@@ -631,7 +542,7 @@ Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; 
 
 En `/admin/*` la CSP usa un nonce por solicitud con `'strict-dynamic'`; esas rutas se renderizan dinámicamente. Ver `11-seguridad-hardening.md`.
 
-## 7. Errores HTTP y rutas inexistentes
+## 11. Errores HTTP y rutas inexistentes
 
 | Situación                                       | Respuesta                                 |
 | ----------------------------------------------- | ----------------------------------------- |

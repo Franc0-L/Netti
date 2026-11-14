@@ -22,6 +22,20 @@
       "when": 1794545626429,
       "tag": "0002_reconcile_legacy_schema",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1794566535506,
+      "tag": "0003_editorial_gallery_and_game_tags",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1794567539247,
+      "tag": "0004_games_trash_support",
+      "breakpoints": true
     }
   ]
 }

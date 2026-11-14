@@ -8,46 +8,50 @@
 //      canonical schema.
 //
 // The target databases are created and dropped by this script.
+import { randomUUID } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
 import { Client } from 'pg';
+import { assertLocalDatabaseUrl, loadEnvFiles } from './load-env.js';
 
-function loadEnvFile(path: string): void {
-  for (const line of readFileSync(path, 'utf8').split(/\r?\n/)) {
-    const match = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/);
-    if (!match) continue;
-    process.env[match[1]] = match[2].trim().replace(/^["']|["']$/g, '');
-  }
-}
-
-loadEnvFile('.env');
+loadEnvFiles(['.env']);
 
 const baseUrl = process.env.DATABASE_URL_UNPOOLED ?? process.env.DATABASE_URL;
-if (!baseUrl) throw new Error('DATABASE_URL is missing');
-const url = new URL(baseUrl);
-if (!['localhost', '127.0.0.1', '::1'].includes(url.hostname)) {
-  throw new Error(`Refusing to run against a non-local host: ${url.hostname}`);
-}
+const url = assertLocalDatabaseUrl(baseUrl, 'DATABASE_URL_UNPOOLED or DATABASE_URL');
 
 const MIGRATION_DIR = 'src/db/migrations';
 const LEGACY_FIXTURE = 'scripts/fixtures/legacy-schema.sql';
-
-async function createDatabase(dbName: string): Promise<void> {
-  const adminUrl = new URL(url.toString());
-  adminUrl.pathname = '/postgres';
-  const admin = new Client({ connectionString: adminUrl.toString() });
-  await admin.connect();
-  await admin.query(`DROP DATABASE IF EXISTS "${dbName}" WITH (FORCE)`);
-  await admin.query(`CREATE DATABASE "${dbName}"`);
-  await admin.end();
-}
+/** Unique per run: two concurrent runs never fight over the same database. */
+const RUN_SUFFIX = randomUUID().replace(/-/g, '').slice(0, 12);
 
 async function dropDatabase(dbName: string): Promise<void> {
   const adminUrl = new URL(url.toString());
   adminUrl.pathname = '/postgres';
   const admin = new Client({ connectionString: adminUrl.toString() });
   await admin.connect();
-  await admin.query(`DROP DATABASE IF EXISTS "${dbName}" WITH (FORCE)`);
-  await admin.end();
+  try {
+    // The database was created by this run and is not used by anyone else, but
+    // the connections are closed explicitly instead of forcing the drop.
+    await admin.query(
+      `select pg_terminate_backend(pid) from pg_stat_activity
+        where datname = $1 and pid <> pg_backend_pid()`,
+      [dbName]
+    );
+    await admin.query(`DROP DATABASE IF EXISTS "${dbName}"`);
+  } finally {
+    await admin.end();
+  }
+}
+
+async function createDatabase(dbName: string): Promise<void> {
+  const adminUrl = new URL(url.toString());
+  adminUrl.pathname = '/postgres';
+  const admin = new Client({ connectionString: adminUrl.toString() });
+  await admin.connect();
+  try {
+    await admin.query(`CREATE DATABASE "${dbName}"`);
+  } finally {
+    await admin.end();
+  }
 }
 
 function splitStatements(sql: string): string[] {
@@ -100,6 +104,22 @@ const REQUIRED_CONSTRAINTS = [
   'storage_orphans_action_valid',
   'storage_orphans_status_valid',
   'score_rarities_range_valid',
+  'article_gallery_position_valid',
+  'article_gallery_article_id_articles_id_fk',
+  'article_gallery_media_id_media_id_fk',
+  'articles_pros_limit',
+  'articles_cons_limit',
+  'articles_pros_items_valid',
+  'articles_cons_items_valid',
+  'articles_video_url_valid',
+  'articles_video_title_len',
+  'articles_video_together',
+  'articles_previous_status_valid',
+  'articles_trashed_requires_date',
+  'articles_trashed_requires_previous',
+  'games_previous_status_valid',
+  'games_trashed_requires_date',
+  'games_trashed_requires_previous',
 ];
 
 const REQUIRED_TRIGGERS = [
@@ -125,14 +145,23 @@ const REQUIRED_INDEXES = [
   'login_attempts_ip_time_idx',
   'redirects_to_path_idx',
   'storage_orphans_pending_idx',
+  'article_gallery_article_position_unique',
+  'article_gallery_article_media_unique',
+  'articles_pending_activation_idx',
+  'articles_category_idx',
+  'games_tags_idx',
+  'games_published_idx',
+  'games_featured_idx',
+  'games_release_date_idx',
+  'media_pending_delete_idx',
 ];
 
 async function assertCanonicalSchema(client: Client): Promise<void> {
   const tables = await client.query(
     `select count(*)::int as count from pg_tables where schemaname='public'`
   );
-  if (tables.rows[0]?.count !== 11) {
-    throw new Error(`expected 11 tables, got ${tables.rows[0]?.count}`);
+  if (tables.rows[0]?.count !== 12) {
+    throw new Error(`expected 12 tables, got ${tables.rows[0]?.count}`);
   }
   console.log(`tables: ${tables.rows[0].count}`);
 
@@ -277,12 +306,12 @@ async function runPhase(dbName: string, prepare: (client: Client) => Promise<voi
 
 async function main(): Promise<void> {
   console.log('phase 1: fresh database receives every migration');
-  await runPhase('netti_migration_check', async (client) => {
+  await runPhase(`netti_migration_check_${RUN_SUFFIX}`, async (client) => {
     await applyAllMigrations(client);
   });
 
   console.log('phase 2: legacy database is reconciled by 0002');
-  await runPhase('netti_legacy_check', async (client) => {
+  await runPhase(`netti_legacy_check_${RUN_SUFFIX}`, async (client) => {
     await applyFile(client, LEGACY_FIXTURE);
     await client.query('SET search_path TO public');
     const legacyTables = await client.query(
@@ -323,6 +352,12 @@ async function main(): Promise<void> {
       throw new Error('the cleanup must keep the newest snapshot');
     }
     console.log('legacy duplicate revisions: cleaned');
+
+    // The legacy instance also receives the migrations that came after the
+    // reconciliation, so it reaches the same canonical schema.
+    await applyFile(client, `${MIGRATION_DIR}/0003_editorial_gallery_and_game_tags.sql`);
+    await applyFile(client, `${MIGRATION_DIR}/0004_games_trash_support.sql`);
+    console.log('legacy schema: migrated to the current version');
   });
 
   console.log('migration check finished');
@@ -330,7 +365,7 @@ async function main(): Promise<void> {
 
 main().catch(async (error) => {
   console.error(error instanceof Error ? error.message : error);
-  await dropDatabase('netti_migration_check').catch(() => undefined);
-  await dropDatabase('netti_legacy_check').catch(() => undefined);
+  await dropDatabase(`netti_migration_check_${RUN_SUFFIX}`).catch(() => undefined);
+  await dropDatabase(`netti_legacy_check_${RUN_SUFFIX}`).catch(() => undefined);
   process.exitCode = 1;
 });

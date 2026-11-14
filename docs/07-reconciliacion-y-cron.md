@@ -6,11 +6,11 @@ La definición completa de `Storage` vive en `01-stack-arquitectura.md` (§2.5).
 
 ## 2. Metadatos de imágenes — segundo paso
 
-El upload solo recibe el archivo y devuelve los datos de la imagen. La UI exige `alt` y permite crédito y procedencia. Después de subir, el autor completa los metadatos en un segundo paso mediante `updateMediaMetadata` (definido en `03-validacion-zod.md` como `makeMediaMetadataSchema` y en `04-api-endpoints.md` como acción).
+El upload solo recibe el archivo y devuelve los datos de la imagen. La UI exige `alt` y permite crédito y procedencia. Después de subir, el autor completa los metadatos en un segundo paso con `updateMedia` (`src/app/actions/media.ts`, esquema en `src/lib/validation.ts`).
 
-La acción rechaza con `conflict` si `pending_delete_at` no es nulo. Después invalida los artículos que usan el medio: `cover_media_id = $1 OR og_media_id = $1 OR body ~ ('media:' || $1 || '([^0-9]|$)')`, más juegos con esa portada. Sin esto, el `alt` y el crédito quedan viejos en caché.
+La acción rechaza con `conflict` si `pending_delete_at` no es nulo. Después invalida los artículos y juegos que usan el medio. Sin esto, el `alt` y el crédito quedan viejos en caché.
 
-`listMedia` y `deleteMedia` están definidos en `04-api-endpoints.md`. `deleteMedia` solo si no está referenciado; marca `pending_delete_at`. No generar variantes por encima del ancho de la fuente (una imagen de 800 px no necesita variantes de 960/1600); eso baja las operaciones por subida.
+`markMediaForDeletion` y `restoreMedia` viven en el mismo archivo. Marcar solo escribe `pending_delete_at`: el objeto se borra con el barrido de `/api/cron/cleanup` tras la ventana de gracia y solo si nada lo referencia. `isMediaReferenced` (`src/lib/media-references.ts`) es la única implementación de esa comprobación: cubre portada, Open Graph, galería y `media:<id>` en los cuerpos, y la usan tanto el panel como la reconciliación. No generar variantes por encima del ancho de la fuente (una imagen de 800 px no necesita variantes de 960/1600); eso baja las operaciones por subida.
 
 ## 3. Reconciliación de Blob
 
@@ -18,7 +18,7 @@ La acción rechaza con `conflict` si `pending_delete_at` no es nulo. Después in
 
 0. **Freno de seguridad**: contar cuántas filas se borrarían en el store. Si supera el 10 % de las claves totales, abortar y alertar. Independientemente, si existe una marca `backup_restored_at` en la fila de `cron_runs` con `job_name = 'backup_restore'` con fecha menor a 7 días, abortar y alertar. Nunca borrar masivamente tras un restore de backup.
 1. **Purga de sesiones y intentos de login**: borrar `sessions` con `expires_at < now()` o `absolute_expires_at < now()`, y `login_attempts` con más de 7 días. En el runtime lo hace `/api/cron/cleanup` a diario; `reconcileStorage` repite la purga como red de seguridad.
-2. **Sweep de marcados**: `media` con `pending_delete_at < now() - 24 h`. Re-verificar referencias con regex con borde (`media:1` no debe matchear `media:12`). Si hay referencia, limpiar la marca. Si no, `storage.del(clave + variantes)`; y solo si Blob confirma, borrar las filas. Si falla, registrar en `storage_orphans (action='delete', pending)` y dejar la marca.
+2. **Sweep de marcados**: `media` con `pending_delete_at < now() - 24 h`. Re-verificar referencias con `isMediaReferenced` (cubre portada, Open Graph, galería y `media:<id>` con borde, así `media:1` no matchea `media:12`). Si hay referencia, limpiar la marca. Si no, `storage.del(clave + variantes)`; y solo si Blob confirma, borrar las filas. Si falla, registrar en `storage_orphans (action='delete', pending)` y dejar la marca.
 3. **Huérfanos en el store**: `list` de `articles/` y `games/` contra `media.storage_key ∪ media_variants.storage_key`. Borrar lo que no está en DB **y** tenga `uploadedAt < now() - 1 h` (para no pisar subidas en curso); registrarlo como `repaired`.
 4. **Faltantes** (en DB, no en el store): diseño con `status='failed'` y alerta. El runtime no implementa esta detección; los registros que no se pueden reparar quedan `pending` para el siguiente intento.
 5. **Reintentos** de `storage_orphans` pendientes: los de `put` se resuelven si la clave ya está en `media`.
@@ -37,6 +37,10 @@ La acción rechaza con `conflict` si `pending_delete_at` no es nulo. Después in
 | 5. Reintentos de `storage_orphans` | Implementado (lote de 50)                                                  |
 | 6. Subidas abandonadas             | Pendiente                                                                  |
 | 7. `last_success_at`               | Implementado: solo avanza si no hubo fallos de Blob ni borrados pendientes |
+
+La comprobación de referencias del paso 2 no se duplica en la ruta: importa `isMediaReferenced`, la misma función que usa el panel, para que un medio que la galería o el cuerpo referencian no se borre por error.
+
+El endpoint devuelve `500` con `ok: false` si algo falla y conserva `last_success_at`; solo lo avanza en una ejecución limpia. El cron de GitHub falla con el código de la respuesta, así que un error no pasa desapercibido.
 
 El freno del 10 % sobre claves totales no aplica todavía porque no se listan claves del store.
 
@@ -76,6 +80,8 @@ El freno del 10 % sobre claves totales no aplica todavía porque no se listan cl
 **Si el almacén barato no está disponible**: el cron consulta Neon directamente como fallback, sin usar `next_due`.
 
 El cursor usa la tupla `(published_at, id)` para no omitir filas cuando varias comparten el mismo `published_at` en el borde del lote.
+
+Además del cursor monotónico, la ruta revisa una **ventana de solapamiento** de la última hora (`OVERLAP_WINDOW_MS`) con `updated_at`, en lotes de 100. Sin ella, una fila insertada directamente en PostgreSQL con una fecha ya pasada, o movida hacia atrás, nunca se activaría. La ventana revalida esas filas sin retroceder el cursor.
 
 No hace falta lock: dos ejecuciones solapadas revalidan dos veces y es idempotente. No uses `pg_try_advisory_lock` de sesión: el pooler de Neon (modo transacción) lo rompe; solo `xact` es seguro.
 

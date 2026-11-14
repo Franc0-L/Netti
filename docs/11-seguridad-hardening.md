@@ -30,11 +30,14 @@ style-src 'self' 'unsafe-inline';
 img-src 'self' data: https://*.public.blob.vercel-storage.com https://*.vercel-storage.com;
 font-src 'self';
 connect-src 'self';
+frame-src 'self' https://www.youtube-nocookie.com https://player.vimeo.com;
 object-src 'none';
 base-uri 'self';
 form-action 'self';
 frame-ancestors 'none';
 ```
+
+`frame-src` es necesario porque una reseña puede embeber un video. Sin esa directiva, `default-src 'self'` bloquea el `<iframe>` y el lector ve un recuadro vacío. Solo se autorizan los dos proveedores que acepta `src/lib/video.ts`, y YouTube usa el dominio con privacidad mejorada (`youtube-nocookie.com`). Cualquier otro proveedor se muestra como enlace externo, no como reproductor.
 
 En desarrollo se agregan `'unsafe-eval'` (compilación de Turbopack) y `ws:` en `connect-src`.
 
@@ -44,7 +47,7 @@ En desarrollo se agregan `'unsafe-eval'` (compilación de Turbopack) y `ws:` en 
 script-src 'self' 'nonce-<aleatorio>' 'strict-dynamic';
 ```
 
-El nonce se genera en el proxy, se envía en la cabecera CSP de la solicitud (para que Next.js lo aplique a sus etiquetas `<script>`) y se devuelve en la cabecera CSP de la respuesta. El panel ya es dinámico (lee la cookie de sesión), así que el nonce no afecta al caché.
+El nonce se genera en el proxy, se envía en la cabecera CSP de la solicitud (para que Next.js lo aplique a sus etiquetas `<script>`) y se devuelve en la cabecera CSP de la respuesta. El panel ya es dinámico (lee la cookie de sesión), así que el nonce no afecta al caché. La política del panel no declara `frame-src`: hereda `default-src 'self'` y no permite embeber ningún reproductor, porque el editor enlaza el video sin renderizarlo.
 
 `'unsafe-inline'` se mantiene en las rutas públicas porque todo el HTML lo genera la aplicación a partir de contenido controlado y sanitizado: no hay HTML de usuario sin filtrar. La política con hashes para el sitio público queda como validación futura.
 
@@ -58,22 +61,27 @@ El nonce se genera en el proxy, se envía en la cabecera CSP de la solicitud (pa
 | `img-src`         | `'self' data:` + Blob + `IMAGES_PUBLIC_BASE_URL` | Las imágenes viven en Vercel Blob; `data:` cubre favicons y placeholders.                                |
 | `font-src`        | `'self'`                                         | Fuentes autoalojadas.                                                                                    |
 | `connect-src`     | `'self'`                                         | Las llamadas a Neon y Blob son server-side, no desde el navegador.                                       |
+| `frame-src`       | YouTube sin cookies y Vimeo, solo en público     | Los reproductores embebidos de una reseña; cualquier otro proveedor se muestra como enlace externo.      |
 | `object-src`      | `'none'`                                         | Bloquea plugins y objetos embebidos.                                                                     |
 | `base-uri`        | `'self'`                                         | Evita inyección de `<base>` malicioso.                                                                   |
 | `form-action`     | `'self'`                                         | Los formularios solo pueden enviar al mismo origen.                                                      |
 | `frame-ancestors` | `'none'`                                         | Ningún sitio puede embeber este sitio en un iframe.                                                      |
 
-La política se valida en `npm run test:http`: la prueba comprueba que las rutas públicas autorizan los scripts inline y que `/admin` emite un nonce y que Next.js lo aplica a las etiquetas `<script>` renderizadas.
+La política se valida en `npm run test:http`: la prueba comprueba que las rutas públicas autorizan los scripts inline, declaran `frame-src` con los dos reproductores, y que `/admin` emite un nonce y que Next.js lo aplica a las etiquetas `<script>` renderizadas.
 
 ## 2. Protección CSRF (falsificación de solicitud entre sitios)
 
-Todas las Server Actions de mutación y los endpoints de escritura verifican el origen de la solicitud mediante `assertSameOrigin` (`src/lib/auth.ts`):
+Todas las Server Actions de mutación y los endpoints de escritura verifican el origen de la solicitud mediante `assertSameOrigin` (`src/lib/auth.ts`). La comprobación no se repite acción por acción: `authorize()` en `src/app/actions/_shared.ts` combina `requireSession()` y `assertSameOrigin()` y todas las acciones pasan por ahí.
 
-- `POST /api/upload` — subida de imágenes.
-- `createArticle`, `updateArticle`, `publishArticle` — Server Actions de contenido.
-- `login`, `logout`, `logoutAll` — Server Actions de autenticación.
+- `POST /api/upload`: subida de imágenes.
+- `login`, `logout`, `logoutAll`: autenticación.
+- `createArticle`, `updateArticle`, `publishArticle`, `unpublishArticle`, `trashArticle`, `restoreArticle`, `restoreRevision`: ciclo de vida y edición de artículos.
+- `createGame`, `updateGame`, `publishGame`, `unpublishGame`, `trashGame`, `restoreGame`: ciclo de vida y edición de juegos.
+- `updateMedia`, `markMediaForDeletion`, `restoreMedia`: biblioteca de imágenes.
 
-`assertSameOrigin` valida que el encabezado `Origin` o `Referer` coincida con `PUBLIC_SITE_URL` configurada. Si no coincide, la solicitud se rechaza con `403 Forbidden`.
+`assertSameOrigin` valida que el encabezado `Origin` coincida con `PUBLIC_SITE_URL` configurada. Si falta, no es una URL válida o no coincide, la solicitud se rechaza con `403 Forbidden` (`OriginNotAllowedError`). El `Referer` solo se usa en `/api/upload` como respaldo cuando el navegador no manda `Origin`, y siempre se compara por origen, nunca por ruta.
+
+Las rutas que invoca el scheduler (`/api/cron/cleanup`, `/api/revalidate`, `/api/reconcile-storage`) no dependen de `Origin`: exigen el bearer `CRON_SECRET`, que un navegador no puede añadir en una petición cross-site.
 
 Además, las rutas de administración (`/admin/*`) requieren sesión válida mediante `requireSession()`, que valida la cookie de sesión contra la tabla `sessions` en la base de datos. `requireSession()` no modifica cookies salvo que se lo pida explícitamente con `clearCookie: true`: Next.js solo permite mutar cookies desde Server Functions y Route Handlers, y borrarla durante el render de un Server Component lanza un error que tapa la causa real. Solo los contextos mutables (Server Actions, `POST /api/upload`, `GET /api/metrics`) limpian la cookie caducada; el panel y el login se limitan a redirigir.
 
@@ -88,9 +96,14 @@ Todas las entradas de usuario pasan por esquemas Zod en `src/lib/validation.ts`:
 - **Etiquetas**: máximo 5, sin duplicados (insensible a mayúsculas), 1-30 caracteres cada una.
 - **Autor**: máximo 60 caracteres.
 - **Fecha de publicación**: debe ser ISO datetime válida al publicar.
-- **Campos de reseña**: `gameId`, `score` (1-10), `scoreReason` (mínimo 20), `verdict` (mínimo 10).
+- **Campos de reseña**: `gameId`, `score` (0-100), `scoreDetails` (`story`, `gameplay`, `visual`, enteros 1-10), `scoreReason` (mínimo 20), `verdict` (mínimo 10). La base vuelve a comprobar el rango, la forma del JSON y que los campos de reseña no existan en una noticia o guía.
+- **Pros y contras**: máximo 5 elementos por lista, 200 caracteres cada uno; la base los valida con una función inmutable.
+- **Video**: `videoUrl` y `videoTitle` van juntos; la URL debe ser `http(s)` y solo YouTube o Vimeo se embeben.
+- **Galería**: máximo 20 imágenes, ids de `media` existentes y no marcados para eliminación, sin repetir.
+- **Juegos**: título de 3 a 120 caracteres, hasta 8 plataformas y 8 géneros (30 caracteres cada uno), etiquetas con el mismo límite que un artículo, `releaseDate` opcional y portada obligatoria al publicar.
 - **URLs de fuente**: esquema `http://` o `https://`.
 - **ID de medios**: enteros positivos, referencias validadas contra la tabla `media`.
+- **Parámetros de URL**: `searchParams` se normaliza con `firstParamText` (un parámetro repetido ya no rompe el render) y los comodines `LIKE` se escapan con `escapeLike`.
 
 La sanitización de Markdown usa `remark` + `rehype` + `rehype-sanitize` (`src/components/markdown-content.tsx`), eliminando HTML crudo, JavaScript en enlaces y CDATA malicioso.
 
@@ -101,7 +114,7 @@ La sanitización de Markdown usa `remark` + `rehype` + `rehype-sanitize` (`src/c
 - **Cookie de sesión**: `HttpOnly`, `Secure`, `SameSite=Lax`, `maxAge` = 30 días (expiración absoluta).
 - **Expiración idle**: 8 horas deslizantes (se renueva en cada uso).
 - **Expiración absoluta**: 30 días (tope absoluto sin importar la actividad).
-- **Rate limiting de login**: backoff progresivo por IP (hash de IP con HMAC-SHA256 usando `CRON_SECRET`), empezando en el 5.º intento fallido, con tope de 15 minutos.
+- **Rate limiting de login**: backoff progresivo por IP (hash de IP con HMAC-SHA256 usando `IP_HASH_SECRET`, con `CRON_SECRET` como respaldo si la variable no está definida), empezando en el 5.º intento fallido, con tope de 15 minutos. La IPv4 se usa completa y la IPv6 se colapsa a su prefijo `/64` (`src/lib/ip.ts`): un atacante con un bloque IPv6 no obtiene un contador nuevo por cada dirección.
 - **Atomicidad del rate limiting**: `attemptLogin` ejecuta el control de intentos, la verificación scrypt y el registro dentro de una transacción con `pg_advisory_xact_lock` por IP. Sin el bloqueo, varias solicitudes simultáneas podían leer el mismo contador y superar el límite. La prueba `npm run test:db` verifica que 10 intentos concurrentes de una misma IP producen exactamente 5 permitidos.
 - **Registro de intentos**: todos los intentos de login (éxitos y fallos) se registran en `login_attempts`.
 
@@ -134,6 +147,8 @@ No se usa `npm audit fix --force`: proponía un cambio de versión mayor de `@ve
 - Variantes generadas: 480, 960, 1600 px (solo si son menores al ancho fuente).
 - Claves de almacenamiento con UUID aleatorio (nunca el nombre original ni el slug).
 - `cacheControlMaxAge: 31536000` (caché larga; la clave lleva UUID, el contenido nunca cambia).
+- **Borrado reversible**: el panel no borra objetos. Marca `pending_delete_at` en `media` y el barrido de `/api/cron/cleanup` elimina el objeto y sus variantes después de la ventana de gracia, solo si ninguna referencia lo usa. La detección vive en `src/lib/media-references.ts` (portada, Open Graph, galería y `media:<id>` en cuerpos) y la comparten el panel y la reconciliación.
+- **Objetos huérfanos**: si el `INSERT` en `media` falla después de subir a Blob y el borrado de compensación también falla, la clave queda en `storage_orphans`; `/api/reconcile-storage` la reintenta.
 
 ## 7. Límites y cuotas
 
@@ -168,11 +183,17 @@ El presupuesto limita el costo del tráfico de rastreadores: como máximo una co
 
 ## 9. Verificación continua
 
-CI (`.github/workflows/quality.yml`) usa Node 24 y `npm ci` (lockfile obligatorio), con dos trabajos:
+CI (`.github/workflows/quality.yml`) usa Node 24 desde `.nvmrc` y `npm ci` (lockfile obligatorio), con dos trabajos:
 
 1. **validate**: tests unitarios, ESLint, Prettier (`--check` sobre todo el repo), typecheck, build de producción y `npm audit --omit=dev --audit-level=high`.
-2. **integration**: PostgreSQL 18 como servicio, `npm run db:migrate`, build, `npm run test:db` (auth, sesiones, rate limiting atómico contra la base real) y `npm run test:http` (CSP, cookies de sesión, origen, cron, redirección 308 y límites de subida contra el servidor real).
+2. **integration**: PostgreSQL 18 como servicio, `npm run test:migrations` (base nueva y base legacy reconciliada), `npm run test:baseline` (esquema legacy → historial → migrate), `npm run db:migrate`, build, `npm run test:db` (auth, sesiones, rate limiting atómico, rareza y catálogo contra la base real) y `npm run test:http` (CSP, cookies de sesión, origen, cron, redirección 308, catálogo, ficha de juego, extras editoriales y límites de subida contra el servidor real).
 
-`npm run test:db` exige una base PostgreSQL en loopback (`localhost`, `127.0.0.1` o `::1`), porque inserta y borra fixtures de sesiones e intentos de login mientras ejercita los flujos; un nombre que termine en `_test` no autoriza un host remoto. `npm run test:http` aplica la misma restricción y restaura las filas de `cron_runs` que sobrescribe, en lugar de borrarlas.
+El mismo commit se vigila además con:
+
+- `codeql.yml`: análisis estático de JavaScript/TypeScript en cada push a `main` y cada pull request, más una ejecución semanal.
+- `dependabot.yml`: actualizaciones semanales de npm y de las GitHub Actions, agrupadas para no inundar de PRs.
+- `.husky/pre-commit`: `lint-staged` formatea y linta solo los archivos tocados, con `HUSKY=0` en CI para no interferir.
+
+`npm run test:db` exige una base PostgreSQL en loopback (`localhost`, `127.0.0.1` o `::1`), porque inserta y borra fixtures de sesiones e intentos de login mientras ejercita los flujos; un nombre que termine en `_test` no autoriza un host remoto. `npm run test:http` aplica la misma restricción y restaura las filas de `cron_runs` que sobrescribe, en lugar de borrarlas. `test:migrations` y `test:baseline` crean y destruyen sus propias bases desechables, con un nombre que incluye un UUID.
 
 Pendiente de integración real (requiere credenciales): subida a Vercel Blob, ejecución del scheduler de GitHub Actions con `NETTI_SITE_URL` y `CRON_SECRET`, y métricas de Neon en producción.

@@ -4,8 +4,9 @@ import { notFound } from 'next/navigation';
 import { ScoreBadge } from '@/components/score-badge';
 import { SectionChips } from '@/components/section-chips';
 import { SiteFooter, SiteHeader, SkipLink } from '@/components/site-chrome';
-import { getVisibleArticles } from '@/lib/content';
+import { getVisibleArticleCount, getVisibleArticles, getVisibleCategories } from '@/lib/content';
 import { articleCollectionPath, articleKindFromSegment, articlePath } from '@/lib/routes';
+import { firstParamText } from '@/lib/search-params';
 
 /**
  * Blocking route.
@@ -15,6 +16,8 @@ import { articleCollectionPath, articleKindFromSegment, articlePath } from '@/li
  * a partially prerendered shell with status 200.
  */
 export const instant = false;
+
+const PAGE_SIZE = 12;
 
 const COLLECTIONS = {
   resenas: { title: 'Reseñas', description: 'Análisis y opiniones sobre videojuegos.' },
@@ -47,7 +50,7 @@ export default async function CollectionPage({
   searchParams,
 }: {
   params: Promise<{ kind: string }>;
-  searchParams: Promise<{ categoria?: string }>;
+  searchParams: Promise<{ categoria?: string | string[]; pagina?: string | string[] }>;
 }) {
   const { kind: segment } = await params;
   const kind = articleKindFromSegment(segment);
@@ -55,19 +58,28 @@ export default async function CollectionPage({
 
   const collection = COLLECTIONS[segment as keyof typeof COLLECTIONS];
   const collectionPath = articleCollectionPath(kind);
-  const [query] = await Promise.all([searchParams]);
-  const allArticles = await getVisibleArticles(kind, 30);
-  const categories = [
-    ...new Set(
-      allArticles.map((article) => article.category).filter((value): value is string => !!value)
-    ),
-  ];
-  const activeCategory = query.categoria?.trim() ?? '';
-  const articles = activeCategory
-    ? allArticles.filter((article) => article.category === activeCategory)
-    : allArticles;
+  const query = await searchParams;
+  // A repeated parameter arrives as an array: reading it directly would throw.
+  const activeCategory = firstParamText(query.categoria, 60);
+  const requestedPage = Number.parseInt(firstParamText(query.pagina, 8), 10);
+  const page = Number.isSafeInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+
+  const [categories, total, articles] = await Promise.all([
+    getVisibleCategories(kind),
+    getVisibleArticleCount(kind, activeCategory || undefined),
+    getVisibleArticles(kind, PAGE_SIZE, activeCategory || undefined, (page - 1) * PAGE_SIZE),
+  ]);
+
+  const totalPages = Math.max(Math.ceil(total / PAGE_SIZE), 1);
   const [lead, ...rest] = articles;
   const topStories = articles.slice(0, 4);
+  const pageLink = (target: number) => {
+    const next = new URLSearchParams();
+    if (activeCategory) next.set('categoria', activeCategory);
+    if (target > 1) next.set('pagina', String(target));
+    const queryString = next.toString();
+    return queryString ? `${collectionPath}?${queryString}` : collectionPath;
+  };
 
   return (
     <div className="site-shell">
@@ -110,9 +122,19 @@ export default async function CollectionPage({
             <span className="empty-mark" aria-hidden="true">
               N.
             </span>
-            <h2>Todavía no hay publicaciones</h2>
-            <p>Esta colección aparecerá aquí cuando haya contenido publicado.</p>
-            <Link href="/">Volver al inicio</Link>
+            {activeCategory ? (
+              <>
+                <h2>No hay publicaciones en esta categoría</h2>
+                <p>Todavía no hay artículos publicados en “{activeCategory}”.</p>
+                <Link href={collectionPath}>Ver todas las publicaciones</Link>
+              </>
+            ) : (
+              <>
+                <h2>Todavía no hay publicaciones</h2>
+                <p>Esta colección aparecerá aquí cuando haya contenido publicado.</p>
+                <Link href="/">Volver al inicio</Link>
+              </>
+            )}
           </div>
         ) : (
           <div className="collection-layout">
@@ -221,6 +243,23 @@ export default async function CollectionPage({
             </aside>
           </div>
         )}
+        {totalPages > 1 ? (
+          <nav className="pagination" aria-label="Páginas de la colección">
+            {page > 1 ? (
+              <Link className="pagination-link" href={pageLink(page - 1)} rel="prev">
+                <span aria-hidden="true">←</span> Anteriores
+              </Link>
+            ) : null}
+            <span className="pagination-status">
+              Página {page} de {totalPages}
+            </span>
+            {page < totalPages ? (
+              <Link className="pagination-link" href={pageLink(page + 1)} rel="next">
+                Siguientes <span aria-hidden="true">→</span>
+              </Link>
+            ) : null}
+          </nav>
+        ) : null}
       </main>
       <SiteFooter />
     </div>

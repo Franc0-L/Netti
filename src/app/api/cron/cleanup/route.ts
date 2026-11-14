@@ -11,14 +11,35 @@ import {
 } from '@/db/schema';
 import { planOrphanCleanup } from '@/lib/cleanup-plan';
 import { isAuthorizedCron } from '@/lib/cron-auth';
+import { logger } from '@/lib/logger';
 import { storage } from '@/lib/storage';
 
 export const maxDuration = 10;
 const LOGIN_ATTEMPT_RETENTION_DAYS = 7;
 const ORPHAN_BATCH_SIZE = 25;
+const JOB_NAME = 'cleanup';
 
 function response(status: number, body: Record<string, unknown>) {
   return NextResponse.json(body, { status, headers: { 'Cache-Control': 'no-store' } });
+}
+
+/**
+ * Records that the job ran.
+ *
+ * `lastRunAt` is best effort: it is written even when the run failed, as long
+ * as PostgreSQL is reachable. `lastSuccessAt` only advances when the run
+ * finished without pending work, so monitoring can tell a degraded run from a
+ * healthy one.
+ */
+async function recordRun(now: Date, successful: boolean) {
+  const values = successful
+    ? { jobName: JOB_NAME, lastRunAt: now, lastSuccessAt: now }
+    : { jobName: JOB_NAME, lastRunAt: now };
+  const update = successful ? { lastRunAt: now, lastSuccessAt: now } : { lastRunAt: now };
+  await db
+    .insert(cronRuns)
+    .values(values)
+    .onConflictDoUpdate({ target: cronRuns.jobName, set: update });
 }
 
 export async function GET(request: Request) {
@@ -92,32 +113,35 @@ export async function GET(request: Request) {
             .set({ status: 'repaired', repairedAt: now })
             .where(inArray(storageOrphans.id, plan.deleteIds));
           repaired += plan.deleteIds.length;
-        } catch {
+        } catch (error) {
           // Keep failed objects pending so the next scheduled run retries them.
           failed = plan.deleteIds.length;
+          logger.error('cron.cleanup.blob.delete.failed', {
+            errorType: error instanceof Error ? error.name : 'unknown',
+            failedObjects: failed,
+          });
         }
       }
     }
 
     const unresolved = pending.length - repaired;
-    const update = { lastRunAt: now };
-    if (unresolved === 0) {
-      await db
-        .insert(cronRuns)
-        .values({ jobName: 'cleanup', lastRunAt: now, lastSuccessAt: now })
-        .onConflictDoUpdate({
-          target: cronRuns.jobName,
-          set: { lastRunAt: now, lastSuccessAt: now },
-        });
-    } else {
-      await db
-        .insert(cronRuns)
-        .values({ jobName: 'cleanup', ...update })
-        .onConflictDoUpdate({ target: cronRuns.jobName, set: update });
+    // Blocked or failed deletions leave work pending: the run is degraded and
+    // must not be reported as a success.
+    const degraded = failed > 0 || blocked > 0;
+
+    await recordRun(now, !degraded);
+
+    if (degraded) {
+      logger.error('cron.cleanup.degraded', {
+        failedObjects: failed,
+        blockedObjects: blocked,
+        pendingObjects: unresolved,
+      });
     }
 
-    return response(200, {
-      ok: true,
+    return response(degraded ? 500 : 200, {
+      ok: !degraded,
+      degraded,
       removedLoginAttempts: removedAttempts.length,
       removedExpiredSessions: removedSessions.length,
       repairedStorageOrphans: repaired,
@@ -126,7 +150,16 @@ export async function GET(request: Request) {
       pendingStorageOrphans: unresolved,
       batchLimit: ORPHAN_BATCH_SIZE,
     });
-  } catch {
+  } catch (error) {
+    logger.error('cron.cleanup.failed', {
+      errorType: error instanceof Error ? error.name : 'unknown',
+    });
+    // Best effort: the run happened even if the result could not be stored.
+    try {
+      await recordRun(now, false);
+    } catch {
+      /* PostgreSQL is the failing dependency; readiness will report it. */
+    }
     return response(500, { ok: false, error: 'Cleanup failed' });
   }
 }

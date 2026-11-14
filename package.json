@@ -2,6 +2,10 @@
   "name": "netti",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": "24.x"
+  },
+  "packageManager": "npm@11.19.1",
   "scripts": {
     "dev": "next dev",
     "typecheck": "tsc --noEmit",
@@ -10,6 +14,7 @@
     "test:migrations": "tsx scripts/migration-check.ts",
     "test:baseline": "tsx scripts/baseline-check.ts",
     "test:http": "tsx scripts/http-smoke.ts",
+    "test:all": "npm run test && npm run test:migrations && npm run test:baseline && npm run test:db && npm run test:http",
     "build": "next build",
     "start": "next start",
     "hash:admin": "tsx scripts/hash-admin-password.ts",

@@ -64,7 +64,13 @@ jobs:
 
   reconcile:
     name: Reconcile storage
-    if: github.event.schedule == '47 4 * * *' || github.event_name == 'workflow_dispatch'
+    # Runs after the cleanup job: both touch the same `storage_orphans` rows,
+    # so they must not compete for the same pending deletions.
+    needs: cleanup
+    # `always()` keeps the job running when the cleanup job was skipped, which
+    # is the case for the daily 04:47 schedule: the cleanup has its own cron
+    # entry and runs in a separate workflow run.
+    if: always() && (github.event.schedule == '47 4 * * *' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

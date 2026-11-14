@@ -4,7 +4,8 @@ import { connection } from 'next/server';
 import { redirect } from 'next/navigation';
 import { AdminNav } from '@/components/admin-nav';
 import { SkipLink } from '@/components/site-chrome';
-import { requireSession } from '@/lib/auth';
+import { requireSession, SessionRequiredError } from '@/lib/auth';
+import { logger } from '@/lib/logger';
 
 export const metadata: Metadata = { robots: { index: false, follow: false } };
 
@@ -23,7 +24,15 @@ export default async function AdminPanelLayout({ children }: Readonly<{ children
     // Server Component: cookies cannot be mutated here, so an expired session
     // only redirects to the login page.
     await requireSession();
-  } catch {
+  } catch (error) {
+    // Only a missing session means "log in". A database failure is an
+    // infrastructure problem and must not look like an expired session.
+    if (!(error instanceof SessionRequiredError)) {
+      logger.error('admin.session.check.failed', {
+        errorType: error instanceof Error ? error.name : 'unknown',
+      });
+      throw error;
+    }
     redirect('/admin/login');
   }
   return (

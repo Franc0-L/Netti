@@ -3,11 +3,20 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ContentImage } from '@/components/content-image';
 import { MarkdownContent } from '@/components/markdown-content';
+import { ScoreBadge } from '@/components/score-badge';
 import { ScoreBreakdown } from '@/components/score-breakdown';
 import { SiteFooter, SiteHeader, SkipLink } from '@/components/site-chrome';
-import { getArticle, getBodyMedia } from '@/lib/content';
+import {
+  getArticle,
+  getArticleGallery,
+  getBodyMedia,
+  getGameSummary,
+  getRelatedArticles,
+  type ArticleKind,
+} from '@/lib/content';
 import { articleCollectionPath, articleKindFromSegment, articlePath } from '@/lib/routes';
 import { safeJsonLd } from '@/lib/seo';
+import { videoEmbedUrl } from '@/lib/video';
 
 /**
  * Blocking route.
@@ -38,6 +47,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
   const siteUrl = process.env.PUBLIC_SITE_URL;
   const canonical = siteUrl ? new URL(articlePath(kind, slug), siteUrl).toString() : undefined;
+  // The social image can be chosen independently from the cover.
+  const socialImage = article.ogImageUrl ?? article.coverImageUrl;
 
   return {
     title: article.seoTitle || article.title,
@@ -50,16 +61,16 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       publishedTime: article.publishedAt?.toISOString(),
       authors: article.author ? [article.author] : undefined,
       url: canonical,
-      images: article.coverImageUrl
-        ? [{ url: article.coverImageUrl, alt: article.coverAlt || article.title }]
+      images: socialImage
+        ? [{ url: socialImage, alt: article.coverAlt || article.title }]
         : undefined,
     },
     twitter: {
       card: 'summary_large_image',
       title: article.seoTitle || article.title,
       description: article.seoDescription || article.description || undefined,
-      images: article.coverImageUrl
-        ? [{ url: article.coverImageUrl, alt: article.coverAlt || article.title }]
+      images: socialImage
+        ? [{ url: socialImage, alt: article.coverAlt || article.title }]
         : undefined,
     },
   };
@@ -73,7 +84,13 @@ export default async function ArticlePage({ params }: PageProps) {
   const article = await getArticle(kind, slug);
   if (!article) notFound();
 
-  const bodyMedia = await getBodyMedia(article.body);
+  const [bodyMedia, gallery, related, game] = await Promise.all([
+    getBodyMedia(article.body),
+    getArticleGallery(article.id),
+    getRelatedArticles(kind as ArticleKind, article.id, article.tags),
+    article.kind === 'review' && article.gameId ? getGameSummary(article.gameId) : null,
+  ]);
+
   const collectionPath = articleCollectionPath(kind);
   const publishedDate = article.publishedAt?.toLocaleDateString('es-AR', {
     day: 'numeric',
@@ -82,6 +99,7 @@ export default async function ArticlePage({ params }: PageProps) {
   });
   const siteUrl = process.env.PUBLIC_SITE_URL;
   const articleUrl = siteUrl ? new URL(articlePath(kind, slug), siteUrl).toString() : undefined;
+  const embedUrl = videoEmbedUrl(article.videoUrl);
   const jsonLd = {
     '@context': 'https://schema.org',
     '@type': 'Article',
@@ -92,6 +110,14 @@ export default async function ArticlePage({ params }: PageProps) {
     author: { '@type': 'Person', name: article.author || 'Netti' },
     image: article.coverImageUrl ? [article.coverImageUrl] : undefined,
     mainEntityOfPage: articleUrl,
+    video: article.videoUrl
+      ? {
+          '@type': 'VideoObject',
+          name: article.videoTitle || article.title,
+          contentUrl: article.videoUrl,
+          embedUrl: embedUrl ?? undefined,
+        }
+      : undefined,
   };
 
   return (
@@ -118,6 +144,11 @@ export default async function ArticlePage({ params }: PageProps) {
                   <time dateTime={article.publishedAt?.toISOString()}>{publishedDate}</time>
                 </span>
               ) : null}
+              {game ? (
+                <span>
+                  <Link href={`/juegos/${game.slug}`}>{game.title}</Link>
+                </span>
+              ) : null}
             </div>
           </header>
           {kind === 'review' && article.score !== null ? (
@@ -139,6 +170,82 @@ export default async function ArticlePage({ params }: PageProps) {
             </figure>
           ) : null}
           <MarkdownContent source={article.body} media={bodyMedia} />
+
+          {article.pros.length > 0 || article.cons.length > 0 ? (
+            <div className="pros-cons">
+              {article.pros.length > 0 ? (
+                <section aria-labelledby="pros-heading">
+                  <h2 id="pros-heading">A favor</h2>
+                  <ul className="pros">
+                    {article.pros.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                </section>
+              ) : null}
+              {article.cons.length > 0 ? (
+                <section aria-labelledby="cons-heading">
+                  <h2 id="cons-heading">En contra</h2>
+                  <ul className="cons">
+                    {article.cons.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                </section>
+              ) : null}
+            </div>
+          ) : null}
+
+          {article.videoUrl && article.videoTitle ? (
+            <section className="article-video" aria-labelledby="video-heading">
+              <h2 id="video-heading">{article.videoTitle}</h2>
+              {embedUrl ? (
+                <div className="video-frame">
+                  <iframe
+                    src={embedUrl}
+                    title={article.videoTitle}
+                    loading="lazy"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                  />
+                </div>
+              ) : (
+                <p>
+                  <a
+                    className="text-link"
+                    href={article.videoUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Ver el video <span aria-hidden="true">↗</span>
+                  </a>
+                </p>
+              )}
+            </section>
+          ) : null}
+
+          {gallery.length > 0 ? (
+            <section className="article-gallery" aria-labelledby="gallery-heading">
+              <h2 id="gallery-heading">Galería</h2>
+              <ul className="gallery-grid">
+                {gallery.map((image) => (
+                  <li key={image.id}>
+                    <figure>
+                      <ContentImage
+                        src={image.publicUrl}
+                        alt={image.alt || 'Imagen de la galería'}
+                        width={800}
+                        height={600}
+                        sizes="(max-width: 800px) 100vw, 33vw"
+                      />
+                      {image.alt ? <figcaption>{image.alt}</figcaption> : null}
+                    </figure>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
           {kind === 'review' && article.verdict ? (
             <aside className="verdict">
               <p className="eyebrow">VEREDICTO</p>
@@ -153,6 +260,48 @@ export default async function ArticlePage({ params }: PageProps) {
             </div>
           ) : null}
         </article>
+
+        {related.length > 0 ? (
+          <section className="related-section" aria-labelledby="related-heading">
+            <h2 id="related-heading">Seguí leyendo</h2>
+            <div className="article-grid">
+              {related.map((item) => (
+                <article className="article-card" key={item.id}>
+                  <Link
+                    href={articlePath(item.kind as ArticleKind, item.slug)}
+                    className="article-card-link"
+                  >
+                    <div className="article-card-meta">
+                      <span>
+                        {item.publishedAt?.toLocaleDateString('es-AR', { dateStyle: 'long' })}
+                      </span>
+                      {item.score !== null && item.kind === 'review' ? (
+                        <ScoreBadge
+                          score={item.score}
+                          rarity={
+                            item.rarityKey && item.rarityLabel && item.rarityColorToken
+                              ? {
+                                  key: item.rarityKey,
+                                  label: item.rarityLabel,
+                                  colorToken: item.rarityColorToken,
+                                }
+                              : null
+                          }
+                          compact
+                        />
+                      ) : null}
+                    </div>
+                    <h3>{item.title}</h3>
+                    {item.description ? <p>{item.description}</p> : null}
+                    <span className="read-more">
+                      Leer artículo <span aria-hidden="true">↗</span>
+                    </span>
+                  </Link>
+                </article>
+              ))}
+            </div>
+          </section>
+        ) : null}
       </main>
       <SiteFooter />
     </div>

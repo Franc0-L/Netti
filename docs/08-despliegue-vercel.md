@@ -8,9 +8,14 @@
 - [ ] Working tree limpio (`git status` muestra "nothing to commit")
 - [ ] `npm run build` pasa sin errores
 - [ ] `npm run typecheck` pasa sin errores
-- [ ] `npm run lint` pasa sin errores (0 errores, warnings aceptables)
-- [ ] `npm run test` pasa (24/24 tests)
-- [ ] `npm run db:migrate` ejecutado contra la base de producción de Neon
+- [ ] `npm run lint` pasa sin errores ni warnings
+- [ ] `npm run format:check` pasa
+- [ ] `npm test` pasa (61/61)
+- [ ] `npm run test:db`, `npm run test:migrations` y `npm run test:baseline` pasan contra PostgreSQL local
+- [ ] `npm run test:http` pasa contra `next start` en loopback
+- [ ] `npm run db:migrate` ejecutado contra la base de producción de Neon **después** de un backup nuevo
+
+> **Bloqueante**: Neon está en `0002_reconcile_legacy_schema` y el código del repositorio usa `0003` y `0004`. No desplegar hasta que la migración esté aplicada y verificada; el panel y las fichas de juego fallarían sin esas columnas.
 
 ### 2. Variables de entorno
 
@@ -23,7 +28,10 @@ Configurar en el dashboard de Vercel (Settings → Environment Variables):
 | `ADMIN_PASSWORD_HASH`   | Hash scrypt generado con `npm run hash:admin` | Production, Preview, Development |
 | `BLOB_READ_WRITE_TOKEN` | Token de Vercel Blob                          | Production, Preview, Development |
 | `CRON_SECRET`           | Secreto de al menos 32 caracteres             | Production, Preview, Development |
+| `IP_HASH_SECRET`        | Secreto de al menos 32 caracteres             | Production, Preview, Development |
 | `PUBLIC_SITE_URL`       | `https://tu-proyecto.vercel.app`              | Production, Preview, Development |
+
+`IP_HASH_SECRET` puede omitirse: en ese caso el HMAC de las IPs usa `CRON_SECRET`. Definirla aparte permite rotar el secreto del cron sin perder la continuidad del rate limiting.
 
 > ⚠️ No subir `.env.local` ni `.env` al repositorio. Están en `.gitignore`.
 
@@ -32,15 +40,15 @@ Variables opcionales: `VERCEL_OIDC_TOKEN`, `BLOB_STORE_ID`, `EDGE_CONFIG_ID`, `I
 ### 3. Base de datos Neon
 
 - [ ] Proyecto creado en región `sa-east-1`
-- [ ] Base de datos `neondb` con tablas migradas (`npm run db:migrate`)
+- [ ] Base de datos `neondb` migrada hasta `0004` (`npm run db:migrate`)
 - [ ] `DATABASE_URL_UNPOOLED` disponible para backups y migraciones
-- [ ] Límite de conexiones monitoreado (máximo 3 por instancia)
+- [ ] Límite de conexiones monitoreado (pool de 2 por instancia por defecto, `DATABASE_POOL_MAX`)
 
 ### 4. Vercel Blob
 
 - [ ] Store de Blob creado en el dashboard de Vercel
-- [ ] Token `READ_WRITE_TOKEN` copiado
-- [ ] Límite de 5 GB de almacenamiento monitoreado
+- [ ] Token `READ_WRITE_TOKEN` copiado para desarrollo local y CI
+- [ ] Límite de 1 GB de almacenamiento monitoreado (Hobby bloquea el store al excederlo, no cobra)
 
 ### 5. Cron
 
@@ -58,6 +66,19 @@ Variables opcionales: `VERCEL_OIDC_TOKEN`, `BLOB_STORE_ID`, `EDGE_CONFIG_ID`, `I
 4. No establecer un output directory personalizado para Next.js.
 5. Configurar el dominio `<proyecto>.vercel.app`; no se presupone ni se configura un dominio propio.
 6. Mantener separados Production, Preview y Development. No conectar previews a la base de producción.
+
+## Cutover desde el proyecto legacy
+
+El proyecto `netti` de Vercel apunta hoy al sitio Astro. El reemplazo se hace cuando el contenido y la migración estén validados, no antes:
+
+1. Confirmar que Neon está en `0004` y que el backup nuevo se verificó con `pg_restore --list`.
+2. Confirmar que `main` tiene el código final y que todos los checks pasan en GitHub.
+3. Anotar el dominio, las variables de entorno y el store de Blob del proyecto actual (los valores de los secretos no se copian a ningún documento).
+4. Borrar el proyecto `netti` antiguo y crear uno nuevo importando este repositorio, con las variables de la tabla de arriba.
+5. Comprobar que el dominio `.vercel.app` quedó asignado. Si Vercel lo retiene unos minutos, usar el dominio temporal del deployment mientras se libera.
+6. Repetir las verificaciones posteriores al despliegue.
+
+El store de Blob y la base de Neon son recursos de la cuenta, no del proyecto: borrar el proyecto de Vercel no los elimina. Aun así, revisá en el dashboard que el store sigue existiendo y que el proyecto nuevo puede escribir en él antes de subir imágenes.
 
 ## Variables por entorno
 
@@ -90,7 +111,10 @@ No ejecutar `db:migrate` automáticamente desde el build de Vercel. No aplicar e
 - Consultar `/api/health` (liveness; no prueba Neon ni Blob). Para readiness, llamar a `/api/ready` con `Authorization: Bearer $CRON_SECRET`.
 - Probar login y cierre de sesión desde el origen configurado.
 - Crear un borrador, editarlo y comprobar su persistencia.
+- Abrir `/admin/games`, crear una ficha, publicarla y comprobar `/juegos` y `/juegos/<slug>`.
+- Comprobar `/juegos/azar` (debe redirigir 307 a una ficha publicada) y los filtros de plataforma, género y año.
 - Probar subida de imagen solo después de confirmar el token/store del entorno.
+- Verificar que una reseña muestra pros, contras, video y galería, y que el `<iframe>` del video carga (la CSP debe incluir `frame-src`).
 - Verificar logs del deployment y errores de runtime.
 - Confirmar que las variables no aparecen en logs o respuestas.
 
@@ -114,13 +138,14 @@ Si el deployment presenta errores:
 
 ## Variables de entorno — inventario completo
 
-| Variable                | Requerida                              | Uso y origen                                                                                                                                                                                                                                   |
-| ----------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`          | Sí                                     | URL PostgreSQL pooled usada por el pool de la aplicación. Se obtiene desde el proyecto PostgreSQL/Neon; en producción debe ser la cadena pooled apropiada para el runtime.                                                                     |
-| `DATABASE_URL_UNPOOLED` | Sí para el esquema de entorno validado | URL PostgreSQL directa, sin pooler. Se obtiene desde la consola del proveedor. Se usa para backup y migraciones; no se usa como pool de la aplicación.                                                                                         |
-| `ADMIN_PASSWORD_HASH`   | Sí                                     | Hash scrypt, nunca contraseña en texto plano. Generarlo con `npm run hash:admin` y el flujo interactivo del script.                                                                                                                            |
-| `BLOB_READ_WRITE_TOKEN` | Sí según `src/lib/env.ts`              | Token de lectura/escritura del store de Vercel Blob. Obtenerlo desde el store correspondiente.                                                                                                                                                 |
-| `CRON_SECRET`           | Sí                                     | Secreto aleatorio de al menos 32 caracteres para el endpoint de limpieza. También se usa como clave HMAC para derivar el hash de IP de los intentos de login. Generarlo con un generador criptográficamente seguro y custodiarlo como secreto. |
+| Variable                | Requerida                              | Uso y origen                                                                                                                                                                                                       |
+| ----------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `DATABASE_URL`          | Sí                                     | URL PostgreSQL pooled usada por el pool de la aplicación. Se obtiene desde el proyecto PostgreSQL/Neon; en producción debe ser la cadena pooled apropiada para el runtime.                                         |
+| `DATABASE_URL_UNPOOLED` | Sí para el esquema de entorno validado | URL PostgreSQL directa, sin pooler. Se obtiene desde la consola del proveedor. Se usa para backup y migraciones; no se usa como pool de la aplicación.                                                             |
+| `ADMIN_PASSWORD_HASH`   | Sí                                     | Hash scrypt, nunca contraseña en texto plano. Generarlo con `npm run hash:admin` y el flujo interactivo del script.                                                                                                |
+| `BLOB_READ_WRITE_TOKEN` | Sí según `src/lib/env.ts`              | Token de lectura/escritura del store de Vercel Blob. Obtenerlo desde el store correspondiente.                                                                                                                     |
+| `CRON_SECRET`           | Sí                                     | Secreto aleatorio de al menos 32 caracteres para los endpoints de cron, revalidación y reconciliación. También se usa como respaldo del HMAC de IP si `IP_HASH_SECRET` no está definida. Custodiarlo como secreto. |
+| `IP_HASH_SECRET`        | No                                     | Secreto del HMAC que hashea las IPs de `login_attempts`. Si falta se usa `CRON_SECRET`; definirlo aparte permite rotar el cron sin reiniciar el rate limiting.                                                     |
 
 ### Variables opcionales o condicionales
 

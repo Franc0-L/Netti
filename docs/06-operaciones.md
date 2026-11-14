@@ -11,17 +11,27 @@ El contenido no toca Git: vive en Postgres y se escribe desde el panel. No hay r
 
 **Previews**: cada PR usa un **proyecto de Neon separado**, no una rama del proyecto de producción. Las ramas comparten las 100 CU-horas y el tope de 10; el PR número 11 fallaría. Un segundo proyecto Free (hay 100) evita compartir cuota y evita que un preview con migraciones rompa producción.
 
-**CI** en cada PR y en `main`:
+**CI** en cada PR y en `main` (`.github/workflows/quality.yml`):
 
 ```bash
 npm ci
-npm run lint        # eslint .
-npm run typecheck   # tsc --noEmit
-npm run test        # vitest run, con Postgres 17 en service container
+npm test                 # node:test sobre src/lib y src/components
+npm run lint             # eslint .
+npm run format:check     # prettier --check .
+npm run typecheck        # tsc --noEmit
 npm run build
+
+# trabajo de integración, con PostgreSQL 18 como servicio
+npm run test:migrations  # base nueva + base legacy reconciliada
+npm run test:baseline    # esquema legacy → historial → migrate
+npm run db:migrate
+npm run test:db
+npm run test:http        # contra next start en 127.0.0.1
 ```
 
-`next build` ya no corre ESLint: si no se agrega `npm run lint`, un error de lint llega a producción.
+`next build` ya no corre ESLint: si no se agrega `npm run lint`, un error de lint llega a producción. `npm run test:all` encadena las cuatro suites de integración locales; no se usa en CI porque cada job necesita su propia base y su propio servidor.
+
+Además del workflow de calidad, `codeql.yml` analiza el código en cada PR y una vez por semana, y `dependabot.yml` abre PRs semanales de npm y de las GitHub Actions. `.husky/pre-commit` formatea y linta solo los archivos tocados (`lint-staged`).
 
 ## 2. Entorno
 
@@ -50,46 +60,47 @@ No hay factura sorpresa: **no se cobra el exceso, se bloquea el almacenamiento h
 
 ### 2.2 Variables
 
-| Variable                 | Requerida | Descripción                                                                                                           |
-| ------------------------ | --------- | --------------------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`           | Sí        | Cadena **pooled** de Neon, para la aplicación                                                                         |
-| `DATABASE_URL_UNPOOLED`  | Sí        | Cadena directa, para migraciones y `pg_dump`                                                                          |
-| `ADMIN_PASSWORD_HASH`    | Sí        | `scrypt:131072:8:1:<saltB64>:<hashB64>`                                                                               |
-| `IP_HASH_SECRET`         | Sí        | Secreto del HMAC que hashea IPs                                                                                       |
-| `PUBLIC_SITE_URL`        | Sí        | Origen de producción                                                                                                  |
-| `PREVIEW_ORIGIN_REGEX`   | No        | Patrón de origen permitido en previews, anclado al dominio del proyecto (no aceptar subdominios arbitrarios)          |
-| `IMAGES_PUBLIC_BASE_URL` | Sí        | URL pública de Blob (`https://<store>.public.blob.vercel-storage.com`)                                                |
-| `CRON_SECRET`            | Sí        | Bearer del endpoint de revalidación                                                                                   |
-| `AGE_PUBLIC_KEY`         | Sí        | Clave pública `age` para cifrar el dump de backup                                                                     |
-| `BLOB_STORE_ID`          | No        | ID del store de Vercel Blob (OIDC en Vercel suele proveerlo automáticamente; confirmar si el código lo usa realmente) |
-| `BLOB_READ_WRITE_TOKEN`  | No        | Token de lectura/escritura para desarrollo local y CI; en producción se usa OIDC                                      |
+| Variable                 | Requerida | Descripción                                                                                              |
+| ------------------------ | --------- | -------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`           | Sí        | Cadena **pooled** de Neon, para la aplicación                                                            |
+| `DATABASE_URL_UNPOOLED`  | Sí        | Cadena directa, para migraciones y `pg_dump`                                                             |
+| `ADMIN_PASSWORD_HASH`    | Sí        | `scrypt:131072:8:1:<saltB64>:<hashB64>`                                                                  |
+| `CRON_SECRET`            | Sí        | Bearer de los endpoints de cron, revalidación y reconciliación; mínimo 32 caracteres                     |
+| `IP_HASH_SECRET`         | No        | Secreto del HMAC que hashea IPs; si falta se usa `CRON_SECRET`                                           |
+| `PUBLIC_SITE_URL`        | Sí        | Origen de producción; obligatoria con `NODE_ENV=production` y la usa `assertSameOrigin`                  |
+| `IMAGES_PUBLIC_BASE_URL` | No        | URL pública de Blob si no es la del store por defecto (`https://<store>.public.blob.vercel-storage.com`) |
+| `BLOB_READ_WRITE_TOKEN`  | No        | Token de lectura/escritura para desarrollo local y CI; en Vercel se resuelve con OIDC                    |
+| `BLOB_STORE_ID`          | No        | ID del store de Vercel Blob; OIDC en Vercel suele proveerlo                                              |
+| `VERCEL_OIDC_TOKEN`      | No        | Lo inyecta Vercel; no se define a mano                                                                   |
+| `EDGE_CONFIG_ID`         | No        | Reservada para `next_due`; el código todavía no la usa                                                   |
 
-**Custodia de la clave `age`**: la clave pública (`AGE_PUBLIC_KEY`) se usa para cifrar el backup en GitHub Actions. La clave privada (`AGE_PRIVATE_KEY`) se conserva fuera del repo y fuera de GitHub Actions (por ejemplo, en el gestor de contraseñas del autor o un secreto de entorno protegido), y se usa solo para la restauración mensual de prueba. Si se pierde, el backup cifrado no se puede recuperar. Para la restauración mensual se hace desde la máquina del autor con la clave privada local, no desde un job automático de GitHub.
+`src/lib/env.ts` valida estas variables al arrancar con Zod y falla con un mensaje claro si falta una requerida. `AGE_PUBLIC_KEY` no está implementada: el backup manual se guarda sin cifrar y el cifrado es la decisión pendiente A-01.
+
+**Custodia de la clave `age`** (cuando se implemente A-01): la clave pública cifra el dump en el job de backup; la privada se conserva fuera del repo y de GitHub Actions, y se usa solo para la restauración mensual de prueba. Si se pierde, el backup cifrado no se puede recuperar.
 
 **El separador del hash es `:`, no `$`.** Next expande `$VAR` en los archivos `.env`; un hash con `$` queda corrupto y el login falla sin explicación.
 
-**Previews**: `PUBLIC_SITE_URL` es fijo, así que el panel en un preview rechazaría el login con `403`. La verificación de origen compara el `Origin` normalizado contra `PUBLIC_SITE_URL` **o** contra `PREVIEW_ORIGIN_REGEX` (patrón anclado al dominio de Vercel, por ejemplo `^https://.*-netti-gru1\.vercel\.app$`). No se acepta cualquier `VERCEL_BRANCH_URL` que llegue: el host permitido se valida contra el proyecto de Vercel configurado.
+**Previews**: `PUBLIC_SITE_URL` es fija, así que el panel en un preview rechazaría el login con `403`. Mientras no exista una allowlist de previews, la revisión del panel se hace contra el deployment de producción o contra `next start` en local. `PREVIEW_ORIGIN_REGEX` figuraba en el diseño pero no está implementada.
 
 **Dos URLs de base**: el pooler no sirve para migraciones ni para `pg_dump`, y `CREATE INDEX CONCURRENTLY` falla a través de él.
 
-### 2.3 `.env.local`
+### 2.3 `.env` local
 
 ```env
-DATABASE_URL=postgresql://...@...-pooler.sa-east-1.aws.neon.tech/netti?sslmode=require
-DATABASE_URL_UNPOOLED=postgresql://...@...sa-east-1.aws.neon.tech/netti?sslmode=require
+DATABASE_URL=postgresql://postgres:8814@localhost:5432/netti_dev
+DATABASE_URL_UNPOOLED=postgresql://postgres:8814@localhost:5432/netti_dev
 
 ADMIN_PASSWORD_HASH=scrypt:131072:8:1:
-IP_HASH_SECRET=
 CRON_SECRET=
+IP_HASH_SECRET=
 
 PUBLIC_SITE_URL=http://localhost:3000
 IMAGES_PUBLIC_BASE_URL=https://ce0rcu23vrrdzqap.public.blob.vercel-storage.com
-AGE_PUBLIC_KEY=age1...
 
-BLOB_STORE_ID=
 BLOB_READ_WRITE_TOKEN=
-EDGE_CONFIG_ID=  # ID de Edge Config de Vercel para next_due (opcional, usar Blob JSON si no se usa Edge Config). Requiere token de API de Vercel para escribir.
 ```
+
+`.env.local` apunta a Neon y nunca se usa para `npm run test:db`, `test:migrations`, `test:baseline` ni `test:http`: esos scripts exigen PostgreSQL en loopback y una base con "test" en el nombre cuando purgan datos. Los secretos de producción viven en Vercel y en los secretos de GitHub (`NETTI_SITE_URL` y `CRON_SECRET` para el scheduler), no en el repositorio.
 
 Generar el hash:
 
@@ -125,4 +136,18 @@ npm run db:migrate    # aplica contra DATABASE_URL_UNPOOLED
 npm run db:studio
 ```
 
-Se revisan en el PR y se ejecutan **manualmente**, nunca en el build de Vercel.
+Se revisan en el PR y se ejecutan **manualmente**, nunca en el build de Vercel. El estado actual y el catálogo verificado están en `database-migrations.md`; el detalle es:
+
+- `0000_initial_schema`: esquema base.
+- `0001_score_rarity`: puntuación 0-100, `score_details` y rareza derivada.
+- `0002_reconcile_legacy_schema`: reconciliación idempotente de la base creada fuera de Drizzle.
+- `0003_editorial_gallery_and_game_tags`: pros/contras, video, galería y etiquetas de juego.
+- `0004_games_trash_support`: papelera reversible de juegos.
+
+La base local está en `0004`. **Neon sigue en `0002`**: no desplegar el código actual antes de aplicar `0003` y `0004` (con backup previo y aprobación explícita), porque el panel y las fichas de juego esperan esas columnas.
+
+## 3. Backup y restauración
+
+`npm run db:backup` genera un dump custom con `pg_dump` 18 o posterior en `backups/`, sin las tablas `sessions` ni `login_attempts`. `npm run db:restore` solo acepta localhost y bases `*_test`/`*_testing`, y deja `backup_restored_at` para que `/api/reconcile-storage` no borre objetos que la restauración acaba de recuperar. El ciclo completo está documentado en `09-backup-restore.md`.
+
+El backup es **manual y sin cifrar**: el cifrado con `age` y la copia fuera de la máquina son la decisión pendiente A-01.

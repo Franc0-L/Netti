@@ -3,7 +3,13 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { createArticle, publishArticle, updateArticle } from '@/app/actions/content';
+import {
+  createArticle,
+  publishArticle,
+  trashArticle,
+  unpublishArticle,
+  updateArticle,
+} from '@/app/actions/content';
 import { ContentImage } from '@/components/content-image';
 
 type ArticleKind = 'review' | 'news' | 'guide';
@@ -42,6 +48,11 @@ type EditorValues = {
   sourceUrl: string;
   seoTitle: string;
   seoDescription: string;
+  pros: string;
+  cons: string;
+  videoUrl: string;
+  videoTitle: string;
+  gallery: number[];
 };
 type Props = {
   articleId?: number;
@@ -86,6 +97,14 @@ function FieldErrors({ field, errors }: { field: string; errors?: string[] }) {
   );
 }
 
+/** Splits a textarea into a bullet list, one item per line. */
+function splitBullets(value: string): string[] {
+  return value
+    .split('\n')
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 const defaultValues: EditorValues = {
   kind: 'news',
   slug: '',
@@ -112,6 +131,11 @@ const defaultValues: EditorValues = {
   sourceUrl: '',
   seoTitle: '',
   seoDescription: '',
+  pros: '',
+  cons: '',
+  videoUrl: '',
+  videoTitle: '',
+  gallery: [],
 };
 
 export function AdminArticleForm({
@@ -132,6 +156,7 @@ export function AdminArticleForm({
   const [messageTone, setMessageTone] = useState<'error' | 'success'>('success');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
   const [bodyImageId, setBodyImageId] = useState<number | null>(null);
+  const [galleryPick, setGalleryPick] = useState<number | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
   const focusErrorsRef = useRef(false);
@@ -143,6 +168,21 @@ export function AdminArticleForm({
     focusErrorsRef.current = false;
     formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
   }, [fieldErrors]);
+
+  // A revision restore (or any server-side save) changes the version that the
+  // page passes down. When that happens the form must adopt the new snapshot:
+  // otherwise it would keep editing the old content and the next save would
+  // fail with a stale-version conflict.
+  const syncedVersionRef = useRef(initialVersion);
+  useEffect(() => {
+    if (initialVersion === undefined) return;
+    if (syncedVersionRef.current === initialVersion) return;
+    syncedVersionRef.current = initialVersion;
+    setVersion(initialVersion);
+    setValues({ ...defaultValues, ...initial });
+    setMediaItems(initialMedia);
+    setFieldErrors({});
+  }, [initialVersion, initial, initialMedia]);
 
   function insertBodyImage() {
     const item = mediaItems.find((candidate) => candidate.id === bodyImageId);
@@ -164,6 +204,25 @@ export function AdminArticleForm({
   function change<K extends keyof EditorValues>(key: K, value: EditorValues[K]) {
     setValues((current) => ({ ...current, [key]: value }));
     setFieldErrors((current) => ({ ...current, [key]: [] }));
+  }
+
+  function moveGallery(index: number, direction: -1 | 1) {
+    const target = index + direction;
+    if (target < 0 || target >= values.gallery.length) return;
+    const next = [...values.gallery];
+    const current = next[index];
+    const other = next[target];
+    if (current === undefined || other === undefined) return;
+    next[index] = other;
+    next[target] = current;
+    change('gallery', next);
+  }
+
+  function addGalleryImage() {
+    if (galleryPick === null) return;
+    if (values.gallery.includes(galleryPick)) return;
+    change('gallery', [...values.gallery, galleryPick]);
+    setGalleryPick(null);
   }
 
   /** Builds the editorial breakdown from the three sub-scores (1-10 each). */
@@ -192,6 +251,11 @@ export function AdminArticleForm({
         .split(',')
         .map((tag) => tag.trim())
         .filter(Boolean),
+      pros: splitBullets(values.pros),
+      cons: splitBullets(values.cons),
+      videoUrl: values.videoUrl || null,
+      videoTitle: values.videoTitle || null,
+      gallery: values.gallery,
       score: values.kind === 'review' && values.score ? Number(values.score) : null,
       scoreDetails: values.kind === 'review' ? buildScoreDetails() : null,
       gameId: values.kind === 'review' ? values.gameId : null,
@@ -290,6 +354,51 @@ export function AdminArticleForm({
     }
   }
 
+  async function unpublish() {
+    if (!id) return;
+    setBusy(true);
+    try {
+      const result = await unpublishArticle({ id, version });
+      if (!result.ok) {
+        setMessageTone('error');
+        setMessage(result.message);
+        return;
+      }
+      setValues((current) => ({ ...current, status: 'draft' }));
+      setVersion(result.data.version);
+      setMessageTone('success');
+      setMessage('Artículo despublicado. Sigue disponible como borrador.');
+      router.refresh();
+    } catch {
+      setMessageTone('error');
+      setMessage('No se pudo despublicar el artículo.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function trash() {
+    if (!id) return;
+    if (!window.confirm('¿Mover el artículo a la papelera? Podés restaurarlo desde el escritorio.'))
+      return;
+    setBusy(true);
+    try {
+      const result = await trashArticle({ id, version });
+      if (!result.ok) {
+        setMessageTone('error');
+        setMessage(result.message);
+        return;
+      }
+      router.replace('/admin');
+      router.refresh();
+    } catch {
+      setMessageTone('error');
+      setMessage('No se pudo mover el artículo a la papelera.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function upload(file?: File) {
     if (!file) return;
     setUploading(true);
@@ -336,6 +445,7 @@ export function AdminArticleForm({
   }
 
   const selectedMedia = mediaItems.find((item) => item.id === values.coverMediaId);
+  const galleryOptions = mediaItems.filter((item) => !values.gallery.includes(item.id));
 
   return (
     <form
@@ -473,6 +583,61 @@ export function AdminArticleForm({
             {...errorProps('tags', fieldErrors.tags)}
           />
           <FieldErrors field="tags" errors={fieldErrors.tags} />
+
+          <label className="admin-label" htmlFor="pros">
+            A favor (un punto por línea, máx. 5)
+          </label>
+          <textarea
+            id="pros"
+            className={inputClass}
+            rows={5}
+            value={values.pros}
+            onChange={(e) => change('pros', e.target.value)}
+            {...errorProps('pros', fieldErrors.pros)}
+          />
+          <FieldErrors field="pros" errors={fieldErrors.pros} />
+
+          <label className="admin-label" htmlFor="cons">
+            En contra (un punto por línea, máx. 5)
+          </label>
+          <textarea
+            id="cons"
+            className={inputClass}
+            rows={5}
+            value={values.cons}
+            onChange={(e) => change('cons', e.target.value)}
+            {...errorProps('cons', fieldErrors.cons)}
+          />
+          <FieldErrors field="cons" errors={fieldErrors.cons} />
+
+          <label className="admin-label" htmlFor="video-url">
+            Video (URL)
+          </label>
+          <input
+            id="video-url"
+            className={inputClass}
+            type="url"
+            placeholder="https://www.youtube.com/watch?v=…"
+            value={values.videoUrl}
+            onChange={(e) => change('videoUrl', e.target.value)}
+            {...errorProps('videoUrl', fieldErrors.videoUrl)}
+          />
+          <FieldErrors field="videoUrl" errors={fieldErrors.videoUrl} />
+          <label className="admin-label" htmlFor="video-title">
+            Título del video
+          </label>
+          <input
+            id="video-title"
+            className={inputClass}
+            maxLength={200}
+            value={values.videoTitle}
+            onChange={(e) => change('videoTitle', e.target.value)}
+            {...errorProps('videoTitle', fieldErrors.videoTitle)}
+          />
+          <FieldErrors field="videoTitle" errors={fieldErrors.videoTitle} />
+          <p className="admin-muted">
+            YouTube y Vimeo se reproducen embebidos; otros enlaces se muestran como enlace externo.
+          </p>
         </section>
 
         <aside className="admin-sidebar">
@@ -497,6 +662,26 @@ export function AdminArticleForm({
                 onClick={() => void publish()}
               >
                 Guardar y publicar
+              </button>
+            ) : null}
+            {values.status === 'published' && id ? (
+              <button
+                className="admin-button admin-button-secondary"
+                type="button"
+                disabled={busy}
+                onClick={() => void unpublish()}
+              >
+                Despublicar
+              </button>
+            ) : null}
+            {id ? (
+              <button
+                className="admin-button admin-button-quiet"
+                type="button"
+                disabled={busy}
+                onClick={() => void trash()}
+              >
+                Mover a la papelera
               </button>
             ) : null}
           </section>
@@ -576,6 +761,96 @@ export function AdminArticleForm({
             </select>
           </section>
 
+          <section className="admin-panel">
+            <h2>Galería</h2>
+            <p className="admin-muted">
+              Las imágenes se muestran en este orden, debajo del contenido (máx. 20).
+            </p>
+            {values.gallery.length > 0 ? (
+              <ol className="admin-gallery-list">
+                {values.gallery.map((mediaId, index) => {
+                  const item = mediaItems.find((candidate) => candidate.id === mediaId);
+                  return (
+                    <li key={mediaId}>
+                      {item ? (
+                        <ContentImage
+                          className="admin-gallery-thumb"
+                          src={item.publicUrl}
+                          alt=""
+                          width={64}
+                          height={48}
+                        />
+                      ) : null}
+                      <span className="admin-gallery-label">
+                        #{mediaId} {item?.alt ? `· ${item.alt}` : ''}
+                      </span>
+                      <span className="admin-gallery-buttons">
+                        <button
+                          className="admin-button admin-button-quiet"
+                          type="button"
+                          disabled={index === 0}
+                          aria-label={`Subir la imagen ${index + 1}`}
+                          onClick={() => moveGallery(index, -1)}
+                        >
+                          ↑
+                        </button>
+                        <button
+                          className="admin-button admin-button-quiet"
+                          type="button"
+                          disabled={index === values.gallery.length - 1}
+                          aria-label={`Bajar la imagen ${index + 1}`}
+                          onClick={() => moveGallery(index, 1)}
+                        >
+                          ↓
+                        </button>
+                        <button
+                          className="admin-button admin-button-quiet"
+                          type="button"
+                          aria-label={`Quitar la imagen ${index + 1} de la galería`}
+                          onClick={() =>
+                            change(
+                              'gallery',
+                              values.gallery.filter((candidate) => candidate !== mediaId)
+                            )
+                          }
+                        >
+                          Quitar
+                        </button>
+                      </span>
+                    </li>
+                  );
+                })}
+              </ol>
+            ) : (
+              <p className="admin-muted">La galería está vacía.</p>
+            )}
+            <label className="admin-label" htmlFor="gallery-pick">
+              Agregar imagen
+            </label>
+            <select
+              id="gallery-pick"
+              className={inputClass}
+              value={galleryPick ?? ''}
+              onChange={(e) => setGalleryPick(e.target.value ? Number(e.target.value) : null)}
+            >
+              <option value="">Elegir imagen</option>
+              {galleryOptions.map((item) => (
+                <option value={item.id} key={item.id}>
+                  #{item.id} · {item.alt || `${item.width}×${item.height}`}
+                </option>
+              ))}
+            </select>
+            <button
+              className="admin-button admin-button-secondary"
+              type="button"
+              disabled={galleryPick === null}
+              onClick={addGalleryImage}
+            >
+              Agregar a la galería
+            </button>
+            <FieldErrors field="gallery" errors={fieldErrors.gallery} />
+          </section>
+
           {values.kind === 'review' ? (
             <section className="admin-panel">
               <h2>Datos de la reseña</h2>
@@ -587,6 +862,7 @@ export function AdminArticleForm({
                 className={inputClass}
                 value={values.gameId ?? ''}
                 onChange={(e) => change('gameId', e.target.value ? Number(e.target.value) : null)}
+                {...errorProps('gameId', fieldErrors.gameId)}
               >
                 <option value="">Elegir juego publicado</option>
                 {games.map((game) => (
@@ -595,6 +871,7 @@ export function AdminArticleForm({
                   </option>
                 ))}
               </select>
+              <FieldErrors field="gameId" errors={fieldErrors.gameId} />
               <label className="admin-label" htmlFor="score">
                 Puntuación (0-100)
               </label>
@@ -720,7 +997,9 @@ export function AdminArticleForm({
                 type="url"
                 value={values.sourceUrl}
                 onChange={(e) => change('sourceUrl', e.target.value)}
+                {...errorProps('sourceUrl', fieldErrors.sourceUrl)}
               />
+              <FieldErrors field="sourceUrl" errors={fieldErrors.sourceUrl} />
             </section>
           ) : null}
 

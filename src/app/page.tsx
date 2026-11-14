@@ -1,10 +1,16 @@
 import { Suspense } from 'react';
 import Link from 'next/link';
 import { connection } from 'next/server';
+import { ScoreBadge } from '@/components/score-badge';
 import { SearchForm } from '@/components/search-form';
 import { SectionChips } from '@/components/section-chips';
 import { SiteFooter, SiteHeader, SkipLink } from '@/components/site-chrome';
-import { getLibraryProgress, getVisibleArticles, type ArticleKind } from '@/lib/content';
+import {
+  getFeaturedArticles,
+  getLibraryProgress,
+  getVisibleArticles,
+  type ArticleKind,
+} from '@/lib/content';
 import { articlePath } from '@/lib/routes';
 
 const sections: Array<{
@@ -77,6 +83,58 @@ async function LatestContent() {
         );
       })}
     </div>
+  );
+}
+
+/** Featured publications: the articles marked from the panel. */
+async function FeaturedContent() {
+  await connection();
+  const featured = await getFeaturedArticles(3);
+  if (featured.length === 0) return null;
+
+  return (
+    <section className="featured-section" aria-label="Publicaciones destacadas">
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">DESTACADOS</p>
+          <h2>Lo que no te podés perder</h2>
+        </div>
+      </div>
+      <div className="article-grid">
+        {featured.map((article) => (
+          <article className="article-card" key={article.id}>
+            <Link
+              href={articlePath(article.kind as ArticleKind, article.slug)}
+              className="article-card-link"
+            >
+              <div className="article-card-meta">
+                <span className="featured-badge">Destacado</span>
+                {article.kind === 'review' && article.score !== null ? (
+                  <ScoreBadge
+                    score={article.score}
+                    rarity={
+                      article.rarityKey && article.rarityLabel && article.rarityColorToken
+                        ? {
+                            key: article.rarityKey,
+                            label: article.rarityLabel,
+                            colorToken: article.rarityColorToken,
+                          }
+                        : null
+                    }
+                    compact
+                  />
+                ) : null}
+              </div>
+              <h2>{article.title}</h2>
+              {article.description ? <p>{article.description}</p> : null}
+              <span className="read-more">
+                Leer artículo <span aria-hidden="true">↗</span>
+              </span>
+            </Link>
+          </article>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -208,6 +266,10 @@ export default function Home() {
 
         <Suspense fallback={<div className="library-level library-level-skeleton" />}>
           <LibraryLevel />
+        </Suspense>
+
+        <Suspense fallback={null}>
+          <FeaturedContent />
         </Suspense>
 
         <section className="latest-section">

@@ -7,27 +7,18 @@
 //
 // The database is created and dropped by this script.
 import { execFileSync } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { Client } from 'pg';
+import { assertLocalDatabaseUrl, loadEnvFiles } from './load-env.js';
 
-function loadEnvFile(path: string): void {
-  for (const line of readFileSync(path, 'utf8').split(/\r?\n/)) {
-    const match = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/);
-    if (!match) continue;
-    process.env[match[1]] = match[2].trim().replace(/^["']|["']$/g, '');
-  }
-}
-
-loadEnvFile('.env');
+loadEnvFiles(['.env']);
 
 const baseUrl = process.env.DATABASE_URL_UNPOOLED ?? process.env.DATABASE_URL;
-if (!baseUrl) throw new Error('DATABASE_URL is missing');
-const url = new URL(baseUrl);
-if (!['localhost', '127.0.0.1', '::1'].includes(url.hostname)) {
-  throw new Error(`Refusing to run against a non-local host: ${url.hostname}`);
-}
+const url = assertLocalDatabaseUrl(baseUrl, 'DATABASE_URL_UNPOOLED or DATABASE_URL');
 
-const dbName = 'netti_baseline_check';
+/** Unique per run: two concurrent runs never fight over the same database. */
+const dbName = `netti_baseline_check_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
 const dbUrl = new URL(url.toString());
 dbUrl.pathname = `/${dbName}`;
 
@@ -36,8 +27,18 @@ async function dropDatabase(): Promise<void> {
   adminUrl.pathname = '/postgres';
   const admin = new Client({ connectionString: adminUrl.toString() });
   await admin.connect();
-  await admin.query(`DROP DATABASE IF EXISTS "${dbName}" WITH (FORCE)`);
-  await admin.end();
+  try {
+    // The database was created by this run and is not used by anyone else, but
+    // the connections are closed explicitly instead of forcing the drop.
+    await admin.query(
+      `select pg_terminate_backend(pid) from pg_stat_activity
+        where datname = $1 and pid <> pg_backend_pid()`,
+      [dbName]
+    );
+    await admin.query(`DROP DATABASE IF EXISTS "${dbName}"`);
+  } finally {
+    await admin.end();
+  }
 }
 
 function run(args: string[], env: NodeJS.ProcessEnv): void {
@@ -91,8 +92,9 @@ async function main(): Promise<void> {
     );
     const timestamps = history.rows.map((row) => Number(row.created_at));
     console.log(`history rows: ${timestamps.length}`);
-    if (timestamps.length !== 3) {
-      throw new Error(`expected 3 history rows, got ${timestamps.length}`);
+    // Two baselined snapshots plus the three migrations applied afterwards.
+    if (timestamps.length !== 5) {
+      throw new Error(`expected 5 history rows, got ${timestamps.length}`);
     }
 
     const rarities = await verify.query('select count(*)::int as count from score_rarities');
@@ -112,6 +114,30 @@ async function main(): Promise<void> {
       `select 1 from pg_trigger where tgname='articles_set_rarity' and not tgisinternal`
     );
     if (trigger.rowCount !== 1) throw new Error('the rarity trigger is missing');
+
+    // The gallery and the editorial bullet lists arrive with the last migration.
+    const gallery = await verify.query(
+      `select count(*)::int as count from information_schema.tables
+        where table_name='article_gallery'`
+    );
+    if (gallery.rows[0]?.count !== 1) throw new Error('the gallery table is missing');
+
+    const bulletColumns = await verify.query(
+      `select column_name from information_schema.columns
+        where table_name='articles' and column_name in ('pros','cons','video_url','video_title')`
+    );
+    if (bulletColumns.rowCount !== 4) {
+      throw new Error('the editorial bullet list columns are missing');
+    }
+
+    // The game trash arrived with the last migration.
+    const trashColumns = await verify.query(
+      `select column_name from information_schema.columns
+        where table_name='games' and column_name in ('previous_status','trashed_at')`
+    );
+    if (trashColumns.rowCount !== 2) {
+      throw new Error('the game trash columns are missing');
+    }
     console.log('baseline flow: ok');
   } finally {
     await verify.end();

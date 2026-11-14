@@ -1,9 +1,15 @@
 import { randomUUID } from 'node:crypto';
-import { NextResponse } from 'next/server';
+import { connection, NextResponse } from 'next/server';
 import { db } from '@/db/index';
 import { media, mediaVariants, storageOrphans } from '@/db/schema';
-import { assertSameOrigin, requireSession } from '@/lib/auth';
+import {
+  assertSameOrigin,
+  OriginNotAllowedError,
+  requireSession,
+  SessionRequiredError,
+} from '@/lib/auth';
 import { processImage, UPLOAD_MAX_BYTES } from '@/lib/images';
+import { logger } from '@/lib/logger';
 import { storage } from '@/lib/storage';
 
 export const maxDuration = 10;
@@ -48,21 +54,33 @@ async function readLimitedBody(request: Request, limit: number): Promise<Uint8Ar
 }
 
 export async function POST(request: Request) {
+  // cacheComponents prerenders route handlers unless they opt into a request.
+  await connection();
+  let origin: string | undefined;
+  const referer = request.headers.get('referer');
+  if (referer) {
+    try {
+      origin = new URL(referer).origin;
+    } catch {
+      return errorResponse(403, 'Origen no permitido.');
+    }
+  }
   try {
-    const origin =
-      request.headers.get('origin') ??
-      (request.headers.get('referer')
-        ? new URL(request.headers.get('referer')!).origin
-        : undefined);
+    origin = request.headers.get('origin') ?? origin;
     assertSameOrigin(origin);
     // Route Handler context: an expired cookie can be removed from the response.
     await requireSession({ clearCookie: true });
   } catch (error) {
-    const message = error instanceof Error ? error.message : '';
-    return errorResponse(
-      message.includes('Origen') ? 403 : 401,
-      message.includes('Origen') ? 'Origen no permitido.' : 'Sesión no válida.'
-    );
+    if (error instanceof OriginNotAllowedError) {
+      return errorResponse(403, 'Origen no permitido.');
+    }
+    if (error instanceof SessionRequiredError) {
+      return errorResponse(401, 'Sesión no válida.');
+    }
+    logger.error('upload.authorize.failed', {
+      errorType: error instanceof Error ? error.name : 'unknown',
+    });
+    return errorResponse(503, 'No se pudo verificar la sesión.');
   }
 
   const contentLength = Number(request.headers.get('content-length') ?? 0);
@@ -186,7 +204,7 @@ export async function POST(request: Request) {
       },
       { headers: { 'Cache-Control': 'no-store' } }
     );
-  } catch {
+  } catch (error) {
     try {
       await storage.del(uploaded.map((item) => item.key));
     } catch {
@@ -200,6 +218,10 @@ export async function POST(request: Request) {
         }
       }
     }
+    logger.error('upload.failed', {
+      errorType: error instanceof Error ? error.name : 'unknown',
+      uploadedObjects: uploaded.length,
+    });
     return errorResponse(500, 'No se pudo guardar la imagen.');
   }
 }

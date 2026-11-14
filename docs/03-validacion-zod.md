@@ -11,37 +11,53 @@ No existe `imageUrlSchema` como función pública. Las URLs de imagen no entran 
 Todo lo que sigue vive dentro de `makeArticleSchema()`, que construye el esquema de validación de entradas del cliente. No recibe parámetros.
 
 ```ts
+const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+/** Editorial score dimensions, each one from 1 to 10. */
+const scoreDetailsShape = z.strictObject({
+  story: z.number().int().min(1).max(10).optional(),
+  gameplay: z.number().int().min(1).max(10).optional(),
+  visual: z.number().int().min(1).max(10).optional(),
+});
+
+/** Pros and cons: at most five items of at most 200 characters. */
+const bulletListShape = z
+  .array(z.string().trim().min(1, 'El punto no puede estar vacío.').max(200))
+  .max(5, 'Máximo 5 puntos.')
+  .default([]);
+
+/** Identifiers of the images of the structured gallery. */
+const galleryShape = z
+  .array(z.number().int().positive())
+  .max(20, 'Máximo 20 imágenes en la galería.')
+  .default([])
+  .refine((ids) => new Set(ids).size === ids.length, {
+    message: 'No se puede repetir una imagen en la galería.',
+  });
+
+/** Absolute URL that uses http or https. */
+const httpUrlShape = z.url().refine((value) => /^https?:\/\//i.test(value), {
+  message: 'La URL debe usar http:// o https://.',
+});
+
 export const makeArticleSchema = () => {
   // Campos comunes a las tres colecciones. Un borrador puede dejarlos vacíos.
   const baseArticle = z.object({
-    slug: z
-      .string()
-      .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Solo minúsculas, números y guiones.')
-      .or(z.literal('')),
+    slug: z.string().regex(SLUG_RE, 'Solo minúsculas, números y guiones.').or(z.literal('')),
     title: z.string().trim().max(120).default(''),
     description: z.string().trim().max(240).default(''),
-    body: z.string().default(''),
+    body: z.string().max(100_000).default(''),
     author: z.string().trim().max(60).nullable().optional(),
     tags: z
-      .array(
-        z
-          .string()
-          .trim()
-          .min(1)
-          .max(30)
-          .transform((val) =>
-            val
-              .normalize('NFD')
-              .replace(/[\u0300-\u036f]/g, '')
-              .toLowerCase()
-              .replace(/\s+/g, '-')
-              .replace(/-+/g, '-')
-              .replace(/^-|-$/g, '')
-          )
-      )
+      .array(z.string().trim().min(1).max(30))
       .max(5)
       .default([])
-      .transform((vals) => vals.filter((v) => v.length > 0)),
+      .superRefine((tags, ctx) => {
+        const normalized = tags.map((tag) => tag.toLocaleLowerCase('es'));
+        if (new Set(normalized).size !== normalized.length) {
+          ctx.addIssue({ code: 'custom', message: 'No se pueden repetir etiquetas.' });
+        }
+      }),
     coverMediaId: z.number().int().positive().nullable().optional(),
     coverAlt: z.string().trim().max(200).nullable().optional(),
     status: z.enum(['draft', 'published']).default('draft'),
@@ -54,12 +70,24 @@ export const makeArticleSchema = () => {
     seoTitle: z.string().trim().max(70).nullable().optional(),
     seoDescription: z.string().trim().max(160).nullable().optional(),
     ogMediaId: z.number().int().positive().nullable().optional(),
+    pros: bulletListShape,
+    cons: bulletListShape,
+    videoUrl: httpUrlShape.nullable().optional(),
+    videoTitle: z.string().trim().max(200).nullable().optional(),
+    gallery: galleryShape,
   });
 
   const reviewShape = baseArticle.extend({
     kind: z.literal('review'),
     gameId: z.number().int().positive().nullable().optional(),
-    score: z.number().int().min(1).max(10).nullable().optional(),
+    score: z.number().int().min(0).max(100).nullable().optional(),
+    scoreDetails: scoreDetailsShape
+      .refine(
+        (details) => Object.values(details).some((value) => value !== undefined),
+        'Completá al menos una nota.'
+      )
+      .nullable()
+      .optional(),
     scoreReason: z.string().trim().max(2000).nullable().optional(),
     verdict: z.string().trim().max(500).nullable().optional(),
   });
@@ -68,11 +96,7 @@ export const makeArticleSchema = () => {
     kind: z.literal('news'),
     category: z.string().trim().max(40).nullable().optional(),
     sourceName: z.string().trim().max(120).nullable().optional(),
-    sourceUrl: z
-      .string()
-      .regex(/^https?:\/\//i, 'La fuente debe empezar por http:// o https://.')
-      .nullable()
-      .optional(),
+    sourceUrl: httpUrlShape.nullable().optional(),
   });
 
   const guideShape = baseArticle.extend({ kind: z.literal('guide') });
@@ -142,7 +166,11 @@ export type ParsedArticle = z.output<ReturnType<typeof makeArticleSchema>>;
 
 El `kind` es un literal por variante, así que `discriminatedUnion` estrecha el tipo: en `value.kind === "review"`, `gameId` y `score` existen en el tipo. Los campos de reseña son nullable para que un borrador incompleto sea válido; la exigencia aparece al publicar, en el mismo lugar que los `CHECK` de la base.
 
-`sourceUrl` usa la misma regla que el `CHECK` (`~*`), insensible a mayúsculas. Si Zod fuera más laxo, `HTTPS://x` pasaría la validación y fallaría en la base con un `500`.
+La puntuación va de **0 a 100** y el desglose editorial (`scoreDetails`) usa dimensiones de **1 a 10**, con al menos una informada y sin claves desconocidas (`strictObject`). La rareza no se valida en Zod: no la escribe la aplicación, la deriva el trigger de la base a partir del score.
+
+`sourceUrl` y `videoUrl` usan `httpUrlShape`, que exige `http://` o `https://` sin distinguir mayúsculas, igual que los `CHECK` (`~*`). Si Zod fuera más laxo, `HTTPS://x` pasaría la validación y fallaría en la base con un `500`.
+
+El video se valida en pareja: si hay URL, el título es obligatorio (es lo que anuncia el lector de pantalla), y si hay título, la URL también. La galería admite hasta 20 ids de `media` sin repetir; el servidor comprueba además que existan y que no estén marcados para eliminación.
 
 ### 3. `makeGameSchema`
 
@@ -151,7 +179,18 @@ La base exige `slug` y `title` desde el insert (los `CHECK` de `games` no admite
 ```ts
 // lib/validation.ts
 const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const label = (max: number) => z.string().trim().min(1).max(max);
+
+/** A list of short labels: platforms, genres or editorial tags. */
+const labelListShape = z
+  .array(z.string().trim().min(1).max(30))
+  .max(8, 'Máximo 8 valores.')
+  .default([])
+  .superRefine((values, ctx) => {
+    const normalized = values.map((value) => value.toLocaleLowerCase('es'));
+    if (new Set(normalized).size !== normalized.length) {
+      ctx.addIssue({ code: 'custom', message: 'No se pueden repetir valores.' });
+    }
+  });
 
 export const makeGameSchema = () =>
   z
@@ -159,75 +198,83 @@ export const makeGameSchema = () =>
       slug: z.string().regex(SLUG_RE, 'Solo minúsculas, números y guiones.'),
       title: z.string().trim().min(3).max(120),
       description: z.string().trim().max(240).default(''),
-      body: z.string().default(''),
-      developer: z.string().trim().max(120).nullable().optional(),
-      publisher: z.string().trim().max(120).nullable().optional(),
-      releaseDate: z.iso.date().nullable().optional(),
-      platforms: z.array(label(30)).max(12).default([]),
-      genres: z.array(label(30)).max(8).default([]),
-      externalSource: z.enum(['rawg', 'igdb', 'manual']).nullable().optional(),
-      externalId: z.string().trim().min(1).max(64).nullable().optional(),
-      status: z.enum(['draft', 'published']).default('draft'),
+      body: z.string().max(20_000).default(''),
+      developer: z.string().trim().max(80).nullable().optional(),
+      publisher: z.string().trim().max(80).nullable().optional(),
+      releaseDate: z
+        .string()
+        .regex(/^\d{4}-\d{2}-\d{2}$/, 'Usá el formato AAAA-MM-DD.')
+        .nullable()
+        .optional()
+        .transform((value) => (value ? new Date(`${value}T00:00:00.000Z`) : null)),
+      platforms: labelListShape,
+      genres: labelListShape,
+      tags: labelListShape,
+      featured: z.boolean().default(false),
       coverMediaId: z.number().int().positive().nullable().optional(),
       coverAlt: z.string().trim().max(200).nullable().optional(),
+      status: z.enum(['draft', 'published']).default('draft'),
     })
-    .superRefine((v, ctx) => {
-      if (v.coverMediaId && !v.coverAlt?.trim())
+    .superRefine((value, ctx) => {
+      if (value.coverMediaId && !value.coverAlt?.trim()) {
         ctx.addIssue({
           code: 'custom',
           path: ['coverAlt'],
           message: 'La portada necesita texto alternativo.',
         });
-      if (v.status === 'published' && !v.coverMediaId)
+      }
+      if (value.status === 'published' && !value.coverMediaId) {
         ctx.addIssue({
           code: 'custom',
           path: ['coverMediaId'],
-          message: 'Una ficha publicada necesita portada.',
+          message: 'Un juego publicado necesita una portada.',
         });
-      if (!!v.externalSource !== !!v.externalId)
-        ctx.addIssue({
-          code: 'custom',
-          path: ['externalId'],
-          message: 'Fuente e id externo van juntos.',
-        });
+      }
     });
 
 export type GameInput = z.input<ReturnType<typeof makeGameSchema>>;
 export type ParsedGame = z.output<ReturnType<typeof makeGameSchema>>;
 ```
 
-### 3.1 `makeMediaMetadataSchema`
+Plataformas, géneros y etiquetas comparten el mismo esquema: hasta ocho valores de 30 caracteres, sin repetir (la comparación no distingue mayúsculas, como `toLocaleLowerCase('es')`). La fecha de lanzamiento se envía como `AAAA-MM-DD` y se transforma a `Date` en UTC: el panel y la ficha muestran solo la fecha, sin zona horaria ambigua.
 
-Segundo paso después de la subida de imagen. El servidor valida que `mediaId` exista y no esté marcado para purga.
+### 3.1 `makeMediaSchema`
+
+Segundo paso después de la subida de imagen. El servidor valida que el medio exista y no esté marcado para eliminación.
 
 ```ts
-export const makeMediaMetadataSchema = () =>
+export const makeMediaSchema = () =>
   z
     .object({
-      mediaId: z.number().int().positive(),
-      alt: z.string().trim().min(1).max(200),
+      alt: z.string().trim().max(200).nullable().optional(),
       credit: z.string().trim().max(120).nullable().optional(),
       rights: z.enum(['own', 'press', 'third_party']),
-      sourceUrl: z
-        .string()
-        .max(500)
-        .regex(/^https?:\/\//i)
-        .nullable()
-        .optional(),
+      sourceUrl: httpUrlShape.nullable().optional(),
     })
-    .superRefine((v, ctx) => {
-      if (v.rights !== 'own' && !v.credit?.trim())
-        ctx.addIssue({ code: 'custom', path: ['credit'], message: 'Indicá el crédito.' });
+    .superRefine((value, ctx) => {
+      if (value.rights !== 'own' && !value.credit?.trim()) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['credit'],
+          message: 'Los derechos de terceros necesitan un crédito.',
+        });
+      }
     });
 ```
 
 ### 3.2 Constantes de subida
 
+Viven en `src/lib/images.ts`, no en el esquema de Zod: son límites del procesamiento de imágenes.
+
 ```ts
 export const UPLOAD_MAX_BYTES = 2 * 1024 * 1024;
-export const MAX_MEGAPIXELS = 20;
-export const ALLOWED = ['image/jpeg', 'image/png', 'image/webp', 'image/avif'] as const;
+export const MAX_IMAGE_PIXELS = 20_000_000;
+export const MAX_IMAGE_EDGE = 2560;
+export const IMAGE_VARIANT_WIDTHS = [480, 960, 1600] as const;
+export type ImageMime = 'image/jpeg' | 'image/png' | 'image/webp' | 'image/avif';
 ```
+
+El tipo válido se detecta por **magic bytes** (`detectImageType`) y tiene que coincidir con el MIME declarado: un archivo que dice `image/png` pero es otra cosa se rechaza.
 
 El servidor valida, en este orden: tamaño declarado (como pista), tamaño real, MIME, magic numbers, dimensiones decodificadas y megapíxeles. Después re-encodea con `sharp`, que descarta EXIF (incluido GPS) y las estructuras del archivo original, y genera las variantes. `sharp` reduce la superficie de un archivo manipulado; no es una garantía absoluta frente a vulnerabilidades del decodificador, así que la dependencia se mantiene actualizada.
 

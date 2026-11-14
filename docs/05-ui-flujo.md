@@ -66,15 +66,20 @@ Estado real de la interfaz migrada desde el Netti Legacy:
 - **Chips de categoría**: en las colecciones, con las categorías reales del contenido (por ejemplo, las noticias). Filtran por `?categoria=` y se resuelven en el servidor.
 - **Nivel de biblioteca**: barra de progreso con los juegos publicados y los que ya tienen reseña (`0/0 reseñados` cuando la biblioteca está vacía), con `role="progressbar"` y el mensaje del logro pendiente.
 - **Colecciones** (`/resenas`, `/noticias`, `/guias`): artículo principal a todo el ancho, grilla de artículos y aside **"Historias principales"** con las cuatro historias más recientes.
-- **Juegos** (`/juegos`): catálogo de fichas publicadas con plataformas (iconos del cliente) y géneros.
+- **Juegos** (`/juegos`): catálogo de fichas publicadas con plataformas (iconos del cliente) y géneros, filtros de plataforma, género y año, y paginación.
+- **Ficha de juego** (`/juegos/[slug]`): portada, plataformas, géneros, etiquetas, fecha, cuerpo y las reseñas publicadas del juego, con JSON-LD `VideoGame`.
+- **Juego al azar** (`/juegos/azar`): redirige con 307 a una ficha publicada; si el catálogo está vacío, vuelve a `/juegos`.
+- **Artículo**: pros y contras, video embebido (solo YouTube con `youtube-nocookie.com` y Vimeo; el resto se muestra como enlace), galería de imágenes y artículos relacionados por etiqueta dentro de la misma colección.
 - **Puntuación**: badge con la rareza derivada de la base de datos y, en el detalle de la reseña, el desglose de historia, jugabilidad y apartado visual.
 - **Pie de página**: cuatro columnas (marca, Secciones, Legal, Contacto) con los iconos en SVG inline, el correo de contacto y las redes (YouTube, Instagram, TikTok), más la barra legal con el aviso de marcas.
 - **Páginas legales**: `/terminos` y `/privacidad`.
 - **404 real**; si el slug no existe, se consulta `redirects` por la ruta anterior y se responde con el código almacenado (`301`, `302`, `307` o `308`) si existe una redirección interna válida; si no, 404.
 
-Pendiente del diseño original: vista de detalle de juego (`/juegos/[slug]`), "Juego al azar" en la portada y contador de estadísticas por colección.
+Pendiente del diseño original: contador de estadísticas por colección y vista previa de Markdown en el editor.
 
 ## 4. Panel (pantalla completa)
+
+> Esta sección describe el objetivo de diseño. Lo que existe hoy está en `admin-panel.md` y en `estado-implementacion.md`: escritorio con filtros y paginación, editor de artículos, fichas de juego, biblioteca de medios e historial de revisiones. La vista previa en modal, el autoguardado en `localStorage` y los atajos de teclado **no** están implementados.
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
@@ -121,16 +126,18 @@ Pendiente del diseño original: vista de detalle de juego (`/juegos/[slug]`), "J
 
 ## 7. Flujo
 
+> Igual que en la sección 4, el flujo es el objetivo de diseño. La diferencia con la implementación actual está anotada en cada paso.
+
 ### 7.1 Login
 
 1. `/admin/login`, contraseña.
 2. Rate limit por IP antes de verificar; si está bloqueado, se muestra el tiempo restante.
 3. Sesión de 8 horas deslizante, tope absoluto de 30 días.
-4. Redirección a `/admin/panel`.
+4. Redirección a `/admin`.
 
 ### 7.2 Panel
 
-Listado por colección con estado, versión y última modificación. Acciones: Editar, Borrar. Buscador full-text en español, sin tildes.
+Listado por colección con estado, versión y última modificación. Acciones: Editar, Despublicar, Papelera y Restaurar. La búsqueda es por título con `ILIKE` y comodines escapados; el buscador full-text en español quedó sin usar.
 
 ### 7.3 Crear
 
@@ -138,7 +145,7 @@ Listado por colección con estado, versión y última modificación. Acciones: E
 2. Se elige la colección.
 3. Título genera el slug.
 4. Cuerpo Markdown con barra mínima: negrita, itálica, enlace, H2, cita, imagen, lista.
-5. Metadatos según colección. En reseñas, el juego se busca con autocompletado (`pg_trgm`). Crear la ficha desde la reseña queda para después del primer lanzamiento: en la v1, la ficha se crea antes desde Juegos. La puntuación va de 0 a 100 y las subpuntuaciones (historia, jugabilidad, apartado visual) van de 1 a 10; la rareza la calcula la base de datos a partir del score y no se escribe a mano.
+5. Metadatos según colección. En reseñas, el juego se elige de las fichas publicadas (la ficha se crea antes desde Juegos; el autocompletado con `pg_trgm` no está implementado). La puntuación va de 0 a 100 y las subpuntuaciones (historia, jugabilidad, apartado visual) van de 1 a 10; la rareza la calcula la base de datos a partir del score y no se escribe a mano.
 6. **Portada e imágenes del cuerpo**: se eligen de la biblioteca de medios o se suben arrastrando. **El cliente redimensiona a WebP antes de subir**, porque un PNG de 1080p supera los 2 MB. Cada imagen exige texto alternativo y permite crédito y procedencia (`own`, `press`, `third_party`). Las imágenes del cuerpo no se pegan como URL: se insertan desde el selector y el Markdown guarda `![alt](media:12)`, que el render resuelve con `srcset` y dimensiones.
 7. Guardar borrador o publicar. Los errores aparecen junto al campo.
 
@@ -158,17 +165,18 @@ La interfaz dice **"Se publica el 12/12 a las 09:00"** y no promete precisión a
 
 Modal con la plantilla real: cabecera, ancho, tipografía, JSON-LD. `Esc` cierra y devuelve el foco. Usa **el mismo pipeline de sanitizado y el mismo resolvedor de `media:`** que el sitio público; si el cliente renderizara distinto, la vista previa mentiría.
 
+**No implementado.** Hoy el panel no ofrece vista previa; es una mejora opcional, no un requisito del lanzamiento.
+
 ### 7.7 Borrar y papelera
 
 1. Confirmación con el título.
 2. Pasa a `trashed` guardando el estado anterior y la fecha. El slug queda libre.
-3. Papelera: recuperar o eliminar definitivamente.
+3. Papelera: recuperar. **No hay borrado definitivo desde el panel**: la eliminación física de artículos y el barrido de medios son tareas de mantenimiento, y los medios se borran con `pending_delete_at` más el job de limpieza.
 4. **Recuperar con slug ocupado**: el servidor reintenta con `-2`, `-3`… hasta 10 veces y devuelve el slug definitivo. El panel no lo pide antes ni lo elige: muestra "Se recuperó como `mi-articulo-2`". Si el slug original lo ocupa otro artículo, **no se crea redirección** desde él (apropiaría la URL del artículo nuevo).
-5. Purgar exige escribir el slug y sigue el orden mark-and-sweep: primero se borra la fila del artículo (la FK `ON DELETE RESTRICT` protege `media` si aún se usa como `cover_media_id`/`og_media_id`), recién entonces se marca `pending_delete_at` en los medios huérfanos, después se borra el objeto en Blob. Si Blob falla, la fila queda marcada y se reintenta; el artículo ya no está.
 
 ### 7.8 Historial
 
-Lista de revisiones con fecha y versión. Se puede ver el snapshot y restaurar uno anterior (crea una versión nueva, no reescribe el pasado). Se conservan las últimas 20. Restaurar un snapshot es una escritura normal: exige la `version` actual y pasa por Zod como cualquier otra.
+Lista de revisiones con fecha y versión. Se puede restaurar una anterior (crea una versión nueva, no reescribe el pasado). Se conservan las últimas 20. Restaurar un snapshot es una escritura normal: pasa por Zod como cualquier otra y el trigger incrementa la versión.
 
 ### 7.9 Cerrar sesión
 

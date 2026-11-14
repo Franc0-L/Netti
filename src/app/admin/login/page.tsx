@@ -3,7 +3,8 @@ import { connection } from 'next/server';
 import { redirect } from 'next/navigation';
 import { AdminLoginForm } from '@/components/admin-login-form';
 import { SkipLink } from '@/components/site-chrome';
-import { requireSession } from '@/lib/auth';
+import { requireSession, SessionRequiredError } from '@/lib/auth';
+import { logger } from '@/lib/logger';
 
 export const metadata: Metadata = {
   title: 'Ingresar al panel',
@@ -26,8 +27,15 @@ export default async function AdminLoginPage() {
     // only leaves the login form visible.
     await requireSession();
     authenticated = true;
-  } catch {
-    /* No hay una sesión activa. */
+  } catch (error) {
+    // Only a missing session shows the form. An infrastructure failure must
+    // surface as an error instead of pretending the author was logged out.
+    if (!(error instanceof SessionRequiredError)) {
+      logger.error('admin.login.session.check.failed', {
+        errorType: error instanceof Error ? error.name : 'unknown',
+      });
+      throw error;
+    }
   }
   if (authenticated) redirect('/admin');
   return (

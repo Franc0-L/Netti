@@ -1,10 +1,8 @@
-import { and, asc, eq, inArray, lt, or, sql } from 'drizzle-orm';
+import { asc, eq, inArray, lt, or } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { db } from '@/db/index';
 import {
-  articles,
   cronRuns,
-  games,
   loginAttempts,
   media,
   mediaVariants,
@@ -13,6 +11,8 @@ import {
 } from '@/db/schema';
 import { planOrphanCleanup } from '@/lib/cleanup-plan';
 import { isAuthorizedCron } from '@/lib/cron-auth';
+import { logger } from '@/lib/logger';
+import { isMediaReferenced } from '@/lib/media-references';
 import { storage } from '@/lib/storage';
 
 export const maxDuration = 30;
@@ -26,29 +26,6 @@ const MEDIA_BATCH_SIZE = 50;
 
 function response(status: number, body: Record<string, unknown>) {
   return NextResponse.json(body, { status, headers: { 'Cache-Control': 'no-store' } });
-}
-
-async function isReferenced(mediaId: number): Promise<boolean> {
-  const bodyPattern = `media:${mediaId}([^0-9]|$)`;
-  const [articleRef] = await db
-    .select({ id: articles.id })
-    .from(articles)
-    .where(
-      or(
-        eq(articles.coverMediaId, mediaId),
-        eq(articles.ogMediaId, mediaId),
-        sql`${articles.body} ~ ${bodyPattern}`
-      )
-    )
-    .limit(1);
-  if (articleRef) return true;
-
-  const [gameRef] = await db
-    .select({ id: games.id })
-    .from(games)
-    .where(or(eq(games.coverMediaId, mediaId), sql`${games.body} ~ ${bodyPattern}`))
-    .limit(1);
-  return Boolean(gameRef);
 }
 
 /**
@@ -112,6 +89,7 @@ export async function POST(request: Request) {
 
     let repairedOrphans = 0;
     let failedOrphanDeletes = 0;
+    let blockedOrphans = 0;
     if (pending.length > 0) {
       const keys = pending.map((item) => item.storageKey);
       const [mediaRows, variantRows] = await Promise.all([
@@ -138,6 +116,10 @@ export async function POST(request: Request) {
         repairedOrphans += plan.repairWithoutDeleteIds.length;
       }
 
+      // A deletion that is still referenced cannot be executed: it stays
+      // pending and needs an operator, so the run counts as degraded.
+      blockedOrphans = plan.blockedIds.length;
+
       if (plan.deleteKeys.length > 0) {
         try {
           await storage.del(plan.deleteKeys);
@@ -146,9 +128,13 @@ export async function POST(request: Request) {
             .set({ status: 'repaired', repairedAt: now })
             .where(inArray(storageOrphans.id, plan.deleteIds));
           repairedOrphans += plan.deleteIds.length;
-        } catch {
+        } catch (error) {
           // Leave the rows pending so the next run retries the deletion.
           failedOrphanDeletes = plan.deleteIds.length;
+          logger.error('cron.reconcile.blob.delete.failed', {
+            errorType: error instanceof Error ? error.name : 'unknown',
+            failedObjects: failedOrphanDeletes,
+          });
         }
       }
     }
@@ -166,7 +152,7 @@ export async function POST(request: Request) {
     let failedMedia = 0;
 
     for (const item of markedMedia) {
-      if (await isReferenced(item.id)) {
+      if (await isMediaReferenced(item.id)) {
         await db.update(media).set({ pendingDeleteAt: null }).where(eq(media.id, item.id));
         clearedMarks += 1;
         continue;
@@ -182,21 +168,26 @@ export async function POST(request: Request) {
         await storage.del(keys);
         await db.delete(media).where(eq(media.id, item.id));
         deletedMedia += 1;
-      } catch {
+      } catch (error) {
         await db.insert(storageOrphans).values({
           storageKey: item.storageKey,
           action: 'delete',
           status: 'pending',
         });
         failedMedia += 1;
+        logger.error('cron.reconcile.media.delete.failed', {
+          mediaId: item.id,
+          errorType: error instanceof Error ? error.name : 'unknown',
+        });
       }
     }
 
     // `last_success_at` only advances when every mandatory stage finished
-    // without failures. A failed Blob deletion keeps the previous success
-    // timestamp so monitoring can tell a degraded run from a healthy one.
+    // without failures. A failed Blob deletion or a pending deletion keeps the
+    // previous success timestamp so monitoring can tell a degraded run from a
+    // healthy one.
     const failedOperations = failedMedia + failedOrphanDeletes;
-    const successful = failedOperations === 0;
+    const successful = failedOperations === 0 && blockedOrphans === 0;
 
     await db
       .insert(cronRuns)
@@ -210,18 +201,39 @@ export async function POST(request: Request) {
         set: successful ? { lastRunAt: now, lastSuccessAt: now } : { lastRunAt: now },
       });
 
+    if (!successful) {
+      logger.error('cron.reconcile.degraded', {
+        failedOperations,
+        blockedObjects: blockedOrphans,
+      });
+    }
+
     return response(successful ? 200 : 500, {
       ok: successful,
+      degraded: !successful,
       removedLoginAttempts: removedAttempts.length,
       removedExpiredSessions: removedSessions.length,
       repairedStorageOrphans: repairedOrphans,
       failedStorageOrphans: failedOrphanDeletes,
+      blockedStorageOrphans: blockedOrphans,
       markedMediaScanned: markedMedia.length,
       clearedMarks,
       deletedMedia,
       failedMedia,
     });
   } catch (error) {
+    logger.error('cron.reconcile.failed', {
+      errorType: error instanceof Error ? error.name : 'unknown',
+    });
+    // Best effort: the run happened even if the result could not be stored.
+    try {
+      await db
+        .insert(cronRuns)
+        .values({ jobName: JOB_NAME, lastRunAt: now })
+        .onConflictDoUpdate({ target: cronRuns.jobName, set: { lastRunAt: now } });
+    } catch {
+      /* PostgreSQL is the failing dependency; readiness will report it. */
+    }
     return response(500, {
       ok: false,
       error: 'Reconciliation failed',

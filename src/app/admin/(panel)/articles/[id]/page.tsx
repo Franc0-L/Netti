@@ -1,8 +1,9 @@
-import { eq, desc, isNull } from 'drizzle-orm';
+import { asc, desc, eq, isNull } from 'drizzle-orm';
 import { notFound } from 'next/navigation';
 import { db } from '@/db/index';
-import { articles, games, media } from '@/db/schema';
+import { articleGallery, articleRevisions, articles, games, media } from '@/db/schema';
 import { AdminArticleForm } from '@/components/admin-article-form';
+import { AdminRevisionHistory } from '@/components/admin-revision-history';
 
 export default async function EditArticlePage({ params }: { params: Promise<{ id: string }> }) {
   const { id: rawId } = await params;
@@ -10,7 +11,8 @@ export default async function EditArticlePage({ params }: { params: Promise<{ id
   if (!Number.isSafeInteger(id) || id < 1) notFound();
   const [article] = await db.select().from(articles).where(eq(articles.id, id)).limit(1);
   if (!article || article.status === 'trashed') notFound();
-  const [mediaItems, gameItems] = await Promise.all([
+
+  const [mediaItems, gameItems, galleryRows, revisions] = await Promise.all([
     db
       .select({
         id: media.id,
@@ -29,7 +31,46 @@ export default async function EditArticlePage({ params }: { params: Promise<{ id
       .where(eq(games.status, 'published'))
       .orderBy(games.title)
       .limit(500),
+    db
+      .select({
+        mediaId: articleGallery.mediaId,
+        publicUrl: media.publicUrl,
+        width: media.width,
+        height: media.height,
+        alt: media.alt,
+      })
+      .from(articleGallery)
+      .innerJoin(media, eq(articleGallery.mediaId, media.id))
+      .where(eq(articleGallery.articleId, article.id))
+      .orderBy(asc(articleGallery.position)),
+    db
+      .select({
+        id: articleRevisions.id,
+        version: articleRevisions.version,
+        createdAt: articleRevisions.createdAt,
+      })
+      .from(articleRevisions)
+      .where(eq(articleRevisions.articleId, article.id))
+      .orderBy(desc(articleRevisions.version))
+      .limit(20),
   ]);
+
+  // The gallery may use images older than the 60 newest ones: merge them so
+  // the editor can show their thumbnails and keep them in the list.
+  const known = new Set(mediaItems.map((item) => item.id));
+  const mergedMedia = [
+    ...mediaItems,
+    ...galleryRows
+      .filter((row) => !known.has(row.mediaId))
+      .map((row) => ({
+        id: row.mediaId,
+        publicUrl: row.publicUrl,
+        width: row.width,
+        height: row.height,
+        alt: row.alt,
+      })),
+  ];
+
   const initial = {
     kind: article.kind as 'review' | 'news' | 'guide',
     slug: article.slug,
@@ -56,14 +97,27 @@ export default async function EditArticlePage({ params }: { params: Promise<{ id
     sourceUrl: article.sourceUrl ?? '',
     seoTitle: article.seoTitle ?? '',
     seoDescription: article.seoDescription ?? '',
+    pros: article.pros.join('\n'),
+    cons: article.cons.join('\n'),
+    videoUrl: article.videoUrl ?? '',
+    videoTitle: article.videoTitle ?? '',
+    gallery: galleryRows.map((row) => row.mediaId),
   };
+
   return (
-    <AdminArticleForm
-      articleId={article.id}
-      version={article.version}
-      initial={initial}
-      media={mediaItems}
-      games={gameItems}
-    />
+    <>
+      <AdminArticleForm
+        articleId={article.id}
+        version={article.version}
+        initial={initial}
+        media={mergedMedia}
+        games={gameItems}
+      />
+      <AdminRevisionHistory
+        articleId={article.id}
+        revisions={revisions}
+        currentVersion={article.version}
+      />
+    </>
   );
 }

@@ -1,8 +1,9 @@
-import { and, count, eq, gt } from 'drizzle-orm';
-import { NextResponse } from 'next/server';
+import { and, count, gt } from 'drizzle-orm';
+import { connection, NextResponse } from 'next/server';
 import { db } from '@/db/index';
 import { articles, media, sessions } from '@/db/schema';
-import { requireSession } from '@/lib/auth';
+import { requireSession, SessionRequiredError } from '@/lib/auth';
+import { visibleArticle } from '@/lib/content';
 import { logger } from '@/lib/logger';
 
 function response(status: number, body: Record<string, unknown>) {
@@ -13,17 +14,27 @@ function response(status: number, body: Record<string, unknown>) {
 }
 
 export async function GET() {
+  // cacheComponents prerenders route handlers unless they opt into a request.
+  await connection();
   try {
     await requireSession({ clearCookie: true });
-  } catch {
-    return response(401, { ok: false, error: 'Unauthorized' });
+  } catch (error) {
+    if (error instanceof SessionRequiredError) {
+      return response(401, { ok: false, error: 'Unauthorized' });
+    }
+    logger.error('metrics.session.check.failed', {
+      errorType: error instanceof Error ? error.name : 'unknown',
+    });
+    return response(503, { ok: false, error: 'Metrics unavailable' });
   }
 
   const now = new Date();
 
   try {
     const [publishedArticles, activeSessions, storedMedia] = await Promise.all([
-      db.select({ value: count() }).from(articles).where(eq(articles.status, 'published')),
+      // A scheduled publication is not public yet: it only counts once its
+      // publication date has passed.
+      db.select({ value: count() }).from(articles).where(visibleArticle(now)),
       db
         .select({ value: count() })
         .from(sessions)

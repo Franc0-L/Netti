@@ -9,6 +9,10 @@ const envSchema = z
     VERCEL_OIDC_TOKEN: z.string().optional(),
     BLOB_STORE_ID: z.string().optional(),
     CRON_SECRET: z.string().min(32, 'CRON_SECRET debe tener al menos 32 caracteres'),
+    IP_HASH_SECRET: z
+      .string()
+      .min(32, 'IP_HASH_SECRET debe tener al menos 32 caracteres')
+      .optional(),
     EDGE_CONFIG_ID: z.string().optional(),
     IMAGES_PUBLIC_BASE_URL: z.string().url().optional(),
     PUBLIC_SITE_URL: z.string().url().optional(),

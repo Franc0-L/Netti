@@ -36,6 +36,8 @@ export function AdminNav() {
       <nav className="admin-nav" aria-label="Administración">
         <Link href="/admin">Artículos</Link>
         <Link href="/admin/articles/new">Nuevo artículo</Link>
+        <Link href="/admin/games">Juegos</Link>
+        <Link href="/admin/media">Medios</Link>
       </nav>
       <div className="admin-session">
         {message ? (

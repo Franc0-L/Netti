@@ -50,6 +50,11 @@ export default async function NewArticlePage() {
     sourceUrl: '',
     seoTitle: '',
     seoDescription: '',
+    pros: '',
+    cons: '',
+    videoUrl: '',
+    videoTitle: '',
+    gallery: [] as number[],
   };
   return <AdminArticleForm initial={initial} media={mediaItems} games={gameItems} />;
 }

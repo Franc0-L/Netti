@@ -23,7 +23,7 @@ async function main() {
     terminal: false,
   });
 
-  const password = await new Promise<string>((resolve, reject) => {
+  const password = await new Promise<string>((resolve) => {
     rl.question('Ingresá la contraseña de administrador (mínimo 12 caracteres): ', (answer) => {
       rl.close();
       resolve(answer);

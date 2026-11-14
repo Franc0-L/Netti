@@ -14,8 +14,11 @@
  *   DATABASE_URL    (must point to a local PostgreSQL instance)
  *   CRON_SECRET     (must match the running server)
  */
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { Client } from 'pg';
+import { assertLocalDatabaseUrl, loadEnvFiles } from './load-env.js';
+
+loadEnvFiles(['.env']);
 
 const BASE_URL = (process.env.SMOKE_BASE_URL ?? 'http://127.0.0.1:3000').replace(/\/$/, '');
 const CRON_SECRET = process.env.CRON_SECRET ?? '';
@@ -37,14 +40,26 @@ async function check(name: string, run: () => Promise<void>): Promise<void> {
   }
 }
 
-type Response = { status: number; body: Record<string, unknown> };
+/** Response of {@link call}: the status code and the parsed JSON body. */
+type JsonResponse = { status: number; body: Record<string, unknown> };
 
 function toArrayBuffer(value: Buffer): ArrayBuffer {
   return value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength) as ArrayBuffer;
 }
 
-async function call(path: string, init: RequestInit = {}): Promise<Response> {
-  const response = await fetch(`${BASE_URL}${path}`, init);
+/** Every request has a deadline: a hung request cannot eat the CI budget. */
+const REQUEST_TIMEOUT_MS = 30_000;
+
+/** Performs an HTTP request against the application with a timeout. */
+function request(path: string, init: RequestInit = {}): Promise<globalThis.Response> {
+  return fetch(`${BASE_URL}${path}`, {
+    ...init,
+    signal: init.signal ?? AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  });
+}
+
+async function call(path: string, init: RequestInit = {}): Promise<JsonResponse> {
+  const response = await request(path, init);
   let body: Record<string, unknown> = {};
   try {
     body = (await response.json()) as Record<string, unknown>;
@@ -101,15 +116,13 @@ function oversizedUpload(boundary: string): ReadableStream<Uint8Array> {
 function assertSafeTarget(): void {
   const raw = process.env.DATABASE_URL;
   if (!raw) throw new Error('DATABASE_URL is required for HTTP smoke tests.');
-  const url = new URL(raw);
-  const host = url.hostname.toLowerCase();
+  const url = assertLocalDatabaseUrl(raw);
   const database = url.pathname.replace(/^\//, '');
-  const isLocal = ['localhost', '127.0.0.1', '::1', '[::1]'].includes(host);
-  if (!isLocal) {
+  if (!database.toLowerCase().includes('test')) {
     throw new Error(
-      `Refusing to run HTTP smoke tests against ${host}/${database}. ` +
-        'Only a local PostgreSQL instance (localhost, 127.0.0.1 or ::1) is allowed; ' +
-        'a database name ending in _test is not enough.'
+      `Refusing to run HTTP smoke tests against ${url.hostname}/${database}. ` +
+        'The database name must contain "test": the smoke test purges sessions ' +
+        'and login attempts through the cleanup endpoint.'
     );
   }
 }
@@ -169,12 +182,12 @@ async function main(): Promise<void> {
   await client.connect();
 
   const cronSnapshot = await snapshotCronRuns(client);
+  const token = randomBytes(32).toString('base64url');
+  const sessionId = createHash('sha256').update(token).digest('hex');
+  const expiredSessionId = createHash('sha256').update(`expired-${token}`).digest('hex');
+  const staleAttemptHash = `smoke-old-attempt-${randomUUID()}`;
+  const now = Date.now();
   try {
-    const token = randomBytes(32).toString('base64url');
-    const sessionId = createHash('sha256').update(token).digest('hex');
-    const expiredSessionId = createHash('sha256').update(`expired-${token}`).digest('hex');
-    const staleAttemptHash = `smoke-old-attempt-${Date.now()}`;
-    const now = Date.now();
     await client.query(
       `insert into sessions (id, expires_at, absolute_expires_at) values ($1, $2, $3)`,
       [sessionId, new Date(now + 3_600_000), new Date(now + 7_200_000)]
@@ -206,16 +219,24 @@ async function main(): Promise<void> {
     });
 
     await check('public pages send a CSP compatible with Next.js inline scripts', async () => {
-      const response = await fetch(`${BASE_URL}/`);
+      const response = await request(`/`);
       const csp = response.headers.get('content-security-policy') ?? '';
       expect(csp.includes("script-src 'self' 'unsafe-inline'"), `csp: ${csp}`);
       expect(!csp.includes('nonce-'), 'public pages must not depend on per-request nonces');
+      expect(
+        csp.includes('frame-src') && csp.includes('https://www.youtube-nocookie.com'),
+        `the public CSP must allow the privacy-friendly video players: ${csp}`
+      );
+      expect(
+        csp.includes('https://player.vimeo.com'),
+        `the public CSP must allow the Vimeo player: ${csp}`
+      );
       expect(response.headers.get('x-content-type-options') === 'nosniff', 'missing nosniff');
       expect(response.headers.get('x-frame-options') === 'DENY', 'missing frame protection');
     });
 
     await check('/admin sends a nonce CSP and Next.js applies it to scripts', async () => {
-      const response = await fetch(`${BASE_URL}/admin/login`);
+      const response = await request(`/admin/login`);
       const csp = response.headers.get('content-security-policy') ?? '';
       const nonce = csp.match(/'nonce-([^']+)'/)?.[1];
       expect(nonce, `admin CSP must include a nonce: ${csp}`);
@@ -228,7 +249,7 @@ async function main(): Promise<void> {
     });
 
     await check('unknown routes answer 404 with the error page', async () => {
-      const response = await fetch(`${BASE_URL}/no-existe`, { redirect: 'manual' });
+      const response = await request(`/no-existe`, { redirect: 'manual' });
       expect(response.status === 404, `expected 404, received ${response.status}`);
       const html = await response.text();
       expect(html.includes('Esta página no existe'), 'the 404 page must render its message');
@@ -236,12 +257,12 @@ async function main(): Promise<void> {
     });
 
     await check('unknown collections answer 404', async () => {
-      const response = await fetch(`${BASE_URL}/coleccion-inexistente`, { redirect: 'manual' });
+      const response = await request(`/coleccion-inexistente`, { redirect: 'manual' });
       expect(response.status === 404, `expected 404, received ${response.status}`);
     });
 
     await check('legacy paths redirect with 308 to the current article', async () => {
-      const stamp = Date.now();
+      const stamp = randomUUID();
       const targetSlug = `smoke-redirect-target-${stamp}`;
       const legacySlug = `smoke-redirect-legacy-${stamp}`;
       const legacyPath = `/noticias/${legacySlug}`;
@@ -259,12 +280,12 @@ async function main(): Promise<void> {
           [legacyPath, targetPath]
         );
 
-        const response = await fetch(`${BASE_URL}${legacyPath}`, { redirect: 'manual' });
+        const response = await request(`${legacyPath}`, { redirect: 'manual' });
         expect(response.status === 308, `expected 308, received ${response.status}`);
         const location = response.headers.get('location') ?? '';
         expect(location.endsWith(targetPath), `unexpected Location header: ${location}`);
 
-        const articleResponse = await fetch(`${BASE_URL}${targetPath}`, { redirect: 'manual' });
+        const articleResponse = await request(`${targetPath}`, { redirect: 'manual' });
         expect(articleResponse.status === 200, `expected 200, received ${articleResponse.status}`);
         const html = await articleResponse.text();
         expect(html.includes('name="twitter:card"'), 'the article must expose the Twitter card');
@@ -278,14 +299,14 @@ async function main(): Promise<void> {
     });
 
     await check('the wordmark marks the current page', async () => {
-      const home = await (await fetch(`${BASE_URL}/`)).text();
+      const home = await (await request(`/`)).text();
       const homeWordmark = home.match(/<a[^>]*class="wordmark"[^>]*>/)?.[0] ?? '';
       expect(
         homeWordmark.includes('aria-current="page"'),
         `the home wordmark must expose aria-current="page": ${homeWordmark}`
       );
 
-      const collection = await (await fetch(`${BASE_URL}/resenas`)).text();
+      const collection = await (await request(`/resenas`)).text();
       const collectionWordmark = collection.match(/<a[^>]*class="wordmark"[^>]*>/)?.[0] ?? '';
       expect(
         !collectionWordmark.includes('aria-current="page"'),
@@ -299,7 +320,7 @@ async function main(): Promise<void> {
     });
 
     await check('the navigation renders the legacy pills', async () => {
-      const html = await (await fetch(`${BASE_URL}/`)).text();
+      const html = await (await request(`/`)).text();
       for (const href of ['/juegos', '/resenas', '/noticias', '/guias']) {
         expect(
           new RegExp(`<a[^>]*href="${href}"[^>]*class="nav-pill"`).test(html) ||
@@ -310,7 +331,7 @@ async function main(): Promise<void> {
     });
 
     await check('the footer renders the four columns with contact and social links', async () => {
-      const html = await (await fetch(`${BASE_URL}/`)).text();
+      const html = await (await request(`/`)).text();
       for (const heading of ['Secciones', 'Legal', 'Contacto']) {
         expect(html.includes(heading), `the footer must render the ${heading} column`);
       }
@@ -333,7 +354,7 @@ async function main(): Promise<void> {
         ['/terminos', 'Términos y condiciones'],
         ['/privacidad', 'Política de privacidad'],
       ] as const) {
-        const response = await fetch(`${BASE_URL}${path}`, { redirect: 'manual' });
+        const response = await request(`${path}`, { redirect: 'manual' });
         expect(response.status === 200, `${path} must answer 200, received ${response.status}`);
         const html = await response.text();
         expect(html.includes(expected), `${path} must render "${expected}"`);
@@ -341,7 +362,7 @@ async function main(): Promise<void> {
     });
 
     await check('every internal link of the footer answers 200', async () => {
-      const html = await (await fetch(`${BASE_URL}/`)).text();
+      const html = await (await request(`/`)).text();
       const hrefs = new Set(
         [...html.matchAll(/<footer[\s\S]*?<\/footer>/g)]
           .flatMap((block) => [...block[0].matchAll(/href="(\/[^"#?]*)"/g)])
@@ -349,13 +370,13 @@ async function main(): Promise<void> {
       );
       expect(hrefs.size > 0, 'the footer must render internal links');
       for (const href of hrefs) {
-        const response = await fetch(`${BASE_URL}${href}`, { redirect: 'manual' });
+        const response = await request(`${href}`, { redirect: 'manual' });
         expect(response.status === 200, `${href} must answer 200, received ${response.status}`);
       }
     });
 
     await check('the home page renders the central search and the library level', async () => {
-      const html = await (await fetch(`${BASE_URL}/`)).text();
+      const html = await (await request(`/`)).text();
       expect(html.includes('¿Qué estás buscando?'), 'the search box must show its placeholder');
       expect(html.includes('role="search"'), 'the search box must be exposed as a search form');
       expect(html.includes('Nivel de biblioteca'), 'the library level must be rendered');
@@ -363,7 +384,7 @@ async function main(): Promise<void> {
     });
 
     await check('the section chips keep the legacy colors', async () => {
-      const html = await (await fetch(`${BASE_URL}/resenas`)).text();
+      const html = await (await request(`/resenas`)).text();
       for (const tone of ['cyan', 'gold', 'red', 'green']) {
         expect(
           html.includes(`data-tone="${tone}"`),
@@ -375,7 +396,7 @@ async function main(): Promise<void> {
     await check(
       'a published review shows its rarity badge and the top stories sidebar',
       async () => {
-        const stamp = Date.now();
+        const stamp = randomUUID();
         const gameSlug = `smoke-game-${stamp}`;
         const reviewSlug = `smoke-review-${stamp}`;
 
@@ -398,7 +419,7 @@ async function main(): Promise<void> {
           // Invalidate the cached collection so the fixture is rendered.
           await call('/api/revalidate', { method: 'POST', headers: bearer() });
 
-          const html = await (await fetch(`${BASE_URL}/resenas`)).text();
+          const html = await (await request(`/resenas`)).text();
           expect(html.includes('data-rarity="mythic"'), 'the badge must expose the rarity band');
           expect(html.includes('Mítica'), 'the badge must show the rarity label');
           expect(
@@ -408,7 +429,7 @@ async function main(): Promise<void> {
           expect(!html.includes('/10</span>'), 'the score must not use the old 1-10 scale');
           expect(html.includes('95'), 'the score must be rendered with the 0-100 scale');
 
-          const article = await (await fetch(`${BASE_URL}/resenas/${reviewSlug}`)).text();
+          const article = await (await request(`/resenas/${reviewSlug}`)).text();
           expect(article.includes('Apartado visual'), 'the review must render the score breakdown');
           expect(article.includes('10 / 10'), 'the breakdown must show the sub-scores');
         } finally {
@@ -419,8 +440,118 @@ async function main(): Promise<void> {
       }
     );
 
+    await check('the game sheet and the editorial extras render', async () => {
+      const stamp = randomUUID();
+      const gameSlug = `smoke-game-page-${stamp}`;
+      const reviewSlug = `smoke-review-page-${stamp}`;
+      const relatedSlug = `smoke-related-page-${stamp}`;
+      const mediaKey = `smoke-gallery-${stamp}.webp`;
+      // A platform that only this fixture uses: the filtered catalog gets its
+      // own cache entry, so the listing is read from PostgreSQL instead of
+      // serving the empty catalog rendered earlier in the run.
+      const platform = `Smoke ${stamp.slice(0, 8)}`;
+
+      try {
+        const insertedMedia = await client.query(
+          `insert into media (storage_key, public_url, width, height, bytes, alt)
+           values ($1, '/probe-gallery.webp', 800, 600, 2048, 'Imagen de galería')
+           returning id`,
+          [mediaKey]
+        );
+        const mediaId = insertedMedia.rows[0].id as number;
+
+        const insertedGame = await client.query(
+          `insert into games
+             (slug, title, description, body, status, cover_image_url, platforms, genres, tags,
+              developer, publisher, release_date)
+           values ($1, 'Smoke Game Page', 'Ficha de prueba', 'Cuerpo de la ficha de prueba.',
+                   'published', '/probe-cover.webp', $2, '{RPG}', '{smoke-tag}',
+                   'Estudio de prueba', 'Distribuidora de prueba', '2024-05-01')
+           returning id`,
+          [gameSlug, ['PC', platform]]
+        );
+        const gameId = insertedGame.rows[0].id as number;
+
+        const insertedReview = await client.query(
+          `insert into articles
+             (kind, slug, title, description, body, status, published_at, game_id, score,
+              score_reason, verdict, score_details, tags, pros, cons, video_url, video_title, author)
+           values ('review', $1, 'Smoke Review Page', 'Reseña de prueba',
+                   'Cuerpo de la reseña de prueba.', 'published', $2, $3, 88,
+                   'Justificación suficientemente larga para la reseña de prueba.',
+                   'Un veredicto de prueba con longitud suficiente.',
+                   '{"story":8,"gameplay":9,"visual":7}'::jsonb, '{smoke-tag}',
+                   '{"A favor uno","A favor dos"}', '{"En contra uno"}',
+                   'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'Video de prueba', 'Netti')
+           returning id`,
+          [reviewSlug, new Date(now - 60_000), gameId]
+        );
+
+        await client.query(
+          `insert into article_gallery (article_id, media_id, position) values ($1, $2, 0)`,
+          [insertedReview.rows[0].id, mediaId]
+        );
+
+        // A second review of the same game and the same tag: the related
+        // section is built from a tag overlap inside the same collection.
+        await client.query(
+          `insert into articles
+             (kind, slug, title, description, body, status, published_at, game_id, score,
+              score_reason, verdict, tags)
+           values ('review', $1, 'Smoke Related Review', 'Reseña relacionada',
+                   'Cuerpo de la reseña relacionada.', 'published', $2, $3, 70,
+                   'Justificación suficientemente larga para la reseña relacionada.',
+                   'Otro veredicto suficientemente largo.', '{smoke-tag}')`,
+          [relatedSlug, new Date(now - 120_000), gameId]
+        );
+
+        await call('/api/revalidate', { method: 'POST', headers: bearer() });
+
+        const catalog = await (
+          await request(`/juegos?plataforma=${encodeURIComponent(platform)}`)
+        ).text();
+        expect(catalog.includes('Smoke Game Page'), 'the filtered catalog must list the new game');
+
+        const sheet = await (await request(`/juegos/${gameSlug}`)).text();
+        expect(sheet.includes('Smoke Game Page'), 'the sheet must render the title');
+        expect(sheet.includes('Plataformas'), 'the sheet must render the platform block');
+        expect(sheet.includes(platform), 'the sheet must list every platform');
+        expect(sheet.includes('"@type":"VideoGame"'), 'the sheet must expose VideoGame JSON-LD');
+        expect(
+          sheet.includes(`/resenas/${reviewSlug}`),
+          'the sheet must link its published reviews'
+        );
+
+        const article = await (await request(`/resenas/${reviewSlug}`)).text();
+        expect(article.includes('A favor'), 'the review must render the pros');
+        expect(article.includes('A favor dos'), 'the review must render every pro');
+        expect(article.includes('En contra'), 'the review must render the cons');
+        expect(
+          article.includes('youtube-nocookie.com/embed/dQw4w9WgXcQ'),
+          'a YouTube video must be embedded through the private domain'
+        );
+        expect(article.includes('/probe-gallery.webp'), 'the gallery must render its images');
+        expect(article.includes('Seguí leyendo'), 'the review must render related articles');
+        expect(article.includes('Smoke Related Review'), 'related articles must share tags');
+
+        const random = await request(`/juegos/azar`, { redirect: 'manual' });
+        expect(random.status === 307, `expected 307, received ${random.status}`);
+        expect(
+          (random.headers.get('location') ?? '').startsWith('/juegos/'),
+          'the random game must redirect to a sheet'
+        );
+      } finally {
+        await client.query(`delete from articles where slug = any($1::text[])`, [
+          [reviewSlug, relatedSlug],
+        ]);
+        await client.query(`delete from games where slug = $1`, [gameSlug]);
+        await client.query(`delete from media where storage_key = $1`, [mediaKey]);
+        await call('/api/revalidate', { method: 'POST', headers: bearer() });
+      }
+    });
+
     await check('public pages expose language, title and viewport metadata', async () => {
-      const html = await (await fetch(`${BASE_URL}/`)).text();
+      const html = await (await request(`/`)).text();
       expect(html.includes('<html lang="es"'), 'the document language must be declared');
       expect(/<title>[^<]+<\/title>/.test(html), 'the document must have a title');
       expect(html.includes('name="viewport"'), 'the viewport meta tag must be present');
@@ -428,7 +559,7 @@ async function main(): Promise<void> {
     });
 
     await check('public pages expose a skip link before the navigation', async () => {
-      const html = await (await fetch(`${BASE_URL}/`)).text();
+      const html = await (await request(`/`)).text();
       const skipIndex = html.indexOf('class="skip-link"');
       const navIndex = html.indexOf('aria-label="Navegación principal"');
       expect(skipIndex >= 0, 'the skip link must be rendered');
@@ -439,7 +570,7 @@ async function main(): Promise<void> {
 
     await check('public pages have a single h1 and labelled images', async () => {
       for (const path of ['/', '/resenas']) {
-        const html = await (await fetch(`${BASE_URL}${path}`)).text();
+        const html = await (await request(`${path}`)).text();
         const headings = html.match(/<h1[\s>]/g) ?? [];
         expect(headings.length === 1, `${path} must have exactly one h1, found ${headings.length}`);
         const images = html.match(/<img[^>]*>/g) ?? [];
@@ -450,7 +581,7 @@ async function main(): Promise<void> {
     });
 
     await check('robots.txt keeps the admin and API out of the index', async () => {
-      const response = await fetch(`${BASE_URL}/robots.txt`);
+      const response = await request(`/robots.txt`);
       expect(response.status === 200, `expected 200, received ${response.status}`);
       const body = await response.text();
       expect(body.includes('/admin'), 'robots.txt must disallow /admin');
@@ -458,7 +589,7 @@ async function main(): Promise<void> {
     });
 
     await check('sitemap.xml is served as XML', async () => {
-      const response = await fetch(`${BASE_URL}/sitemap.xml`);
+      const response = await request(`/sitemap.xml`);
       expect(response.status === 200, `expected 200, received ${response.status}`);
       expect(
         (response.headers.get('content-type') ?? '').includes('xml'),
@@ -469,7 +600,7 @@ async function main(): Promise<void> {
     });
 
     await check('GET /admin redirects anonymous visitors to the login page', async () => {
-      const response = await fetch(`${BASE_URL}/admin`, { redirect: 'manual' });
+      const response = await request(`/admin`, { redirect: 'manual' });
       expect(
         [302, 303, 307, 308].includes(response.status),
         `expected a redirect, received ${response.status}`
@@ -481,11 +612,29 @@ async function main(): Promise<void> {
     });
 
     await check('GET /admin renders the panel for a valid session', async () => {
-      const response = await fetch(`${BASE_URL}/admin`, { headers: cookie, redirect: 'manual' });
+      const response = await request(`/admin`, { headers: cookie, redirect: 'manual' });
       expect(response.status === 200, `expected 200, received ${response.status}`);
       const html = await response.text();
       expect(html.includes('id="contenido"'), 'the panel must expose the main landmark');
       expect(html.includes('class="skip-link"'), 'the panel must expose a skip link');
+    });
+
+    await check('the panel renders the game and media sections', async () => {
+      for (const path of [
+        '/admin/games',
+        '/admin/games/new',
+        '/admin/articles/new',
+        '/admin/media',
+      ]) {
+        const response = await request(path, { headers: cookie, redirect: 'manual' });
+        expect(response.status === 200, `${path} must answer 200, received ${response.status}`);
+        const html = await response.text();
+        expect(html.includes('id="contenido"'), `${path} must expose the main landmark`);
+      }
+      const dashboard = await (await request(`/admin`, { headers: cookie })).text();
+      for (const href of ['/admin/games', '/admin/media']) {
+        expect(dashboard.includes(`href="${href}"`), `the panel navigation must link to ${href}`);
+      }
     });
 
     await check('GET /api/metrics rejects requests without a session', async () => {
@@ -547,18 +696,20 @@ async function main(): Promise<void> {
     });
 
     await check('POST /api/revalidate activates due scheduled publications', async () => {
-      const slug = `smoke-scheduled-${Date.now()}`;
-      await client.query(
-        `insert into articles (kind, slug, title, description, body, status, published_at)
-         values ('news', $1, 'Smoke scheduled article', 'Smoke test', 'Body for the smoke test.', 'published', $2)`,
-        [slug, new Date(now - 60_000)]
-      );
+      const slug = `smoke-scheduled-${randomUUID()}`;
+      try {
+        await client.query(
+          `insert into articles (kind, slug, title, description, body, status, published_at)
+           values ('news', $1, 'Smoke scheduled article', 'Smoke test', 'Body for the smoke test.', 'published', $2)`,
+          [slug, new Date(now - 60_000)]
+        );
 
-      const response = await call('/api/revalidate', { method: 'POST', headers: bearer() });
-      expect(response.status === 200, `expected 200, received ${response.status}`);
-      expect(Number(response.body.revalidated) >= 1, `revalidated=${response.body.revalidated}`);
-
-      await client.query('delete from articles where slug = $1', [slug]);
+        const response = await call('/api/revalidate', { method: 'POST', headers: bearer() });
+        expect(response.status === 200, `expected 200, received ${response.status}`);
+        expect(Number(response.body.revalidated) >= 1, `revalidated=${response.body.revalidated}`);
+      } finally {
+        await client.query('delete from articles where slug = $1', [slug]);
+      }
     });
 
     await check('POST /api/upload rejects a foreign origin', async () => {
@@ -614,6 +765,14 @@ async function main(): Promise<void> {
     ]);
     await client.query('delete from login_attempts where ip_hash = $1', [staleAttemptHash]);
   } finally {
+    // The fixtures are removed even when a check fails, so the local database
+    // does not accumulate sessions or rate limit rows.
+    await client
+      .query('delete from sessions where id = any($1::text[])', [[sessionId, expiredSessionId]])
+      .catch(() => undefined);
+    await client
+      .query('delete from login_attempts where ip_hash = $1', [staleAttemptHash])
+      .catch(() => undefined);
     await restoreCronRuns(client, cronSnapshot);
     await client.end();
   }

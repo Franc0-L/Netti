@@ -11,7 +11,30 @@ import { and, count, desc, eq, gte, sql } from 'drizzle-orm';
 import { db } from '@/db/index';
 import { loginAttempts, sessions } from '@/db/schema';
 import { env } from '@/lib/env';
+import { normalizeIp } from '@/lib/ip';
 import { remainingLoginDelay } from '@/lib/rate-limit';
+
+/**
+ * The request has no valid session.
+ *
+ * It is a typed error so the callers can tell it apart from an infrastructure
+ * failure: a database outage must not be reported as an expired session.
+ */
+export class SessionRequiredError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'SessionRequiredError';
+  }
+}
+
+/** The request origin is not allowed to mutate the content. */
+export class OriginNotAllowedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'OriginNotAllowedError';
+  }
+}
+
 function deriveScrypt(password: string, salt: Buffer, keyLength: number): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     scryptCallback(
@@ -44,11 +67,20 @@ async function withScryptSlot<T>(work: () => Promise<T>): Promise<T> {
     else scryptBusy = false;
   }
 }
+/**
+ * Secret used to hash the client addresses.
+ *
+ * It is separate from `CRON_SECRET` so the operational secret can be rotated
+ * without resetting the rate limit history. When it is not configured, the
+ * cron secret is used as a fallback: the hashes stay stable between releases.
+ */
+const ipHashSecret = env.IP_HASH_SECRET ?? env.CRON_SECRET;
+
 function digestToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
 }
 function digestIp(ip: string): string {
-  return createHmac('sha256', env.CRON_SECRET).update(ip).digest('hex');
+  return createHmac('sha256', ipHashSecret).update(ip).digest('hex');
 }
 /** Exposes the IP digest so integration checks can scope their fixtures. */
 export function hashIp(ip: string): string {
@@ -75,7 +107,7 @@ export async function attemptLogin(
   ip: string,
   password: string
 ): Promise<{ allowed: boolean; retryAfter: number; valid: boolean }> {
-  const ipHash = digestIp(ip);
+  const ipHash = digestIp(normalizeIp(ip));
   return db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`login:${ipHash}`})::bigint)`);
 
@@ -140,7 +172,7 @@ export type RequireSessionOptions = {
 export async function requireSession(options: RequireSessionOptions = {}) {
   const store = await cookies();
   const token = store.get('session')?.value;
-  if (!token) throw new Error('No hay sesión activa');
+  if (!token) throw new SessionRequiredError('No hay sesión activa');
   const id = digestToken(token);
   const [session] = await db.select().from(sessions).where(eq(sessions.id, id)).limit(1);
   const now = new Date();
@@ -150,7 +182,7 @@ export async function requireSession(options: RequireSessionOptions = {}) {
     } finally {
       if (options.clearCookie) store.delete('session');
     }
-    throw new Error('Sesión inválida o expirada');
+    throw new SessionRequiredError('Sesión inválida o expirada');
   }
   if (now.getTime() - session.lastUsedAt.getTime() >= TOUCH_MS) {
     const expiresAt = new Date(
@@ -163,31 +195,31 @@ export async function requireSession(options: RequireSessionOptions = {}) {
       .returning();
     if (!updated) {
       if (options.clearCookie) store.delete('session');
-      throw new Error('Sesión inválida o expirada');
+      throw new SessionRequiredError('Sesión inválida o expirada');
     }
     return updated;
   }
   return session;
 }
 export function assertSameOrigin(origin?: string) {
-  if (!origin) throw new Error('Origen no proporcionado');
+  if (!origin) throw new OriginNotAllowedError('Origen no proporcionado');
   let received: URL;
   try {
     received = new URL(origin);
   } catch {
-    throw new Error('Origen inválido');
+    throw new OriginNotAllowedError('Origen inválido');
   }
   const configured =
     env.PUBLIC_SITE_URL ??
     (process.env.NODE_ENV === 'production' ? undefined : 'http://localhost:3000');
-  if (!configured) throw new Error('Origen permitido no configurado');
+  if (!configured) throw new OriginNotAllowedError('Origen permitido no configurado');
   let allowed: URL;
   try {
     allowed = new URL(configured);
   } catch {
-    throw new Error('Origen permitido mal configurado');
+    throw new OriginNotAllowedError('Origen permitido mal configurado');
   }
-  if (received.origin !== allowed.origin) throw new Error('Origen no permitido');
+  if (received.origin !== allowed.origin) throw new OriginNotAllowedError('Origen no permitido');
 }
 export async function revokeCurrentSession() {
   const store = await cookies();

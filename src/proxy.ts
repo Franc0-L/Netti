@@ -32,6 +32,17 @@ const imageSources = [
 ];
 if (process.env.IMAGES_PUBLIC_BASE_URL) imageSources.push(process.env.IMAGES_PUBLIC_BASE_URL);
 
+/*
+ * Video embeds.
+ *
+ * An article may render a YouTube or Vimeo player. `frame-src` is what allows
+ * the iframe: without it `default-src 'self'` blocks the player and the reader
+ * sees an empty box. Only the two providers that `src/lib/video.ts` accepts are
+ * listed, and YouTube uses the privacy-enhanced domain. The admin panel never
+ * embeds a player, so its policy keeps the default and refuses every frame.
+ */
+const frameSources = ["'self'", 'https://www.youtube-nocookie.com', 'https://player.vimeo.com'];
+
 const scriptSources = ["'self'", "'unsafe-inline'"];
 const connectSources = ["'self'"];
 if (isDevelopment) {
@@ -46,6 +57,7 @@ const PUBLIC_CSP = [
   `img-src ${imageSources.join(' ')}`,
   "font-src 'self'",
   `connect-src ${connectSources.join(' ')}`,
+  `frame-src ${frameSources.join(' ')}`,
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",
