@@ -30,7 +30,7 @@ jobs:
       PUBLIC_SITE_URL: https://example.invalid
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -87,7 +87,7 @@ jobs:
       SMOKE_BASE_URL: http://127.0.0.1:3000
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Set up Node.js
         uses: actions/setup-node@v5
