@@ -183,7 +183,7 @@ El presupuesto limita el costo del tráfico de rastreadores: como máximo una co
 
 ## 9. Verificación continua
 
-CI (`.github/workflows/quality.yml`) usa Node 24 desde `.nvmrc` y `npm ci` (lockfile obligatorio), con dos trabajos:
+CI (`.github/workflows/quality.yml`) usa Node 24 (`node-version: 24`) y `npm ci` (lockfile obligatorio), con dos trabajos:
 
 1. **validate**: tests unitarios, ESLint, Prettier (`--check` sobre todo el repo), typecheck, build de producción y `npm audit --omit=dev --audit-level=high`.
 2. **integration**: PostgreSQL 18 como servicio, `npm run test:migrations` (base nueva y base legacy reconciliada), `npm run test:baseline` (esquema legacy → historial → migrate), `npm run db:migrate`, build, `npm run test:db` (auth, sesiones, rate limiting atómico, rareza y catálogo contra la base real) y `npm run test:http` (CSP, cookies de sesión, origen, cron, redirección 308, catálogo, ficha de juego, extras editoriales y límites de subida contra el servidor real).

@@ -124,7 +124,7 @@ El formato del hash debe coincidir **exactamente** entre lo que genera este coma
 
 - `next` se fija **sin rango**: `"next": "16.4.5"`, no `"^16.4.5"`. Un despliegue tiene que ser reproducible.
 - `package-lock.json` se commitea y el CI usa `npm ci`.
-- Node se fija con `.nvmrc` y `engines` (24.x LTS).
+- Node se fija con `engines` (`24.x LTS`) en `package.json` y con `node-version: 24` en CI.
 - Actualizaciones de seguridad: Renovate o Dependabot abre el PR, el CI corre, se revisa el advisory y se despliega. No se actualiza a ciegas ni se queda en una versión con vulnerabilidades conocidas por comodidad.
 - Active LTS no significa "seguro por defecto": los advisories de Next 16.4.x se revisan antes de cada bump.
 
