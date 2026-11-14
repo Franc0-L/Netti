@@ -1,0 +1,19 @@
+# Normalización de fin de línea.
+#
+# El repositorio usa LF en todos los archivos de texto y Prettier lo exige
+# (`endOfLine: lf` en .prettierrc). Sin esta regla, un checkout en Windows con
+# `core.autocrlf=true` deja los archivos con CRLF y `npm run format:check`
+# falla en local aunque la CI pase en Linux.
+* text=auto eol=lf
+
+# Binarios: nunca se normalizan.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.pdf binary
+*.zip binary
